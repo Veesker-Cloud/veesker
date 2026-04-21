@@ -1,12 +1,22 @@
 import { invoke } from "@tauri-apps/api/core";
 
-export type ConnectionConfig = {
-  host: string;
-  port: number;
-  serviceName: string;
-  username: string;
-  password: string;
-};
+export type ConnectionConfig =
+  | {
+      authType: "basic";
+      host: string;
+      port: number;
+      serviceName: string;
+      username: string;
+      password: string;
+    }
+  | {
+      authType: "wallet";
+      walletDir: string;
+      walletPassword: string;
+      connectAlias: string;
+      username: string;
+      password: string;
+    };
 
 export type ConnectionTestOk = {
   serverVersion: string;
