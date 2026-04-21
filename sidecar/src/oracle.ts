@@ -1,7 +1,5 @@
 import oracledb from "oracledb";
 
-oracledb.fetchAsString = [oracledb.CLOB];
-
 export type ConnectionTestParams = {
   host: string;
   port: number;

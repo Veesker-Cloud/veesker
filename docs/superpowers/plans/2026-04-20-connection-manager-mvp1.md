@@ -380,8 +380,6 @@ git commit -m "feat(sidecar): JSON-RPC method dispatcher with error wrapping"
 ```ts
 import oracledb from "oracledb";
 
-oracledb.fetchAsString = [oracledb.CLOB];
-
 export type ConnectionTestParams = {
   host: string;
   port: number;
