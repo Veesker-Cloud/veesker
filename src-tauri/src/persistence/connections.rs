@@ -243,6 +243,46 @@ impl ConnectionService {
         })
     }
 
+    /// Build the sidecar JSON-RPC params for opening an Oracle session
+    /// for the saved connection identified by `id`. Pulls password (and
+    /// wallet password / wallet dir for wallet auth) from the keychain
+    /// + on-disk wallet root.
+    pub fn sidecar_params(&self, id: &str) -> Result<serde_json::Value, ConnectionError> {
+        use super::connection_config::{basic_params, wallet_params};
+        let full = self.get(id)?;
+        match full.meta {
+            ConnectionMeta::Basic {
+                host,
+                port,
+                service_name,
+                username,
+                ..
+            } => Ok(basic_params(
+                &host,
+                port,
+                &service_name,
+                &username,
+                &full.password,
+            )),
+            ConnectionMeta::Wallet {
+                connect_alias,
+                username,
+                id: meta_id,
+                ..
+            } => {
+                let dir = self.wallet_dir(&meta_id);
+                let wpw = full.wallet_password.as_deref().unwrap_or("");
+                Ok(wallet_params(
+                    &dir,
+                    wpw,
+                    &connect_alias,
+                    &username,
+                    &full.password,
+                ))
+            }
+        }
+    }
+
     pub fn save(&self, input: ConnectionInput) -> Result<ConnectionMeta, ConnectionError> {
         let now = Utc::now().to_rfc3339();
         match input {
