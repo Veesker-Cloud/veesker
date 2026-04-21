@@ -77,3 +77,42 @@ pub async fn connection_test(
         elapsed_ms,
     })
 }
+
+use crate::persistence::connections::{
+    ConnectionError, ConnectionFull, ConnectionInput, ConnectionMeta, ConnectionService,
+};
+
+#[tauri::command]
+pub async fn connection_list(
+    app: AppHandle,
+) -> Result<Vec<ConnectionMeta>, ConnectionError> {
+    let svc = app.state::<ConnectionService>();
+    svc.list()
+}
+
+#[tauri::command]
+pub async fn connection_get(
+    app: AppHandle,
+    id: String,
+) -> Result<ConnectionFull, ConnectionError> {
+    let svc = app.state::<ConnectionService>();
+    svc.get(&id)
+}
+
+#[tauri::command]
+pub async fn connection_save(
+    app: AppHandle,
+    input: ConnectionInput,
+) -> Result<ConnectionMeta, ConnectionError> {
+    let svc = app.state::<ConnectionService>();
+    svc.save(input)
+}
+
+#[tauri::command]
+pub async fn connection_delete(
+    app: AppHandle,
+    id: String,
+) -> Result<(), ConnectionError> {
+    let svc = app.state::<ConnectionService>();
+    svc.delete(&id)
+}
