@@ -1,36 +1,38 @@
 <script lang="ts">
-  import { testConnection, type ConnectionConfig } from "$lib/connection";
+  import { goto } from "$app/navigation";
+  import { onMount } from "svelte";
+  import {
+    listConnections,
+    deleteConnection,
+    type ConnectionMeta,
+  } from "$lib/connections";
 
-  let config = $state<ConnectionConfig>({
-    host: "localhost",
-    port: 1521,
-    serviceName: "FREEPDB1",
-    username: "",
-    password: "",
-  });
+  let connections = $state<ConnectionMeta[]>([]);
+  let loading = $state(true);
+  let error = $state<string | null>(null);
 
-  let testing = $state(false);
-  let result = $state<
-    | { kind: "idle" }
-    | { kind: "ok"; serverVersion: string; elapsedMs: number }
-    | { kind: "err"; message: string }
-  >({ kind: "idle" });
-
-  async function onTest(event: Event) {
-    event.preventDefault();
-    testing = true;
-    result = { kind: "idle" };
-    const res = await testConnection(config);
-    testing = false;
+  async function refresh() {
+    loading = true;
+    const res = await listConnections();
     if (res.ok) {
-      result = {
-        kind: "ok",
-        serverVersion: res.data.serverVersion,
-        elapsedMs: res.data.elapsedMs,
-      };
+      connections = res.data;
+      error = null;
     } else {
-      result = { kind: "err", message: res.error.message };
+      error = res.error.message;
     }
+    loading = false;
+  }
+
+  onMount(refresh);
+
+  async function onDelete(c: ConnectionMeta) {
+    if (!confirm(`Delete "${c.name}"?`)) return;
+    const res = await deleteConnection(c.id);
+    if (!res.ok) {
+      alert(`Delete failed: ${res.error.message}`);
+      return;
+    }
+    await refresh();
   }
 </script>
 
@@ -59,52 +61,37 @@
       </svg>
       <h1>veesker</h1>
     </div>
-    <p class="tagline">connect to Oracle 23ai</p>
+    <p class="tagline">connections</p>
   </header>
 
-  <form onsubmit={onTest}>
-    <label>
-      Host
-      <input type="text" bind:value={config.host} required />
-    </label>
-
-    <div class="row">
-      <label class="port">
-        Port
-        <input type="number" bind:value={config.port} min="1" max="65535" required />
-      </label>
-      <label class="service">
-        Service name
-        <input type="text" bind:value={config.serviceName} required />
-      </label>
-    </div>
-
-    <label>
-      Username
-      <input type="text" bind:value={config.username} autocomplete="off" required />
-    </label>
-
-    <label>
-      Password
-      <input type="password" bind:value={config.password} autocomplete="off" required />
-    </label>
-
-    <button type="submit" disabled={testing}>
-      {testing ? "Testing…" : "Test connection"}
-    </button>
-  </form>
-
-  {#if result.kind === "ok"}
-    <div class="status ok">
-      <strong>Connected.</strong>
-      <span>{result.serverVersion}</span>
-      <span class="meta">{result.elapsedMs} ms</span>
-    </div>
-  {:else if result.kind === "err"}
+  {#if loading}
+    <p class="muted">Loading…</p>
+  {:else if error}
     <div class="status err">
-      <strong>Failed.</strong>
-      <span>{result.message}</span>
+      <strong>Failed to load.</strong>
+      <span>{error}</span>
     </div>
+  {:else if connections.length === 0}
+    <div class="empty">
+      <p>No saved connections yet.</p>
+      <button onclick={() => goto("/connections/new")}>+ New connection</button>
+    </div>
+  {:else}
+    <ul class="list">
+      {#each connections as c (c.id)}
+        <li>
+          <div class="info">
+            <strong>{c.name}</strong>
+            <span class="meta">{c.username}@{c.host}:{c.port}/{c.serviceName}</span>
+          </div>
+          <div class="actions">
+            <button class="ghost" onclick={() => goto(`/connections/${c.id}/edit`)}>Edit</button>
+            <button class="ghost danger" onclick={() => onDelete(c)}>Delete</button>
+          </div>
+        </li>
+      {/each}
+    </ul>
+    <button class="primary" onclick={() => goto("/connections/new")}>+ New connection</button>
   {/if}
 </main>
 
@@ -117,7 +104,7 @@
     -webkit-font-smoothing: antialiased;
   }
   main {
-    max-width: 480px;
+    max-width: 640px;
     margin: 0 auto;
     padding: 4rem 2rem;
     display: flex;
@@ -149,85 +136,95 @@
     font-style: italic;
     margin: 0;
   }
-  form {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-  }
-  label {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-    font-family: "Inter", sans-serif;
-    font-size: 12px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: rgba(26, 22, 18, 0.55);
-  }
-  input {
-    font-family: "Inter", sans-serif;
-    font-size: 14px;
-    font-weight: 400;
-    text-transform: none;
-    letter-spacing: normal;
-    color: #1a1612;
-    background: #fff;
-    border: 1px solid rgba(26, 22, 18, 0.15);
-    border-radius: 6px;
-    padding: 0.6rem 0.75rem;
-  }
-  input:focus {
-    outline: none;
-    border-color: #b33e1f;
-  }
-  .row {
-    display: grid;
-    grid-template-columns: 1fr 2fr;
-    gap: 1rem;
-  }
-  button {
-    margin-top: 0.5rem;
-    font-family: "Space Grotesk", sans-serif;
-    font-size: 14px;
-    font-weight: 500;
-    letter-spacing: 0.04em;
-    color: #f6f1e8;
-    background: #1a1612;
-    border: none;
-    border-radius: 6px;
-    padding: 0.85rem 1rem;
-    cursor: pointer;
-  }
-  button:disabled {
-    opacity: 0.5;
-    cursor: progress;
-  }
-  button:hover:not(:disabled) {
-    background: #b33e1f;
-  }
-  .status {
-    font-family: "Inter", sans-serif;
+  .muted {
+    color: rgba(26, 22, 18, 0.5);
     font-size: 13px;
-    line-height: 1.5;
-    padding: 0.85rem 1rem;
-    border-radius: 6px;
+  }
+  .empty {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+  .list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .list li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    background: #fff;
+    border: 1px solid rgba(26, 22, 18, 0.1);
+    border-radius: 8px;
+  }
+  .info {
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
   }
-  .status.ok {
-    background: rgba(46, 125, 50, 0.08);
-    color: #1b5e20;
-    border: 1px solid rgba(46, 125, 50, 0.25);
+  .info strong {
+    font-family: "Space Grotesk", sans-serif;
+    font-weight: 500;
+    font-size: 16px;
+  }
+  .meta {
+    font-size: 12px;
+    color: rgba(26, 22, 18, 0.55);
+    font-family: "JetBrains Mono", "SF Mono", monospace;
+  }
+  .actions {
+    display: flex;
+    gap: 0.5rem;
+  }
+  button {
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: 6px;
+    padding: 0.55rem 0.9rem;
+    cursor: pointer;
+  }
+  button.ghost {
+    background: transparent;
+    color: #1a1612;
+    border: 1px solid rgba(26, 22, 18, 0.2);
+  }
+  button.ghost.danger:hover {
+    background: #b33e1f;
+    color: #f6f1e8;
+    border-color: #b33e1f;
+  }
+  button.primary {
+    align-self: flex-start;
+    background: #1a1612;
+    color: #f6f1e8;
+    border: none;
+    padding: 0.85rem 1.25rem;
+  }
+  button.primary:hover {
+    background: #b33e1f;
+  }
+  .empty button {
+    background: #1a1612;
+    color: #f6f1e8;
+    border: none;
+    padding: 0.85rem 1.25rem;
+  }
+  .empty button:hover {
+    background: #b33e1f;
   }
   .status.err {
     background: rgba(179, 62, 31, 0.08);
     color: #7a2a14;
     border: 1px solid rgba(179, 62, 31, 0.3);
-  }
-  .meta {
-    font-size: 11px;
-    opacity: 0.6;
+    padding: 0.85rem 1rem;
+    border-radius: 6px;
   }
 </style>
