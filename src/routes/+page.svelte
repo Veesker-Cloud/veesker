@@ -94,6 +94,7 @@
             {/if}
           </div>
           <div class="actions">
+            <button class="primary small" onclick={() => goto(`/workspace/${c.id}`)}>Open</button>
             <button class="ghost" onclick={() => goto(`/connections/${c.id}/edit`)}>Edit</button>
             <button class="ghost danger" onclick={() => onDelete(c)}>Delete</button>
           </div>
@@ -235,6 +236,11 @@
   }
   button.primary:hover {
     background: #b33e1f;
+  }
+  button.primary.small {
+    align-self: auto;
+    padding: 0.5rem 0.85rem;
+    font-size: 12px;
   }
   .empty button {
     background: #1a1612;
