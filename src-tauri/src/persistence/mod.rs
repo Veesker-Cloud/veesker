@@ -1,3 +1,4 @@
+pub mod connection_config;
 pub mod connections;
 pub mod secrets;
 pub mod store;
