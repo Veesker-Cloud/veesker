@@ -6,9 +6,9 @@ use tauri::Manager;
 use crate::sidecar::{ensure, SidecarState};
 
 #[derive(Debug, Deserialize)]
-#[serde(tag = "authType", rename_all = "camelCase")]
+#[serde(tag = "authType")]
 pub enum ConnectionConfig {
-    #[serde(rename = "basic")]
+    #[serde(rename = "basic", rename_all = "camelCase")]
     Basic {
         host: String,
         port: u16,
@@ -16,7 +16,7 @@ pub enum ConnectionConfig {
         username: String,
         password: String,
     },
-    #[serde(rename = "wallet")]
+    #[serde(rename = "wallet", rename_all = "camelCase")]
     Wallet {
         wallet_dir: String,
         wallet_password: String,
@@ -83,8 +83,9 @@ pub async fn connection_test(
     let guard = state.0.lock().await;
     let sidecar = guard.as_ref().expect("sidecar ensured");
 
+    let params = config_to_params(config);
     let result = sidecar
-        .call("connection.test", config_to_params(config))
+        .call("connection.test", params)
         .await
         .map_err(|err| ConnectionTestErr {
             code: err.code,

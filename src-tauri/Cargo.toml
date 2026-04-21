@@ -21,7 +21,7 @@ tauri-plugin-shell = "2"
 tokio = { version = "1", features = ["rt", "sync", "io-util", "macros"] }
 uuid = { version = "1", features = ["v4"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
-keyring = "3"
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 zip = "2"
 tauri-plugin-dialog = "2"

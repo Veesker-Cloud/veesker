@@ -10,9 +10,9 @@ use super::{secrets, store, tnsnames, wallet};
 use store::{AuthType, ConnectionRow, StoreError};
 
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase", tag = "authType")]
+#[serde(tag = "authType")]
 pub enum ConnectionMeta {
-    #[serde(rename = "basic")]
+    #[serde(rename = "basic", rename_all = "camelCase")]
     Basic {
         id: String,
         name: String,
@@ -23,7 +23,7 @@ pub enum ConnectionMeta {
         created_at: String,
         updated_at: String,
     },
-    #[serde(rename = "wallet")]
+    #[serde(rename = "wallet", rename_all = "camelCase")]
     Wallet {
         id: String,
         name: String,
@@ -81,9 +81,9 @@ pub struct ConnectionFull {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(tag = "authType", rename_all = "camelCase")]
+#[serde(tag = "authType")]
 pub enum ConnectionInput {
-    #[serde(rename = "basic")]
+    #[serde(rename = "basic", rename_all = "camelCase")]
     Basic {
         id: Option<String>,
         name: String,
@@ -93,7 +93,7 @@ pub enum ConnectionInput {
         username: String,
         password: String,
     },
-    #[serde(rename = "wallet")]
+    #[serde(rename = "wallet", rename_all = "camelCase")]
     Wallet {
         id: Option<String>,
         name: String,
@@ -250,6 +250,16 @@ impl ConnectionService {
     pub fn sidecar_params(&self, id: &str) -> Result<serde_json::Value, ConnectionError> {
         use super::connection_config::{basic_params, wallet_params};
         let full = self.get(id)?;
+        if full.password_missing {
+            return Err(ConnectionError::invalid(
+                "user password missing from keychain — edit the connection and re-enter the password",
+            ));
+        }
+        if full.wallet_password_missing.unwrap_or(false) {
+            return Err(ConnectionError::invalid(
+                "wallet password missing from keychain — edit the connection and re-enter the wallet password",
+            ));
+        }
         match full.meta {
             ConnectionMeta::Basic {
                 host,
