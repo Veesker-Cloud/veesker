@@ -47,4 +47,25 @@ describe("dispatch", () => {
       error: { code: -32000, message: "kaboom" },
     });
   });
+
+  test("uses err.code when handler throws an error with a numeric code", async () => {
+    const handlers = {
+      coded: async () => {
+        const e: any = new Error("custom failure");
+        e.code = -32010;
+        throw e;
+      },
+    };
+    const res = await dispatch(handlers, {
+      jsonrpc: "2.0",
+      id: 4,
+      method: "coded",
+      params: {},
+    });
+    expect(res).toEqual({
+      jsonrpc: "2.0",
+      id: 4,
+      error: { code: -32010, message: "custom failure" },
+    });
+  });
 });
