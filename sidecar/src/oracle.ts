@@ -163,3 +163,165 @@ export async function withActiveSession<T>(
     );
   }
 }
+
+import { OBJECT_NOT_FOUND } from "./errors";
+
+export type SchemaRow = { name: string; isCurrent: boolean };
+export type ObjectRef = { name: string };
+export type ObjectKind = "TABLE" | "VIEW" | "SEQUENCE";
+
+export type ColumnDef = {
+  name: string;
+  dataType: string;
+  nullable: boolean;
+  isPk: boolean;
+  dataDefault: string | null;
+  comments: string | null;
+};
+export type IndexDef = { name: string; isUnique: boolean; columns: string[] };
+export type TableDetails = {
+  columns: ColumnDef[];
+  indexes: IndexDef[];
+  rowCount: number | null;
+};
+
+function formatDataType(
+  dataType: string,
+  length: number | null,
+  precision: number | null,
+  scale: number | null
+): string {
+  const dt = dataType.toUpperCase();
+  if (dt === "NUMBER") {
+    if (precision != null && scale != null && scale > 0) return `NUMBER(${precision},${scale})`;
+    if (precision != null) return `NUMBER(${precision})`;
+    return "NUMBER";
+  }
+  if (dt === "VARCHAR2" || dt === "NVARCHAR2" || dt === "CHAR" || dt === "NCHAR" || dt === "RAW") {
+    return length != null ? `${dt}(${length})` : dt;
+  }
+  if (dt.startsWith("TIMESTAMP")) {
+    return scale != null ? `TIMESTAMP(${scale})` : dt;
+  }
+  return dt;
+}
+
+export async function schemaList(): Promise<{ schemas: SchemaRow[] }> {
+  return withActiveSession(async (conn) => {
+    const res = await conn.execute<{ NAME: string; IS_CURRENT: number }>(
+      `SELECT username AS NAME,
+              CASE WHEN username = SYS_CONTEXT('USERENV','CURRENT_SCHEMA') THEN 1 ELSE 0 END AS IS_CURRENT
+         FROM all_users
+         ORDER BY (CASE WHEN username = SYS_CONTEXT('USERENV','CURRENT_SCHEMA') THEN 0 ELSE 1 END), username`,
+      [],
+      { outFormat: oracledb.OUT_FORMAT_OBJECT }
+    );
+    const schemas: SchemaRow[] = (res.rows ?? []).map((r) => ({
+      name: r.NAME,
+      isCurrent: r.IS_CURRENT === 1,
+    }));
+    return { schemas };
+  });
+}
+
+export async function objectsList(p: {
+  owner: string;
+  type: ObjectKind;
+}): Promise<{ objects: ObjectRef[] }> {
+  return withActiveSession(async (conn) => {
+    const res = await conn.execute<{ NAME: string }>(
+      `SELECT object_name AS NAME
+         FROM all_objects
+        WHERE owner = :owner AND object_type = :type
+        ORDER BY object_name`,
+      { owner: p.owner, type: p.type },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT }
+    );
+    return { objects: (res.rows ?? []).map((r) => ({ name: r.NAME })) };
+  });
+}
+
+export async function tableDescribe(p: {
+  owner: string;
+  name: string;
+}): Promise<TableDetails> {
+  return withActiveSession(async (conn) => {
+    const colsRes = await conn.execute<{
+      COLUMN_NAME: string;
+      DATA_TYPE: string;
+      DATA_LENGTH: number | null;
+      DATA_PRECISION: number | null;
+      DATA_SCALE: number | null;
+      NULLABLE: string;
+      DATA_DEFAULT: string | null;
+      COMMENTS: string | null;
+      IS_PK: number;
+    }>(
+      `SELECT c.column_name, c.data_type, c.data_length, c.data_precision, c.data_scale,
+              c.nullable, c.data_default, cc.comments,
+              (CASE WHEN pk.column_name IS NOT NULL THEN 1 ELSE 0 END) AS is_pk
+         FROM all_tab_columns c
+         LEFT JOIN all_col_comments cc
+           ON cc.owner = c.owner AND cc.table_name = c.table_name AND cc.column_name = c.column_name
+         LEFT JOIN (
+           SELECT acc.owner, acc.table_name, acc.column_name
+             FROM all_constraints ac
+             JOIN all_cons_columns acc
+               ON acc.owner = ac.owner AND acc.constraint_name = ac.constraint_name
+            WHERE ac.constraint_type = 'P'
+         ) pk
+           ON pk.owner = c.owner AND pk.table_name = c.table_name AND pk.column_name = c.column_name
+        WHERE c.owner = :owner AND c.table_name = :name
+        ORDER BY c.column_id`,
+      { owner: p.owner, name: p.name },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT }
+    );
+
+    if ((colsRes.rows ?? []).length === 0) {
+      throw new RpcCodedError(
+        OBJECT_NOT_FOUND,
+        `Object ${p.owner}.${p.name} has no columns or does not exist.`
+      );
+    }
+
+    const columns: ColumnDef[] = (colsRes.rows ?? []).map((r) => ({
+      name: r.COLUMN_NAME,
+      dataType: formatDataType(r.DATA_TYPE, r.DATA_LENGTH, r.DATA_PRECISION, r.DATA_SCALE),
+      nullable: r.NULLABLE === "Y",
+      isPk: r.IS_PK === 1,
+      dataDefault: r.DATA_DEFAULT === null ? null : String(r.DATA_DEFAULT).trim(),
+      comments: r.COMMENTS,
+    }));
+
+    const idxRes = await conn.execute<{
+      INDEX_NAME: string;
+      UNIQUENESS: string;
+      COLUMNS: string;
+    }>(
+      `SELECT i.index_name, i.uniqueness,
+              LISTAGG(ic.column_name, ',') WITHIN GROUP (ORDER BY ic.column_position) AS columns
+         FROM all_indexes i
+         JOIN all_ind_columns ic
+           ON ic.index_owner = i.owner AND ic.index_name = i.index_name
+        WHERE i.table_owner = :owner AND i.table_name = :name
+        GROUP BY i.index_name, i.uniqueness
+        ORDER BY i.index_name`,
+      { owner: p.owner, name: p.name },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT }
+    );
+    const indexes: IndexDef[] = (idxRes.rows ?? []).map((r) => ({
+      name: r.INDEX_NAME,
+      isUnique: r.UNIQUENESS === "UNIQUE",
+      columns: r.COLUMNS.split(","),
+    }));
+
+    const cntRes = await conn.execute<{ NUM_ROWS: number | null }>(
+      `SELECT num_rows AS NUM_ROWS FROM all_tables WHERE owner = :owner AND table_name = :name`,
+      { owner: p.owner, name: p.name },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT }
+    );
+    const rowCount = cntRes.rows?.[0]?.NUM_ROWS ?? null;
+
+    return { columns, indexes, rowCount };
+  });
+}
