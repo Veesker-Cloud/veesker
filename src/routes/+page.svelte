@@ -81,8 +81,17 @@
       {#each connections as c (c.id)}
         <li>
           <div class="info">
-            <strong>{c.name}</strong>
-            <span class="meta">{c.username}@{c.host}:{c.port}/{c.serviceName}</span>
+            <div class="title-row">
+              <strong>{c.name}</strong>
+              {#if c.authType === "wallet"}
+                <span class="badge">wallet</span>
+              {/if}
+            </div>
+            {#if c.authType === "basic"}
+              <span class="meta">{c.username}@{c.host}:{c.port}/{c.serviceName}</span>
+            {:else}
+              <span class="meta">{c.username}@{c.connectAlias}</span>
+            {/if}
           </div>
           <div class="actions">
             <button class="ghost" onclick={() => goto(`/connections/${c.id}/edit`)}>Edit</button>
@@ -173,6 +182,22 @@
     font-family: "Space Grotesk", sans-serif;
     font-weight: 500;
     font-size: 16px;
+  }
+  .title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .badge {
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    background: rgba(179, 62, 31, 0.12);
+    color: #7a2a14;
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
   }
   .meta {
     font-size: 12px;
