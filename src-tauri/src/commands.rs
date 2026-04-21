@@ -1,18 +1,29 @@
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{json, Value};
 use tauri::AppHandle;
 use tauri::Manager;
 
 use crate::sidecar::{ensure, SidecarState};
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ConnectionConfig {
-    pub host: String,
-    pub port: u16,
-    pub service_name: String,
-    pub username: String,
-    pub password: String,
+#[serde(tag = "authType", rename_all = "camelCase")]
+pub enum ConnectionConfig {
+    #[serde(rename = "basic")]
+    Basic {
+        host: String,
+        port: u16,
+        service_name: String,
+        username: String,
+        password: String,
+    },
+    #[serde(rename = "wallet")]
+    Wallet {
+        wallet_dir: String,
+        wallet_password: String,
+        connect_alias: String,
+        username: String,
+        password: String,
+    },
 }
 
 #[derive(Debug, Serialize)]
@@ -27,6 +38,39 @@ pub struct ConnectionTestOk {
 pub struct ConnectionTestErr {
     pub code: i32,
     pub message: String,
+}
+
+fn config_to_params(config: ConnectionConfig) -> Value {
+    match config {
+        ConnectionConfig::Basic {
+            host,
+            port,
+            service_name,
+            username,
+            password,
+        } => json!({
+            "authType": "basic",
+            "host": host,
+            "port": port,
+            "serviceName": service_name,
+            "username": username,
+            "password": password,
+        }),
+        ConnectionConfig::Wallet {
+            wallet_dir,
+            wallet_password,
+            connect_alias,
+            username,
+            password,
+        } => json!({
+            "authType": "wallet",
+            "walletDir": wallet_dir,
+            "walletPassword": wallet_password,
+            "connectAlias": connect_alias,
+            "username": username,
+            "password": password,
+        }),
+    }
 }
 
 #[tauri::command]
@@ -46,16 +90,7 @@ pub async fn connection_test(
     let sidecar = guard.as_ref().expect("sidecar ensured");
 
     let result = sidecar
-        .call(
-            "connection.test",
-            json!({
-                "host": config.host,
-                "port": config.port,
-                "serviceName": config.service_name,
-                "username": config.username,
-                "password": config.password,
-            }),
-        )
+        .call("connection.test", config_to_params(config))
         .await
         .map_err(|err| ConnectionTestErr {
             code: err.code,
@@ -79,13 +114,11 @@ pub async fn connection_test(
 }
 
 use crate::persistence::connections::{
-    ConnectionError, ConnectionFull, ConnectionInput, ConnectionMeta, ConnectionService,
+    ConnectionError, ConnectionFull, ConnectionInput, ConnectionMeta, ConnectionService, WalletInfo,
 };
 
 #[tauri::command]
-pub async fn connection_list(
-    app: AppHandle,
-) -> Result<Vec<ConnectionMeta>, ConnectionError> {
+pub async fn connection_list(app: AppHandle) -> Result<Vec<ConnectionMeta>, ConnectionError> {
     let svc = app.state::<ConnectionService>();
     svc.list()
 }
@@ -109,10 +142,16 @@ pub async fn connection_save(
 }
 
 #[tauri::command]
-pub async fn connection_delete(
-    app: AppHandle,
-    id: String,
-) -> Result<(), ConnectionError> {
+pub async fn connection_delete(app: AppHandle, id: String) -> Result<(), ConnectionError> {
     let svc = app.state::<ConnectionService>();
     svc.delete(&id)
+}
+
+#[tauri::command]
+pub async fn wallet_inspect(
+    app: AppHandle,
+    zip_path: String,
+) -> Result<WalletInfo, ConnectionError> {
+    let svc = app.state::<ConnectionService>();
+    svc.inspect_wallet(&zip_path)
 }
