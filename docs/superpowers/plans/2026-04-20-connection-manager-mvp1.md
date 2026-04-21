@@ -735,7 +735,7 @@ type Pending = Arc<Mutex<HashMap<String, oneshot::Sender<Response>>>>;
 pub struct Sidecar {
     stdin_tx: mpsc::Sender<String>,
     pending: Pending,
-    _child: CommandChild,
+    _child: Arc<Mutex<CommandChild>>,
 }
 
 impl Sidecar {
@@ -749,39 +749,44 @@ impl Sidecar {
 
         let pending: Pending = Arc::new(Mutex::new(HashMap::new()));
         let (stdin_tx, mut stdin_rx) = mpsc::channel::<String>(32);
+        let child = Arc::new(Mutex::new(child));
 
         // Forward stdin writes
-        let mut stdin_writer = child.clone();
+        let stdin_writer = child.clone();
         tauri::async_runtime::spawn(async move {
             while let Some(line) = stdin_rx.recv().await {
-                if let Err(err) = stdin_writer.write(line.as_bytes()) {
+                let mut guard = stdin_writer.lock().await;
+                if let Err(err) = guard.write(line.as_bytes()) {
                     eprintln!("sidecar stdin write failed: {err}");
                     break;
                 }
             }
         });
 
-        // Demux stdout into pending oneshots
+        // Demux stdout into pending oneshots. Stdout chunks may split a JSON line
+        // across events, so accumulate in a buffer and only consume complete lines.
         let pending_clone = pending.clone();
         tauri::async_runtime::spawn(async move {
+            let mut buffer = String::new();
             while let Some(event) = rx.recv().await {
                 match event {
                     CommandEvent::Stdout(bytes) => {
-                        if let Ok(text) = std::str::from_utf8(&bytes) {
-                            for line in text.lines() {
-                                if line.trim().is_empty() {
-                                    continue;
+                        buffer.push_str(&String::from_utf8_lossy(&bytes));
+                        while let Some(idx) = buffer.find('\n') {
+                            let line = buffer[..idx].trim().to_string();
+                            buffer.drain(..=idx);
+                            if line.is_empty() {
+                                continue;
+                            }
+                            match serde_json::from_str::<Response>(&line) {
+                                Ok(resp) => {
+                                    let mut map = pending_clone.lock().await;
+                                    if let Some(tx) = map.remove(&resp.id) {
+                                        let _ = tx.send(resp);
+                                    }
                                 }
-                                match serde_json::from_str::<Response>(line) {
-                                    Ok(resp) => {
-                                        let mut map = pending_clone.lock().await;
-                                        if let Some(tx) = map.remove(&resp.id) {
-                                            let _ = tx.send(resp);
-                                        }
-                                    }
-                                    Err(err) => {
-                                        eprintln!("sidecar bad json: {err} line={line}");
-                                    }
+                                Err(err) => {
+                                    eprintln!("sidecar bad json: {err} line={line}");
                                 }
                             }
                         }
@@ -793,6 +798,9 @@ impl Sidecar {
                     }
                     CommandEvent::Terminated(payload) => {
                         eprintln!("sidecar terminated: {:?}", payload);
+                        // Wake any in-flight callers — dropping their senders
+                        // resolves rx.await to RecvError, which call() maps to -32002.
+                        pending_clone.lock().await.clear();
                         break;
                     }
                     _ => {}
