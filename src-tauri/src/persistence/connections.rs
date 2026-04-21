@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use chrono::Utc;
@@ -6,33 +6,64 @@ use rusqlite::Connection as SqliteConnection;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::{secrets, store};
-use store::{ConnectionRow, StoreError};
+use super::{secrets, store, tnsnames, wallet};
+use store::{AuthType, ConnectionRow, StoreError};
 
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ConnectionMeta {
-    pub id: String,
-    pub name: String,
-    pub host: String,
-    pub port: u16,
-    pub service_name: String,
-    pub username: String,
-    pub created_at: String,
-    pub updated_at: String,
+#[serde(rename_all = "camelCase", tag = "authType")]
+pub enum ConnectionMeta {
+    #[serde(rename = "basic")]
+    Basic {
+        id: String,
+        name: String,
+        host: String,
+        port: u16,
+        service_name: String,
+        username: String,
+        created_at: String,
+        updated_at: String,
+    },
+    #[serde(rename = "wallet")]
+    Wallet {
+        id: String,
+        name: String,
+        connect_alias: String,
+        username: String,
+        created_at: String,
+        updated_at: String,
+    },
 }
 
-impl From<ConnectionRow> for ConnectionMeta {
-    fn from(r: ConnectionRow) -> Self {
-        Self {
-            id: r.id,
-            name: r.name,
-            host: r.host,
-            port: r.port,
-            service_name: r.service_name,
-            username: r.username,
-            created_at: r.created_at,
-            updated_at: r.updated_at,
+impl TryFrom<ConnectionRow> for ConnectionMeta {
+    type Error = ConnectionError;
+    fn try_from(r: ConnectionRow) -> Result<Self, ConnectionError> {
+        match r.auth_type {
+            AuthType::Basic => Ok(ConnectionMeta::Basic {
+                id: r.id,
+                name: r.name,
+                host: r
+                    .host
+                    .ok_or_else(|| ConnectionError::internal("basic row missing host"))?,
+                port: r
+                    .port
+                    .ok_or_else(|| ConnectionError::internal("basic row missing port"))?,
+                service_name: r
+                    .service_name
+                    .ok_or_else(|| ConnectionError::internal("basic row missing service_name"))?,
+                username: r.username,
+                created_at: r.created_at,
+                updated_at: r.updated_at,
+            }),
+            AuthType::Wallet => Ok(ConnectionMeta::Wallet {
+                id: r.id,
+                name: r.name,
+                connect_alias: r
+                    .connect_alias
+                    .ok_or_else(|| ConnectionError::internal("wallet row missing connect_alias"))?,
+                username: r.username,
+                created_at: r.created_at,
+                updated_at: r.updated_at,
+            }),
         }
     }
 }
@@ -43,18 +74,41 @@ pub struct ConnectionFull {
     pub meta: ConnectionMeta,
     pub password: String,
     pub password_missing: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wallet_password: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wallet_password_missing: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(tag = "authType", rename_all = "camelCase")]
+pub enum ConnectionInput {
+    #[serde(rename = "basic")]
+    Basic {
+        id: Option<String>,
+        name: String,
+        host: String,
+        port: u16,
+        service_name: String,
+        username: String,
+        password: String,
+    },
+    #[serde(rename = "wallet")]
+    Wallet {
+        id: Option<String>,
+        name: String,
+        wallet_zip_path: Option<String>,
+        wallet_password: String,
+        connect_alias: String,
+        username: String,
+        password: String,
+    },
+}
+
+#[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ConnectionInput {
-    pub id: Option<String>,
-    pub name: String,
-    pub host: String,
-    pub port: u16,
-    pub service_name: String,
-    pub username: String,
-    pub password: String,
+pub struct WalletInfo {
+    pub aliases: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -83,7 +137,7 @@ impl ConnectionError {
             message: msg.into(),
         }
     }
-    fn internal(msg: impl Into<String>) -> Self {
+    pub(crate) fn internal(msg: impl Into<String>) -> Self {
         Self {
             code: 500,
             message: msg.into(),
@@ -107,21 +161,36 @@ impl From<keyring::Error> for ConnectionError {
     }
 }
 
+impl From<wallet::WalletError> for ConnectionError {
+    fn from(e: wallet::WalletError) -> Self {
+        match e {
+            wallet::WalletError::MissingFile(name) => {
+                ConnectionError::invalid(format!("wallet missing required file: {name}"))
+            }
+            other => ConnectionError::invalid(format!("wallet: {other}")),
+        }
+    }
+}
+
 pub struct ConnectionService {
     conn: Mutex<SqliteConnection>,
+    wallets_root: PathBuf,
 }
 
 impl ConnectionService {
-    pub fn open(db_path: &PathBuf) -> Result<Self, ConnectionError> {
+    pub fn open(db_path: &Path, wallets_root: PathBuf) -> Result<Self, ConnectionError> {
         if let Some(dir) = db_path.parent() {
             std::fs::create_dir_all(dir)
                 .map_err(|e| ConnectionError::internal(format!("mkdir {dir:?}: {e}")))?;
         }
+        std::fs::create_dir_all(&wallets_root)
+            .map_err(|e| ConnectionError::internal(format!("mkdir {wallets_root:?}: {e}")))?;
         let conn = SqliteConnection::open(db_path)
             .map_err(|e| ConnectionError::internal(format!("open {db_path:?}: {e}")))?;
         store::init_db(&conn)?;
         Ok(Self {
             conn: Mutex::new(conn),
+            wallets_root,
         })
     }
 
@@ -131,10 +200,14 @@ impl ConnectionService {
             .map_err(|_| ConnectionError::internal("db mutex poisoned"))
     }
 
+    fn wallet_dir(&self, id: &str) -> PathBuf {
+        self.wallets_root.join(id)
+    }
+
     pub fn list(&self) -> Result<Vec<ConnectionMeta>, ConnectionError> {
         let conn = self.lock()?;
         let rows = store::list(&conn)?;
-        Ok(rows.into_iter().map(ConnectionMeta::from).collect())
+        rows.into_iter().map(ConnectionMeta::try_from).collect()
     }
 
     pub fn get(&self, id: &str) -> Result<ConnectionFull, ConnectionError> {
@@ -143,77 +216,261 @@ impl ConnectionService {
             store::get(&conn, id)?.ok_or_else(ConnectionError::not_found)?
         };
         let id_for_secret = row.id.clone();
-        let meta = ConnectionMeta::from(row);
-        match secrets::get_password(&id_for_secret) {
-            Ok(password) => Ok(ConnectionFull {
-                meta,
-                password,
-                password_missing: false,
-            }),
-            Err(e) if secrets::is_missing(&e) => Ok(ConnectionFull {
-                meta,
-                password: String::new(),
-                password_missing: true,
-            }),
-            Err(e) => Err(e.into()),
-        }
+        let auth = row.auth_type.clone();
+        let meta = ConnectionMeta::try_from(row)?;
+
+        let (password, password_missing) = match secrets::get_password(&id_for_secret) {
+            Ok(p) => (p, false),
+            Err(e) if secrets::is_missing(&e) => (String::new(), true),
+            Err(e) => return Err(e.into()),
+        };
+
+        let (wallet_password, wallet_password_missing) = match auth {
+            AuthType::Basic => (None, None),
+            AuthType::Wallet => match secrets::get_wallet_password(&id_for_secret) {
+                Ok(p) => (Some(p), Some(false)),
+                Err(e) if secrets::is_missing(&e) => (Some(String::new()), Some(true)),
+                Err(e) => return Err(e.into()),
+            },
+        };
+
+        Ok(ConnectionFull {
+            meta,
+            password,
+            password_missing,
+            wallet_password,
+            wallet_password_missing,
+        })
     }
 
     pub fn save(&self, input: ConnectionInput) -> Result<ConnectionMeta, ConnectionError> {
-        if input.name.trim().is_empty() {
-            return Err(ConnectionError::invalid("name is required"));
-        }
-        if input.host.trim().is_empty() {
-            return Err(ConnectionError::invalid("host is required"));
-        }
-        if input.username.trim().is_empty() {
-            return Err(ConnectionError::invalid("username is required"));
-        }
-        if input.password.is_empty() {
-            return Err(ConnectionError::invalid("password is required"));
-        }
         let now = Utc::now().to_rfc3339();
-        let row = match input.id.as_deref() {
-            None => ConnectionRow {
+        match input {
+            ConnectionInput::Basic {
+                id,
+                name,
+                host,
+                port,
+                service_name,
+                username,
+                password,
+            } => {
+                if name.trim().is_empty() {
+                    return Err(ConnectionError::invalid("name is required"));
+                }
+                if host.trim().is_empty() {
+                    return Err(ConnectionError::invalid("host is required"));
+                }
+                if username.trim().is_empty() {
+                    return Err(ConnectionError::invalid("username is required"));
+                }
+                if password.is_empty() {
+                    return Err(ConnectionError::invalid("password is required"));
+                }
+                let row = self.assemble_basic_row(
+                    id.as_deref(),
+                    name,
+                    host,
+                    port,
+                    service_name,
+                    username,
+                    &now,
+                )?;
+                self.persist_row(&row, id.is_some())?;
+                secrets::set_password(&row.id, &password)?;
+                ConnectionMeta::try_from(row)
+            }
+            ConnectionInput::Wallet {
+                id,
+                name,
+                wallet_zip_path,
+                wallet_password,
+                connect_alias,
+                username,
+                password,
+            } => {
+                if name.trim().is_empty() {
+                    return Err(ConnectionError::invalid("name is required"));
+                }
+                if username.trim().is_empty() {
+                    return Err(ConnectionError::invalid("username is required"));
+                }
+                if password.is_empty() {
+                    return Err(ConnectionError::invalid("password is required"));
+                }
+                if wallet_password.is_empty() {
+                    return Err(ConnectionError::invalid("wallet password is required"));
+                }
+                if connect_alias.trim().is_empty() {
+                    return Err(ConnectionError::invalid("connect alias is required"));
+                }
+                let row = self.assemble_wallet_row(
+                    id.as_deref(),
+                    name,
+                    connect_alias.clone(),
+                    username,
+                    &now,
+                )?;
+
+                let wallet_dir = self.wallet_dir(&row.id);
+                if let Some(zip_path) = wallet_zip_path.as_deref() {
+                    let zip = Path::new(zip_path);
+                    let body = wallet::read_tnsnames_from_zip(zip)?;
+                    let aliases = tnsnames::parse_aliases(&body);
+                    if !aliases
+                        .iter()
+                        .any(|a| a.eq_ignore_ascii_case(&connect_alias))
+                    {
+                        return Err(ConnectionError::invalid(format!(
+                            "alias '{connect_alias}' not found in wallet's tnsnames.ora"
+                        )));
+                    }
+                    wallet::extract_to(zip, &wallet_dir)?;
+                } else {
+                    if id.is_none() {
+                        return Err(ConnectionError::invalid(
+                            "wallet zip is required for new wallet connections",
+                        ));
+                    }
+                    if !wallet_dir.exists() {
+                        return Err(ConnectionError::invalid(
+                            "wallet directory missing — please re-upload the wallet zip",
+                        ));
+                    }
+                    let body = std::fs::read_to_string(wallet_dir.join("tnsnames.ora"))
+                        .map_err(|e| {
+                            ConnectionError::invalid(format!("read tnsnames.ora: {e}"))
+                        })?;
+                    let aliases = tnsnames::parse_aliases(&body);
+                    if !aliases
+                        .iter()
+                        .any(|a| a.eq_ignore_ascii_case(&connect_alias))
+                    {
+                        return Err(ConnectionError::invalid(format!(
+                            "alias '{connect_alias}' not found in saved tnsnames.ora"
+                        )));
+                    }
+                }
+
+                self.persist_row(&row, id.is_some())?;
+                secrets::set_password(&row.id, &password)?;
+                secrets::set_wallet_password(&row.id, &wallet_password)?;
+                ConnectionMeta::try_from(row)
+            }
+        }
+    }
+
+    fn assemble_basic_row(
+        &self,
+        id: Option<&str>,
+        name: String,
+        host: String,
+        port: u16,
+        service_name: String,
+        username: String,
+        now: &str,
+    ) -> Result<ConnectionRow, ConnectionError> {
+        match id {
+            None => Ok(ConnectionRow {
                 id: Uuid::new_v4().to_string(),
-                name: input.name.clone(),
-                host: input.host.clone(),
-                port: input.port,
-                service_name: input.service_name.clone(),
-                username: input.username.clone(),
-                created_at: now.clone(),
-                updated_at: now,
-            },
+                name,
+                auth_type: AuthType::Basic,
+                host: Some(host),
+                port: Some(port),
+                service_name: Some(service_name),
+                connect_alias: None,
+                username,
+                created_at: now.into(),
+                updated_at: now.into(),
+            }),
             Some(id) => {
                 let existing = {
                     let conn = self.lock()?;
                     store::get(&conn, id)?.ok_or_else(ConnectionError::not_found)?
                 };
-                ConnectionRow {
-                    id: existing.id,
-                    name: input.name.clone(),
-                    host: input.host.clone(),
-                    port: input.port,
-                    service_name: input.service_name.clone(),
-                    username: input.username.clone(),
-                    created_at: existing.created_at,
-                    updated_at: now,
+                if existing.auth_type != AuthType::Basic {
+                    return Err(ConnectionError::invalid(
+                        "cannot change auth type — delete and recreate the connection",
+                    ));
                 }
-            }
-        };
-        {
-            let conn = self.lock()?;
-            if input.id.is_some() {
-                store::update(&conn, &row)?;
-            } else {
-                store::create(&conn, &row)?;
+                Ok(ConnectionRow {
+                    id: existing.id,
+                    name,
+                    auth_type: AuthType::Basic,
+                    host: Some(host),
+                    port: Some(port),
+                    service_name: Some(service_name),
+                    connect_alias: None,
+                    username,
+                    created_at: existing.created_at,
+                    updated_at: now.into(),
+                })
             }
         }
-        secrets::set_password(&row.id, &input.password)?;
-        Ok(ConnectionMeta::from(row))
+    }
+
+    fn assemble_wallet_row(
+        &self,
+        id: Option<&str>,
+        name: String,
+        connect_alias: String,
+        username: String,
+        now: &str,
+    ) -> Result<ConnectionRow, ConnectionError> {
+        match id {
+            None => Ok(ConnectionRow {
+                id: Uuid::new_v4().to_string(),
+                name,
+                auth_type: AuthType::Wallet,
+                host: None,
+                port: None,
+                service_name: None,
+                connect_alias: Some(connect_alias),
+                username,
+                created_at: now.into(),
+                updated_at: now.into(),
+            }),
+            Some(id) => {
+                let existing = {
+                    let conn = self.lock()?;
+                    store::get(&conn, id)?.ok_or_else(ConnectionError::not_found)?
+                };
+                if existing.auth_type != AuthType::Wallet {
+                    return Err(ConnectionError::invalid(
+                        "cannot change auth type — delete and recreate the connection",
+                    ));
+                }
+                Ok(ConnectionRow {
+                    id: existing.id,
+                    name,
+                    auth_type: AuthType::Wallet,
+                    host: None,
+                    port: None,
+                    service_name: None,
+                    connect_alias: Some(connect_alias),
+                    username,
+                    created_at: existing.created_at,
+                    updated_at: now.into(),
+                })
+            }
+        }
+    }
+
+    fn persist_row(&self, row: &ConnectionRow, is_update: bool) -> Result<(), ConnectionError> {
+        let conn = self.lock()?;
+        if is_update {
+            store::update(&conn, row)?;
+        } else {
+            store::create(&conn, row)?;
+        }
+        Ok(())
     }
 
     pub fn delete(&self, id: &str) -> Result<(), ConnectionError> {
+        let row = {
+            let conn = self.lock()?;
+            store::get(&conn, id)?
+        };
         {
             let conn = self.lock()?;
             store::delete(&conn, id)?;
@@ -221,6 +478,26 @@ impl ConnectionService {
         if let Err(e) = secrets::delete_password(id) {
             eprintln!("[connections] keychain delete failed for {id}: {e}");
         }
+        if let Some(r) = row {
+            if r.auth_type == AuthType::Wallet {
+                if let Err(e) = secrets::delete_wallet_password(id) {
+                    eprintln!("[connections] wallet keychain delete failed for {id}: {e}");
+                }
+                let dir = self.wallet_dir(id);
+                if dir.exists() {
+                    if let Err(e) = std::fs::remove_dir_all(&dir) {
+                        eprintln!("[connections] wallet dir delete failed for {dir:?}: {e}");
+                    }
+                }
+            }
+        }
         Ok(())
+    }
+
+    pub fn inspect_wallet(&self, zip_path: &str) -> Result<WalletInfo, ConnectionError> {
+        let body = wallet::read_tnsnames_from_zip(Path::new(zip_path))?;
+        Ok(WalletInfo {
+            aliases: tnsnames::parse_aliases(&body),
+        })
     }
 }
