@@ -893,7 +893,7 @@ git commit -m "feat(tauri): sidecar process manager with JSON-RPC demux"
 ```rust
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 use crate::sidecar::{ensure, SidecarState};
 
