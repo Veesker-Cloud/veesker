@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 use tauri::AppHandle;
 use tauri::Manager;
 
@@ -41,6 +41,8 @@ pub struct ConnectionTestErr {
 }
 
 fn config_to_params(config: ConnectionConfig) -> Value {
+    use crate::persistence::connection_config::{basic_params, wallet_params};
+    use std::path::Path;
     match config {
         ConnectionConfig::Basic {
             host,
@@ -48,28 +50,20 @@ fn config_to_params(config: ConnectionConfig) -> Value {
             service_name,
             username,
             password,
-        } => json!({
-            "authType": "basic",
-            "host": host,
-            "port": port,
-            "serviceName": service_name,
-            "username": username,
-            "password": password,
-        }),
+        } => basic_params(&host, port, &service_name, &username, &password),
         ConnectionConfig::Wallet {
             wallet_dir,
             wallet_password,
             connect_alias,
             username,
             password,
-        } => json!({
-            "authType": "wallet",
-            "walletDir": wallet_dir,
-            "walletPassword": wallet_password,
-            "connectAlias": connect_alias,
-            "username": username,
-            "password": password,
-        }),
+        } => wallet_params(
+            Path::new(&wallet_dir),
+            &wallet_password,
+            &connect_alias,
+            &username,
+            &password,
+        ),
     }
 }
 
