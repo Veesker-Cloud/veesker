@@ -1,9 +1,21 @@
 import { parseRequest, makeError } from "./rpc";
 import { dispatch, type HandlerMap } from "./handlers";
-import { connectionTest } from "./oracle";
+import {
+  connectionTest,
+  openSession,
+  closeSession,
+  schemaList,
+  objectsList,
+  tableDescribe,
+} from "./oracle";
 
 const handlers: HandlerMap = {
   "connection.test": (params) => connectionTest(params as any),
+  "workspace.open": (params) => openSession(params as any),
+  "workspace.close": () => closeSession(),
+  "schema.list": () => schemaList(),
+  "objects.list": (params) => objectsList(params as any),
+  "table.describe": (params) => tableDescribe(params as any),
   ping: async () => ({ pong: true }),
 };
 
