@@ -20,3 +20,4 @@ src-tauri/gen/
 # Compiled sidecar binaries (built per-platform via scripts/build-sidecar.sh)
 src-tauri/binaries/veesker-sidecar-*
 !src-tauri/binaries/.gitkeep
+.superpowers/
