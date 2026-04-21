@@ -1,4 +1,5 @@
 mod commands;
+mod persistence;
 mod sidecar;
 
 use tokio::sync::Mutex;
