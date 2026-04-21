@@ -16,6 +16,7 @@ export async function dispatch(
     return makeResult(req.id, result);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return makeError(req.id, -32000, message);
+    const code = typeof (err as any)?.code === "number" ? (err as any).code : -32000;
+    return makeError(req.id, code, message);
   }
 }
