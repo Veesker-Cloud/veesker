@@ -4,6 +4,7 @@
   import { saveConnection, type ConnectionInput } from "$lib/connections";
 
   const initial: ConnectionInput = {
+    authType: "basic",
     name: "",
     host: "localhost",
     port: 1521,
