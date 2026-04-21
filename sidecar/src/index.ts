@@ -7,6 +7,7 @@ import {
   schemaList,
   objectsList,
   tableDescribe,
+  queryExecute,
 } from "./oracle";
 
 const handlers: HandlerMap = {
@@ -16,6 +17,7 @@ const handlers: HandlerMap = {
   "schema.list": () => schemaList(),
   "objects.list": (params) => objectsList(params as any),
   "table.describe": (params) => tableDescribe(params as any),
+  "query.execute": (params) => queryExecute(params as any),
   ping: async () => ({ pong: true }),
 };
 
