@@ -2,24 +2,44 @@ use keyring::Entry;
 
 const SERVICE: &str = "veesker";
 
-fn account(id: &str) -> String {
+fn user_account(id: &str) -> String {
     format!("connection:{id}")
 }
 
-fn entry(id: &str) -> keyring::Result<Entry> {
-    Entry::new(SERVICE, &account(id))
+fn wallet_account(id: &str) -> String {
+    format!("connection:{id}:wallet")
+}
+
+fn entry(account: &str) -> keyring::Result<Entry> {
+    Entry::new(SERVICE, account)
 }
 
 pub fn set_password(id: &str, password: &str) -> keyring::Result<()> {
-    entry(id)?.set_password(password)
+    entry(&user_account(id))?.set_password(password)
 }
 
 pub fn get_password(id: &str) -> keyring::Result<String> {
-    entry(id)?.get_password()
+    entry(&user_account(id))?.get_password()
 }
 
 pub fn delete_password(id: &str) -> keyring::Result<()> {
-    match entry(id)?.delete_credential() {
+    delete_account(&user_account(id))
+}
+
+pub fn set_wallet_password(id: &str, password: &str) -> keyring::Result<()> {
+    entry(&wallet_account(id))?.set_password(password)
+}
+
+pub fn get_wallet_password(id: &str) -> keyring::Result<String> {
+    entry(&wallet_account(id))?.get_password()
+}
+
+pub fn delete_wallet_password(id: &str) -> keyring::Result<()> {
+    delete_account(&wallet_account(id))
+}
+
+fn delete_account(account: &str) -> keyring::Result<()> {
+    match entry(account)?.delete_credential() {
         Ok(()) => Ok(()),
         Err(keyring::Error::NoEntry) => Ok(()),
         Err(e) => Err(e),
@@ -44,5 +64,15 @@ mod tests {
         let err = get_password(&id).unwrap_err();
         assert!(is_missing(&err));
         delete_password(&id).unwrap();
+    }
+
+    #[test]
+    #[ignore = "touches the real OS keychain — run with `cargo test -- --ignored`"]
+    fn wallet_round_trip() {
+        let id = format!("test-{}", uuid::Uuid::new_v4());
+        set_wallet_password(&id, "wpass").unwrap();
+        assert_eq!(get_wallet_password(&id).unwrap(), "wpass");
+        delete_wallet_password(&id).unwrap();
+        assert!(is_missing(&get_wallet_password(&id).unwrap_err()));
     }
 }
