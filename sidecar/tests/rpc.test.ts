@@ -47,4 +47,12 @@ describe("makeError", () => {
       error: { code: -32000, message: "boom", data: { detail: "x" } },
     });
   });
+
+  test("allows null id for parse errors per JSON-RPC §5.1", () => {
+    expect(makeError(null, -32700, "Parse error")).toEqual({
+      jsonrpc: "2.0",
+      id: null,
+      error: { code: -32700, message: "Parse error" },
+    });
+  });
 });

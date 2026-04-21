@@ -6,8 +6,8 @@ export type JsonRpcRequest = {
 };
 
 export type JsonRpcResponse =
-  | { jsonrpc: "2.0"; id: number | string; result: unknown }
-  | { jsonrpc: "2.0"; id: number | string; error: { code: number; message: string; data?: unknown } };
+  | { jsonrpc: "2.0"; id: number | string | null; result: unknown }
+  | { jsonrpc: "2.0"; id: number | string | null; error: { code: number; message: string; data?: unknown } };
 
 export function parseRequest(line: string): JsonRpcRequest | null {
   let obj: unknown;
@@ -33,7 +33,7 @@ export function makeResult(id: number | string, result: unknown): JsonRpcRespons
 }
 
 export function makeError(
-  id: number | string,
+  id: number | string | null,
   code: number,
   message: string,
   data?: unknown
