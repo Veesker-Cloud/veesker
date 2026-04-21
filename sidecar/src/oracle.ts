@@ -325,3 +325,60 @@ export async function tableDescribe(p: {
     return { columns, indexes, rowCount };
   });
 }
+
+export type QueryColumn = { name: string; dataType: string };
+export type QueryResultRow = unknown[];
+export type QueryResult = {
+  columns: QueryColumn[];
+  rows: QueryResultRow[];
+  rowCount: number;
+  elapsedMs: number;
+};
+
+function formatColumnType(m: {
+  dbTypeName?: string;
+  precision?: number | null;
+  scale?: number | null;
+  byteSize?: number | null;
+}): string {
+  const t = (m.dbTypeName ?? "UNKNOWN").toUpperCase();
+  if (t === "NUMBER") {
+    if (m.precision != null && m.scale != null && m.scale > 0) return `NUMBER(${m.precision},${m.scale})`;
+    if (m.precision != null) return `NUMBER(${m.precision})`;
+    return "NUMBER";
+  }
+  if (t === "VARCHAR2" || t === "NVARCHAR2" || t === "CHAR" || t === "NCHAR" || t === "RAW") {
+    return m.byteSize != null ? `${t}(${m.byteSize})` : t;
+  }
+  if (t.startsWith("TIMESTAMP")) {
+    return m.scale != null ? `TIMESTAMP(${m.scale})` : t;
+  }
+  return t;
+}
+
+function normalizeCell(v: unknown): unknown {
+  if (v instanceof Float32Array || v instanceof Float64Array) return Array.from(v);
+  if (v instanceof Int8Array || v instanceof Uint8Array) return Array.from(v);
+  return v;
+}
+
+export async function queryExecute(p: { sql: string }): Promise<QueryResult> {
+  return withActiveSession(async (conn) => {
+    const started = Date.now();
+    const r: any = await conn.execute(p.sql, [], {
+      maxRows: 100,
+      outFormat: oracledb.OUT_FORMAT_ARRAY,
+    });
+    const elapsedMs = Date.now() - started;
+
+    const meta: any[] = r.metaData ?? [];
+    const rawRows: any[][] = r.rows ?? [];
+    const columns: QueryColumn[] = meta.map((m) => ({
+      name: m.name,
+      dataType: formatColumnType(m),
+    }));
+    const rows: QueryResultRow[] = rawRows.map((row) => row.map(normalizeCell));
+    const rowCount = rawRows.length > 0 ? rawRows.length : (r.rowsAffected ?? 0);
+    return { columns, rows, rowCount, elapsedMs };
+  });
+}
