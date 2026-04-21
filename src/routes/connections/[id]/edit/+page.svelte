@@ -11,6 +11,7 @@
 
   let initial = $state<ConnectionInput | null>(null);
   let passwordMissing = $state(false);
+  let walletPasswordMissing = $state(false);
   let loadError = $state<string | null>(null);
 
   onMount(async () => {
@@ -20,17 +21,31 @@
       loadError = res.error.message;
       return;
     }
-    const { meta, password, passwordMissing: missing } = res.data;
-    initial = {
-      id: meta.id,
-      name: meta.name,
-      host: meta.host,
-      port: meta.port,
-      serviceName: meta.serviceName,
-      username: meta.username,
-      password,
-    };
-    passwordMissing = missing;
+    const { meta, password, passwordMissing: pmiss, walletPassword, walletPasswordMissing: wmiss } = res.data;
+    if (meta.authType === "basic") {
+      initial = {
+        authType: "basic",
+        id: meta.id,
+        name: meta.name,
+        host: meta.host,
+        port: meta.port,
+        serviceName: meta.serviceName,
+        username: meta.username,
+        password,
+      };
+    } else {
+      initial = {
+        authType: "wallet",
+        id: meta.id,
+        name: meta.name,
+        walletPassword: walletPassword ?? "",
+        connectAlias: meta.connectAlias,
+        username: meta.username,
+        password,
+      };
+      walletPasswordMissing = wmiss ?? false;
+    }
+    passwordMissing = pmiss;
   });
 
   async function onSave(input: ConnectionInput) {
@@ -66,7 +81,15 @@
       <button onclick={() => goto("/")}>Back to list</button>
     </div>
   {:else if initial}
-    <ConnectionForm {initial} submitLabel="Save" {passwordMissing} {onSave} {onCancel} />
+    <ConnectionForm
+      {initial}
+      submitLabel="Save"
+      {passwordMissing}
+      {walletPasswordMissing}
+      isEdit={true}
+      {onSave}
+      {onCancel}
+    />
   {:else}
     <p class="muted">Loading…</p>
   {/if}
