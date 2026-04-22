@@ -2,6 +2,7 @@
 import { queryExecute, queryExecuteMulti, queryCancel, type QueryResult } from "$lib/sql-query";
 import { splitSql } from "$lib/sql-splitter";
 import { historySave, type HistoryEntry } from "$lib/query-history";
+import { saveAs, saveExisting, openFile } from "$lib/sql-files";
 
 export type TabResult = {
   id: string;                         // crypto.randomUUID for selection stability
@@ -22,6 +23,9 @@ export type SqlTab = {
   running: boolean;                   // still useful for the tab badge / cancel overlay
   runningRequestId: string | null;    // for cancel
   splitterError: string | null;       // if the splitter emitted errors, show banner
+  filePath: string | null;            // null = never saved
+  isDirty: boolean;                   // true when sql !== savedContent
+  savedContent: string | null;        // content at last save/load; null if new tab
 };
 
 /** Returns the active TabResult for a tab, or null if none. */
@@ -116,6 +120,9 @@ function makeTab(title: string, sql: string): SqlTab {
     running: false,
     splitterError: null,
     runningRequestId: null,
+    filePath: null,
+    isDirty: false,
+    savedContent: null,
   };
 }
 
@@ -272,7 +279,10 @@ export const sqlEditor = {
 
   updateSql(id: string, sql: string): void {
     const tab = findTab(id);
-    if (tab !== null) tab.sql = sql;
+    if (tab !== null) {
+      tab.sql = sql;
+      tab.isDirty = tab.savedContent !== null && tab.sql !== tab.savedContent;
+    }
   },
 
   toggleDrawer(): void {
@@ -513,6 +523,69 @@ export const sqlEditor = {
     } finally {
       tab.running = false;
       tab.runningRequestId = null;
+    }
+  },
+
+  async saveActive(): Promise<void> {
+    const tab = this.active;
+    if (tab === null) return;
+    if (tab.filePath === null) {
+      await this.saveAsActive();
+      return;
+    }
+    if (!tab.isDirty) return;
+    const tabId = tab.id;
+    const tabFilePath = tab.filePath;
+    const sqlToSave = tab.sql;
+    try {
+      await saveExisting(tabFilePath, sqlToSave);
+      const liveTab = findTab(tabId);
+      if (liveTab === null) return;
+      liveTab.savedContent = sqlToSave;
+      liveTab.isDirty = false;
+    } catch (e) {
+      alert(`Save failed: ${String(e)}`);
+    }
+  },
+
+  async saveAsActive(): Promise<void> {
+    const tab = this.active;
+    if (tab === null) return;
+    const defaultName = tab.filePath
+      ? tab.filePath.split("/").pop()!.replace(/\.sql$/i, "")
+      : tab.title;
+    const sqlToSave = tab.sql;
+    const tabId = tab.id;
+    try {
+      const path = await saveAs(sqlToSave, defaultName);
+      if (path === null) return;
+      const liveTab = findTab(tabId);
+      if (liveTab === null) return;
+      liveTab.filePath = path;
+      const base = path.split("/").pop() ?? path;
+      liveTab.title = base.replace(/\.sql$/i, "");
+      liveTab.savedContent = sqlToSave;
+      liveTab.isDirty = liveTab.sql !== sqlToSave;
+    } catch (e) {
+      alert(`Save failed: ${String(e)}`);
+    }
+  },
+
+  async openFromFile(): Promise<void> {
+    try {
+      const result = await openFile();
+      if (result === null) return;
+      const base = result.path.split("/").pop() ?? result.path;
+      const title = base.replace(/\.sql$/i, "");
+      const tab = makeTab(title, result.content);
+      tab.filePath = result.path;
+      tab.savedContent = result.content;
+      tab.isDirty = false;
+      _tabs.push(tab);
+      _activeId = tab.id;
+      _drawerOpen = true;
+    } catch (e) {
+      alert(`Open failed: ${String(e)}`);
     }
   },
 

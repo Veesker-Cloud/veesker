@@ -2,6 +2,7 @@ mod commands;
 mod persistence;
 mod sidecar;
 
+use tauri::menu::MenuBuilder;
 use tauri::Manager;
 use tokio::sync::Mutex;
 
@@ -14,6 +15,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
+        .menu(|app| MenuBuilder::new(app).build())
         .manage(SidecarState(Mutex::new(None)))
         .setup(|app| {
             let app_data = app.path().app_data_dir().expect("app data dir");

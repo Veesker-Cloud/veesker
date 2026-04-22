@@ -29,6 +29,9 @@ function tab(partial: Partial<SqlTab> = {}): SqlTab {
     running: false,
     splitterError: null,
     runningRequestId: null,
+    filePath: null,
+    isDirty: false,
+    savedContent: null,
     ...partial,
   };
 }

@@ -31,6 +31,9 @@ function makeTab(partial: Partial<SqlTab> = {}): SqlTab {
     running: partial.running ?? false,
     splitterError: partial.splitterError ?? null,
     runningRequestId: partial.runningRequestId ?? null,
+    filePath: partial.filePath ?? null,
+    isDirty: partial.isDirty ?? false,
+    savedContent: partial.savedContent ?? null,
     ...partial,
   };
 }

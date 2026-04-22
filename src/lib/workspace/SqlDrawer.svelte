@@ -126,7 +126,7 @@
             onkeydown={(e) => { if (e.key === "Enter") sqlEditor.setActive(t.id); }}
           >
             {#if t.running}<span class="tab-spinner"></span>{/if}
-            <span class="tab-title">{t.title}</span>
+            <span class="tab-title">{t.isDirty ? `● ${t.title}` : t.title}</span>
             <button
               class="tab-close"
               aria-label="Close {t.title}"
@@ -166,6 +166,8 @@
                   }
                 }}
                 onRunAll={() => void sqlEditor.runActiveAll()}
+                onSave={() => void sqlEditor.saveActive()}
+                onSaveAs={() => void sqlEditor.saveAsActive()}
               />
             {/if}
           </div>
