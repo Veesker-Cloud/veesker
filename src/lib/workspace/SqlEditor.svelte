@@ -5,6 +5,8 @@
   import { sql, PLSQL } from "@codemirror/lang-sql";
   import { oneDark } from "@codemirror/theme-one-dark";
   import { basicSetup } from "codemirror";
+  import { lintGutter, setDiagnostics } from "@codemirror/lint";
+  import type { CompileError } from "$lib/workspace";
 
   type Props = {
     value: string;
@@ -15,11 +17,20 @@
     onRunAll: () => void;
     onSave: () => void;
     onSaveAs: () => void;
+    compileErrors?: CompileError[] | null;
   };
-  let { value, onChange, onRunCursor, onRunAll, onSave, onSaveAs }: Props = $props();
+  let { value, onChange, onRunCursor, onRunAll, onSave, onSaveAs, compileErrors = null }: Props = $props();
 
   let host: HTMLDivElement | undefined = $state();
   let view: EditorView | null = null;
+
+  export function gotoLine(n: number): void {
+    if (!view) return;
+    const lineNum = Math.max(1, Math.min(n, view.state.doc.lines));
+    const line = view.state.doc.line(lineNum);
+    view.dispatch({ selection: { anchor: line.from }, scrollIntoView: true });
+    view.focus();
+  }
 
   onMount(() => {
     if (!host) return;
@@ -74,6 +85,7 @@
           basicSetup,
           sql({ dialect: PLSQL }),
           oneDark,
+          lintGutter(),
           EditorView.updateListener.of((u) => {
             if (u.docChanged) onChange(u.state.doc.toString());
           }),
@@ -93,6 +105,25 @@
         changes: { from: 0, to: view.state.doc.length, insert: value },
       });
     }
+  });
+
+  $effect(() => {
+    if (!view) return;
+    if (!compileErrors || compileErrors.length === 0) {
+      view.dispatch(setDiagnostics(view.state, []));
+      return;
+    }
+    const diagnostics = compileErrors.map((err) => {
+      const lineNum = Math.max(1, Math.min(err.line, view!.state.doc.lines));
+      const line = view!.state.doc.line(lineNum);
+      return {
+        from: line.from,
+        to: line.to,
+        severity: "error" as const,
+        message: err.text,
+      };
+    });
+    view.dispatch(setDiagnostics(view.state, diagnostics));
   });
 </script>
 
