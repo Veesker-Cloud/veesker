@@ -7,6 +7,7 @@
     type ConnectionMeta,
   } from "$lib/connections";
   import VeeskerMark from "$lib/VeeskerMark.svelte";
+  import { ask, message } from "@tauri-apps/plugin-dialog";
 
   let connections = $state<ConnectionMeta[]>([]);
   let loading = $state(true);
@@ -28,10 +29,10 @@
 
   async function onDelete(e: MouseEvent, c: ConnectionMeta) {
     e.stopPropagation();
-    if (!confirm(`Delete "${c.name}"?`)) return;
+    if (!await ask(`Delete "${c.name}"?`, { title: "Delete connection", kind: "warning" })) return;
     const res = await deleteConnection(c.id);
     if (!res.ok) {
-      alert(`Delete failed: ${res.error.message}`);
+      await message(`Delete failed: ${res.error.message}`, { title: "Error", kind: "error" });
       return;
     }
     await refresh();

@@ -1,5 +1,7 @@
 <script lang="ts">
   import { sqlEditor } from "$lib/stores/sql-editor.svelte";
+  import { ask } from "@tauri-apps/plugin-dialog";
+  import VeeskerMark from "$lib/VeeskerMark.svelte";
 
   type Props = {
     connectionName: string;
@@ -20,6 +22,8 @@
 <div class="bar">
   <!-- Left: connection identity -->
   <div class="bar-left">
+    <VeeskerMark size={22} bg={false} class="bar-mark" />
+    <span class="bar-divider" aria-hidden="true"></span>
     <span class="conn-dot" aria-label="Connected"></span>
     <span class="conn-name">{connectionName}</span>
     <span class="divider" aria-hidden="true"></span>
@@ -56,7 +60,7 @@
       class="action-btn disconnect-btn"
       aria-label="Disconnect"
       title="Disconnect"
-      onclick={() => { if (confirm("Disconnect from the database?")) onDisconnect(); }}
+      onclick={async () => { if (await ask("Disconnect from the database?", { title: "Disconnect", kind: "warning" })) onDisconnect(); }}
     >
       <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
         <path d="M5 2H2a.5.5 0 00-.5.5v7A.5.5 0 002 10h3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
@@ -91,6 +95,16 @@
     gap: 0.5rem;
     overflow: hidden;
     min-width: 0;
+  }
+  :global(.bar-mark) {
+    flex-shrink: 0;
+    opacity: 0.9;
+  }
+  .bar-divider {
+    width: 1px;
+    height: 14px;
+    background: rgba(255,255,255,0.1);
+    flex-shrink: 0;
   }
   .conn-dot {
     width: 7px;

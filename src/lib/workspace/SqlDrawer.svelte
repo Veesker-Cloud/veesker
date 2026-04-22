@@ -5,6 +5,7 @@
   import ExecutionLog from "./ExecutionLog.svelte";
   import QueryHistory from "./QueryHistory.svelte";
   import CompileErrors from "./CompileErrors.svelte";
+  import { ask, message } from "@tauri-apps/plugin-dialog";
 
   // ── Refs ────────────────────────────────────────────────────────────────────
   let drawerEl: HTMLDivElement | undefined = $state();
@@ -204,8 +205,9 @@
             class="file-btn compile-btn"
             title="Compile (run and check for errors)"
             aria-label="Compile"
-            onclick={() => {
-              if (!confirm("Compile and apply this DDL to the database?\nThis will CREATE OR REPLACE the object.")) return;
+            onclick={async () => {
+              const ok = await ask("Compile and apply this DDL to the database?\nThis will CREATE OR REPLACE the object.", { title: "Compile", kind: "warning" });
+              if (!ok) return;
               void sqlEditor.runActiveAll();
             }}
           >
@@ -221,9 +223,10 @@
           class="txn-btn commit-btn"
           title="Commit transaction"
           aria-label="Commit"
-          onclick={() => {
-            if (!confirm("Commit the current transaction?\nAll pending changes will be permanently saved to the database.")) return;
-            void sqlEditor.commit().catch(e => alert(String(e)));
+          onclick={async () => {
+            const ok = await ask("Commit the current transaction?\nAll pending changes will be permanently saved to the database.", { title: "Commit", kind: "warning" });
+            if (!ok) return;
+            void sqlEditor.commit().catch(e => void message(String(e), { title: "Commit failed", kind: "error" }));
           }}
         >
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
@@ -236,9 +239,10 @@
           class="txn-btn rollback-btn"
           title="Rollback transaction"
           aria-label="Rollback"
-          onclick={() => {
-            if (!confirm("Rollback the current transaction?\nAll uncommitted changes will be permanently discarded.")) return;
-            void sqlEditor.rollback().catch(e => alert(String(e)));
+          onclick={async () => {
+            const ok = await ask("Rollback the current transaction?\nAll uncommitted changes will be permanently discarded.", { title: "Rollback", kind: "warning" });
+            if (!ok) return;
+            void sqlEditor.rollback().catch(e => void message(String(e), { title: "Rollback failed", kind: "error" }));
           }}
         >
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
