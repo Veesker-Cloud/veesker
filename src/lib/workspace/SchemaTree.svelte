@@ -48,15 +48,11 @@
 
   const q = $derived(search.trim().toLowerCase());
 
-  function filteredObjects(items: Array<{ name: string; status?: string }>): Array<{ name: string; status?: string }> {
-    if (!q) return items;
-    return items.filter(o => o.name.toLowerCase().includes(q));
-  }
-
-  // When search is active: show schema if its name matches OR any loaded objects match
+  // Returns whether the schema itself should be visible in search results
   function schemaVisible(s: SchemaNode): boolean {
     if (!q) return true;
     if (s.name.toLowerCase().includes(q)) return true;
+    // Also visible if any loaded objects match
     for (const kind of KIND_ORDER) {
       const loadable = s.kinds[kind];
       if (loadable?.kind === "ok" && loadable.value.some(o => o.name.toLowerCase().includes(q))) {
@@ -66,16 +62,29 @@
     return false;
   }
 
-  // When searching, force-show kind sections that have matches (even if count is 0 after filter)
-  function kindVisible(loadable: Loadable<Array<{ name: string }>>, kind: ObjectKind): boolean {
-    if (!q) return true;
+  // When schema name itself matches, show all objects unfiltered.
+  // When schema matched only via objects, filter objects by query.
+  function schemaNameMatches(s: SchemaNode): boolean {
+    return !q || s.name.toLowerCase().includes(q);
+  }
+
+  function filteredObjects(
+    items: Array<{ name: string; status?: string }>,
+    passThrough: boolean,
+  ): Array<{ name: string; status?: string }> {
+    if (!q || passThrough) return items;
+    return items.filter(o => o.name.toLowerCase().includes(q));
+  }
+
+  function kindVisible(loadable: Loadable<Array<{ name: string }>>, passThrough: boolean): boolean {
+    if (!q || passThrough) return true;
     if (loadable.kind !== "ok") return true;
     return loadable.value.some(o => o.name.toLowerCase().includes(q));
   }
 
   function kindCount(loadable: Loadable<Array<{ name: string }>>, filtered: Array<{ name: string }>): number | null {
     if (loadable.kind !== "ok") return null;
-    return q ? filtered.length : loadable.value.length;
+    return filtered.length;
   }
 </script>
 
@@ -120,12 +129,13 @@
       </button>
 
       {#if s.expanded || q}
+        {@const passThrough = schemaNameMatches(s)}
         <div class="kinds">
           {#each KIND_ORDER as kind}
             {#if s.kinds[kind] !== undefined}
               {@const loadable = s.kinds[kind]!}
-              {@const filtered = loadable.kind === "ok" ? filteredObjects(loadable.value) : []}
-              {#if !q || kindVisible(loadable, kind)}
+              {@const filtered = loadable.kind === "ok" ? filteredObjects(loadable.value, passThrough) : []}
+              {#if kindVisible(loadable, passThrough)}
               <details class="kind" open>
                 <summary class="kind-head" style="--kc:{KIND_COLOR[kind]}">
                   <span class="kind-dot" style="background:{KIND_COLOR[kind]}" aria-hidden="true"></span>

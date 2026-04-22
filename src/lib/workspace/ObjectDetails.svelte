@@ -200,7 +200,7 @@
                     <td class="col-name">
                       {c.name}
                       {#if c.isPk}
-                        <svg class="pk-icon" width="10" height="10" viewBox="0 0 10 10" fill="none" title="Primary Key" aria-label="Primary Key">
+                        <svg class="pk-icon" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-label="Primary Key">
                           <circle cx="4" cy="4" r="3" stroke="#e8c547" stroke-width="1.2"/>
                           <path d="M6.5 6.5l2 2" stroke="#e8c547" stroke-width="1.2" stroke-linecap="round"/>
                         </svg>
