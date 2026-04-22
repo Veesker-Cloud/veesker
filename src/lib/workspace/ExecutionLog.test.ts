@@ -178,4 +178,49 @@ describe("ExecutionLog", () => {
     const truncated = longSql.slice(0, 60) + "…";
     expect(screen.getByText(truncated)).toBeInTheDocument();
   });
+
+  it("shows ⊞ icon (not ✓) when a result has dbmsOutput entries", () => {
+    const r1 = makeResult({ id: "r1", statementIndex: 0, status: "ok" });
+    const r2 = makeResult({
+      id: "r2",
+      statementIndex: 1,
+      status: "ok",
+      dbmsOutput: ["Hello from PL/SQL"],
+    });
+    const tab = makeTab({ results: [r1, r2], activeResultId: r1.id });
+    render(ExecutionLog, { props: { tab } });
+    expect(screen.getByText("⊞")).toBeInTheDocument();
+    // r1 has no dbmsOutput so its icon is ✓
+    expect(screen.getByText("✓")).toBeInTheDocument();
+  });
+
+  it("renders all dbmsOutput lines and no toggle when there are ≤5 lines", () => {
+    const lines = ["line 1", "line 2", "line 3", "line 4", "line 5"];
+    const r1 = makeResult({ id: "r1", statementIndex: 0, status: "ok", dbmsOutput: lines });
+    const r2 = makeResult({ id: "r2", statementIndex: 1, status: "ok" });
+    const tab = makeTab({ results: [r1, r2], activeResultId: r1.id });
+    render(ExecutionLog, { props: { tab } });
+    for (const line of lines) {
+      expect(screen.getByText(line)).toBeInTheDocument();
+    }
+    expect(screen.queryByRole("button", { name: /show \d+ more/i })).toBeNull();
+  });
+
+  it("shows only 5 lines and a 'show N more' button when dbmsOutput has >5 lines", () => {
+    const lines = ["a", "b", "c", "d", "e", "f", "g"];
+    const r1 = makeResult({ id: "r1", statementIndex: 0, status: "ok", dbmsOutput: lines });
+    const r2 = makeResult({ id: "r2", statementIndex: 1, status: "ok" });
+    const tab = makeTab({ results: [r1, r2], activeResultId: r1.id });
+    render(ExecutionLog, { props: { tab } });
+    // First 5 lines visible
+    for (const line of lines.slice(0, 5)) {
+      expect(screen.getByText(line)).toBeInTheDocument();
+    }
+    // Lines beyond 5 are hidden initially
+    for (const line of lines.slice(5)) {
+      expect(screen.queryByText(line)).toBeNull();
+    }
+    // Toggle button shows the count of hidden lines (7 - 5 = 2)
+    expect(screen.getByRole("button", { name: /show 2 more/i })).toBeInTheDocument();
+  });
 });
