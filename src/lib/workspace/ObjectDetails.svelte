@@ -128,6 +128,7 @@
     persistEmbed();
     const res = await vectorSearch(
       { provider: embedProvider, model: embedModel, baseUrl: embedBaseUrl || undefined, apiKey: embedApiKey || undefined },
+      searchText.trim(),
       selected.owner, selected.name, vectorColName, embedDistance, embedLimit,
     );
     searchResult = res.ok ? { kind: "ok", value: res.data } : { kind: "err", message: res.error.message };

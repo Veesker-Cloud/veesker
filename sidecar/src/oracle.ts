@@ -1062,6 +1062,8 @@ export async function vectorSimilaritySearch(p: {
   return withActiveSession(async (conn) => {
     // Oracle TO_VECTOR() rejects JavaScript scientific notation (e.g. 1.2e-7).
     // Format each float as fixed decimal with enough precision.
+    const badIdx = p.vector.findIndex(n => !isFinite(n) || isNaN(n));
+    if (badIdx >= 0) throw new Error(`Invalid vector value at index ${badIdx}: ${p.vector[badIdx]}`);
     const vecStr = `[${p.vector.map(n => n.toFixed(8)).join(",")}]`;
     const metric = ["COSINE", "EUCLIDEAN", "DOT"].includes(p.distanceMetric)
       ? p.distanceMetric
@@ -1082,14 +1084,16 @@ export async function vectorSimilaritySearch(p: {
       ? dataCols.map((c) => `t."${c}"`).join(", ")
       : "t.ROWID";
 
+    // Use explicit STRING type with maxSize — default maxSize truncates large vectors.
     const sql = `
       SELECT ${colList},
              VECTOR_DISTANCE(t."${p.columnName}", TO_VECTOR(:vecStr), ${metric}) AS VD_SCORE
         FROM "${p.owner}"."${p.tableName}" t
+       WHERE t."${p.columnName}" IS NOT NULL
        ORDER BY VECTOR_DISTANCE(t."${p.columnName}", TO_VECTOR(:vecStr), ${metric})
        FETCH FIRST ${limit} ROWS ONLY`;
 
-    const res = await conn.execute<unknown[]>(sql, { vecStr }, {
+    const res = await conn.execute<unknown[]>(sql, { vecStr: { val: vecStr, type: oracledb.STRING, maxSize: 16000 } }, {
       outFormat: oracledb.OUT_FORMAT_ARRAY,
     });
 

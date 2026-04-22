@@ -175,6 +175,7 @@ export type VectorSearchResult = {
 
 export async function vectorSearch(
   embed: EmbedConfig,
+  text: string,
   owner: string,
   tableName: string,
   columnName: string,
@@ -183,7 +184,7 @@ export async function vectorSearch(
 ): Promise<Result<VectorSearchResult>> {
   try {
     const data = await invoke<VectorSearchResult>("vector_search", {
-      payload: { embed, owner, tableName, columnName, distanceMetric, limit },
+      payload: { embed: { ...embed, text }, owner, tableName, columnName, distanceMetric, limit },
     });
     return { ok: true, data };
   } catch (err) {
