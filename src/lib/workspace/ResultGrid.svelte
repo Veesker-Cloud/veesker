@@ -112,6 +112,28 @@
     colWidths = colWidths.map((w, i) => (i === colIdx ? 160 : w));
   }
 
+  // ── Oracle error parsing ─────────────────────────────────────────────────────
+  type OraLine = { code: string; rest: string };
+
+  function parseOraError(msg: string): OraLine[] {
+    const lines = msg.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    const out: OraLine[] = [];
+    for (const l of lines) {
+      const m = l.match(/^(ORA-\d{5}|PLS-\d{5}):?\s*(.*)/);
+      if (m) out.push({ code: m[1], rest: m[2] });
+      else if (out.length > 0) out[out.length - 1].rest += " " + l;
+    }
+    return out;
+  }
+
+  function formatErrorBanner(errCode: string | number | undefined, errMsg: string | undefined): { primary: OraLine | null; stack: OraLine[]; raw: string } {
+    const msg = errMsg ?? "";
+    const lines = parseOraError(msg);
+    if (lines.length === 0) return { primary: null, stack: [], raw: msg };
+    const [primary, ...stack] = lines;
+    return { primary, stack, raw: msg };
+  }
+
   // ── Export ───────────────────────────────────────────────────────────────────
   let exportMenuOpen = $state(false);
 
@@ -154,10 +176,27 @@
       <span>⏸ Cancelled by user</span>
     </div>
   {:else if ar.status === "error"}
-    <div class="banner">
-      <strong>{ar.error?.code}</strong>
-      <span>{ar.error?.message}</span>
-    </div>
+    {@const ef = formatErrorBanner(ar.error?.code, ar.error?.message)}
+    {#if ef.primary}
+      <div class="banner banner-ora">
+        <div class="ora-primary">
+          <span class="ora-code">{ef.primary.code}</span>
+          <span class="ora-msg">{ef.primary.rest}</span>
+        </div>
+        {#if ef.stack.length > 0}
+          <div class="ora-stack">
+            {#each ef.stack as l}
+              <div class="ora-stack-line"><span class="ora-code-sm">{l.code}</span><span>{l.rest}</span></div>
+            {/each}
+          </div>
+        {/if}
+      </div>
+    {:else}
+      <div class="banner">
+        <strong>{ar.error?.code}</strong>
+        <span>{ar.error?.message}</span>
+      </div>
+    {/if}
   {:else if ar.result && ar.result.columns.length === 0}
     <div class="ok">
       ✓ Statement executed · {ar.result.rowCount} rows affected · {ar.result.elapsedMs}ms
@@ -254,6 +293,46 @@
     font-size: 11.5px;
   }
   .banner strong { font-family: "Space Grotesk", sans-serif; }
+  .banner-ora {
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  .ora-primary {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+  }
+  .ora-code {
+    font-family: "Space Grotesk", sans-serif;
+    font-weight: 700;
+    color: #b33e1f;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .ora-msg {
+    flex: 1;
+  }
+  .ora-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding-left: 0.1rem;
+    border-left: 2px solid rgba(179, 62, 31, 0.25);
+    margin-left: 0.1rem;
+  }
+  .ora-stack-line {
+    display: flex;
+    gap: 0.5rem;
+    font-size: 10.5px;
+    opacity: 0.7;
+  }
+  .ora-code-sm {
+    font-family: "Space Grotesk", sans-serif;
+    font-weight: 600;
+    color: #b33e1f;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
   .banner-splitter {
     background: rgba(179, 62, 31, 0.12);
     color: #7a2a14;

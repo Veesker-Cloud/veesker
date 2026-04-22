@@ -994,3 +994,49 @@ export async function connectionRollback(): Promise<{ rolledBack: true }> {
     return { rolledBack: true as const };
   });
 }
+
+export type SearchResult = { owner: string; name: string; type: string };
+
+export async function objectsSearch(p: {
+  query: string;
+}): Promise<{ objects: SearchResult[] }> {
+  return withActiveSession(async (conn) => {
+    const q = p.query.trim().toUpperCase();
+    if (!q) return { objects: [] };
+    const res = await conn.execute<[string, string, string]>(
+      `SELECT owner, object_name, object_type
+         FROM all_objects
+        WHERE object_name LIKE '%' || :q || '%'
+          AND object_type IN ('TABLE','VIEW','PROCEDURE','FUNCTION','PACKAGE','SEQUENCE','TRIGGER','TYPE')
+        ORDER BY
+          CASE WHEN owner = SYS_CONTEXT('USERENV','CURRENT_SCHEMA') THEN 0 ELSE 1 END,
+          CASE WHEN object_name LIKE :q || '%' THEN 0 ELSE 1 END,
+          object_name
+        FETCH FIRST 50 ROWS ONLY`,
+      { q },
+      { outFormat: oracledb.OUT_FORMAT_ARRAY }
+    );
+    return {
+      objects: (res.rows ?? []).map(([owner, name, type]) => ({ owner, name, type })),
+    };
+  });
+}
+
+export async function schemaKindCounts(p: {
+  owner: string;
+}): Promise<{ counts: Record<string, number> }> {
+  return withActiveSession(async (conn) => {
+    const res = await conn.execute<[string, number]>(
+      `SELECT object_type, COUNT(*) AS cnt
+         FROM all_objects
+        WHERE owner = :owner
+          AND object_type IN ('TABLE','VIEW','SEQUENCE','PROCEDURE','FUNCTION','PACKAGE','TRIGGER','TYPE')
+        GROUP BY object_type`,
+      { owner: p.owner },
+      { outFormat: oracledb.OUT_FORMAT_ARRAY }
+    );
+    const counts: Record<string, number> = {};
+    for (const [type, cnt] of res.rows ?? []) counts[type] = cnt;
+    return { counts };
+  });
+}

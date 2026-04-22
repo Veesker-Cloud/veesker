@@ -82,9 +82,11 @@
   });
 
   function previewData() {
-    if (selected && selected.kind !== "SEQUENCE") {
-      void sqlEditor.openPreview(selected.owner, selected.name);
-    }
+    if (!selected || selected.kind === "SEQUENCE") return;
+    const pkCols = details.kind === "ok"
+      ? details.value.columns.filter(c => c.isPk).map(c => c.name)
+      : [];
+    void sqlEditor.openPreview(selected.owner, selected.name, pkCols);
   }
 
   const KIND_COLOR: Record<string, string> = {
