@@ -1,15 +1,39 @@
 // src/lib/stores/sql-editor.svelte.ts
-import { queryExecute, queryCancel, type QueryResult } from "$lib/sql-query";
+import { queryExecute, queryExecuteMulti, queryCancel, type QueryResult } from "$lib/sql-query";
+import { splitSql } from "$lib/sql-splitter";
+
+export type TabResult = {
+  id: string;                         // crypto.randomUUID for selection stability
+  statementIndex: number;             // 0-based; for display as "Statement N+1"
+  sqlPreview: string;                 // first ~80 chars of the statement, single line
+  status: "ok" | "error" | "cancelled" | "running";
+  result: QueryResult | null;
+  error: { code: number; message: string } | null;
+  elapsedMs: number;                  // 0 while running
+};
 
 export type SqlTab = {
   id: string;
   title: string;
   sql: string;
-  result: QueryResult | null;
-  running: boolean;
-  error: { code: number; message: string } | null;
-  runningRequestId: string | null;
+  results: TabResult[];               // replaces `result` + `error`
+  activeResultId: string | null;      // which result is shown in the grid
+  running: boolean;                   // still useful for the tab badge / cancel overlay
+  runningRequestId: string | null;    // for cancel
+  splitterError: string | null;       // if the splitter emitted errors, show banner
 };
+
+/** Returns the active TabResult for a tab, or null if none. */
+export function activeResult(tab: SqlTab): TabResult | null {
+  if (tab.activeResultId === null) return null;
+  return tab.results.find((r) => r.id === tab.activeResultId) ?? null;
+}
+
+/** Truncate sql to first ~80 chars, single line. */
+function makeSqlPreview(sql: string): string {
+  const single = sql.replace(/\s+/g, " ").trim();
+  return single.length > 80 ? single.slice(0, 80) : single;
+}
 
 let _tabs = $state<SqlTab[]>([]);
 let _activeId = $state<string | null>(null);
@@ -65,9 +89,10 @@ function makeTab(title: string, sql: string): SqlTab {
     id: newId(),
     title,
     sql,
-    result: null,
+    results: [],
+    activeResultId: null,
     running: false,
-    error: null,
+    splitterError: null,
     runningRequestId: null,
   };
 }
@@ -80,6 +105,24 @@ function stripTrailingSemicolon(sql: string): string {
   const trimmed = sql.trim();
   if (trimmed.endsWith(";")) return trimmed.slice(0, -1).trim();
   return trimmed;
+}
+
+/**
+ * Choose which result id to set as activeResultId after a run.
+ * Prefer the last ok result that has columns (i.e. a SELECT with rows).
+ * Fallback to the last result's id.
+ */
+function chooseActiveResultId(results: TabResult[]): string | null {
+  if (results.length === 0) return null;
+  // Find last ok result with columns (SELECT-like)
+  for (let i = results.length - 1; i >= 0; i--) {
+    const r = results[i];
+    if (r.status === "ok" && r.result !== null && r.result.columns.length > 0) {
+      return r.id;
+    }
+  }
+  // Fallback to last result
+  return results[results.length - 1].id;
 }
 
 export const sqlEditor = {
@@ -160,24 +203,231 @@ export const sqlEditor = {
     _drawerOpen = !_drawerOpen;
   },
 
+  /** Run the active tab's full SQL as a single statement (cursor-based or whole-buffer). */
   async runActive(): Promise<void> {
     const tab = this.active;
     if (tab === null) return;
     const sql = stripTrailingSemicolon(tab.sql);
     if (sql === "") return;
     const requestId = crypto.randomUUID();
+    const resultId = newId();
     tab.running = true;
     tab.runningRequestId = requestId;
-    tab.error = null;
+    tab.splitterError = null;
+    tab.results = [];
+    tab.activeResultId = null;
     try {
       const res = await queryExecute(sql, requestId);
-      if (res.ok) {
-        tab.result = res.data;
-        tab.error = null;
-      } else {
-        tab.error = res.error;
-        tab.result = null;
+      const tabResult: TabResult = {
+        id: resultId,
+        statementIndex: 0,
+        sqlPreview: makeSqlPreview(sql),
+        status: res.ok ? "ok" : "error",
+        result: res.ok ? res.data : null,
+        error: res.ok ? null : res.error,
+        elapsedMs: res.ok ? res.data.elapsedMs : 0,
+      };
+      tab.results = [tabResult];
+      tab.activeResultId = resultId;
+    } finally {
+      tab.running = false;
+      tab.runningRequestId = null;
+    }
+  },
+
+  /** Run all statements in the active tab using the SQL splitter. */
+  async runActiveAll(): Promise<void> {
+    const tab = this.active;
+    if (tab === null) return;
+    const sql = tab.sql;
+    if (sql.trim() === "") return;
+
+    // Pre-flight: check splitter on the frontend first to catch errors early.
+    const { errors } = splitSql(sql);
+    if (errors.length > 0) {
+      tab.splitterError = errors.map((e) => `line ${e.line}: ${e.message}`).join("; ");
+      tab.results = [];
+      tab.activeResultId = null;
+      return;
+    }
+
+    const requestId = crypto.randomUUID();
+    tab.running = true;
+    tab.runningRequestId = requestId;
+    tab.splitterError = null;
+    tab.results = [];
+    tab.activeResultId = null;
+
+    try {
+      const res = await queryExecuteMulti(sql, requestId);
+      if (!res.ok) {
+        // Server-side error (e.g. splitter error from sidecar, or session lost)
+        const errMsg = res.error?.message ?? "Unknown error";
+        // Check if it's a splitter error from the sidecar
+        if (typeof res.error?.code === "number" && res.error.code === -32014) {
+          tab.splitterError = errMsg.replace(/^Splitter error:\s*/i, "");
+        } else {
+          // Generic error: create a single error result
+          const errResult: TabResult = {
+            id: newId(),
+            statementIndex: 0,
+            sqlPreview: makeSqlPreview(sql),
+            status: "error",
+            result: null,
+            error: res.error ?? { code: -32000, message: errMsg },
+            elapsedMs: 0,
+          };
+          tab.results = [errResult];
+          tab.activeResultId = errResult.id;
+        }
+        return;
       }
+
+      const tabResults: TabResult[] = res.data.results.map((sr) => {
+        const id = newId();
+        const sqlPreview = makeSqlPreview(sr.sql);
+        if (sr.status === "ok") {
+          return {
+            id,
+            statementIndex: sr.statementIndex,
+            sqlPreview,
+            status: "ok" as const,
+            result: { columns: sr.columns, rows: sr.rows, rowCount: sr.rowCount, elapsedMs: sr.elapsedMs },
+            error: null,
+            elapsedMs: sr.elapsedMs,
+          };
+        } else if (sr.status === "error") {
+          return {
+            id,
+            statementIndex: sr.statementIndex,
+            sqlPreview,
+            status: "error" as const,
+            result: null,
+            error: sr.error,
+            elapsedMs: sr.elapsedMs,
+          };
+        } else {
+          // cancelled
+          return {
+            id,
+            statementIndex: sr.statementIndex,
+            sqlPreview,
+            status: "cancelled" as const,
+            result: null,
+            error: null,
+            elapsedMs: sr.elapsedMs,
+          };
+        }
+      });
+
+      tab.results = tabResults;
+      tab.activeResultId = chooseActiveResultId(tabResults);
+    } finally {
+      tab.running = false;
+      tab.runningRequestId = null;
+    }
+  },
+
+  /** Run a selection of text as a single statement. */
+  async runSelection(selection: string): Promise<void> {
+    const tab = this.active;
+    if (tab === null) return;
+    const sql = stripTrailingSemicolon(selection);
+    if (sql === "") return;
+    const requestId = crypto.randomUUID();
+    const resultId = newId();
+    tab.running = true;
+    tab.runningRequestId = requestId;
+    tab.splitterError = null;
+    tab.results = [];
+    tab.activeResultId = null;
+    try {
+      const res = await queryExecute(sql, requestId);
+      const tabResult: TabResult = {
+        id: resultId,
+        statementIndex: 0,
+        sqlPreview: makeSqlPreview(sql),
+        status: res.ok ? "ok" : "error",
+        result: res.ok ? res.data : null,
+        error: res.ok ? null : res.error,
+        elapsedMs: res.ok ? res.data.elapsedMs : 0,
+      };
+      tab.results = [tabResult];
+      tab.activeResultId = resultId;
+    } finally {
+      tab.running = false;
+      tab.runningRequestId = null;
+    }
+  },
+
+  /**
+   * Run the statement that contains the cursor position.
+   * Splits the document, finds which statement the cursor is inside,
+   * and runs just that one. Falls back to running the whole tab if no match.
+   */
+  async runStatementAtCursor(fullText: string, cursorPos: number): Promise<void> {
+    const tab = this.active;
+    if (tab === null) return;
+
+    const { statements, errors } = splitSql(fullText);
+    if (errors.length > 0 || statements.length === 0) {
+      // Can't split — fall back to running whole buffer as single statement
+      return this.runActive();
+    }
+
+    // Recover each statement's start/end character position in the original text
+    // by scanning forward with indexOf from the last match end.
+    let searchFrom = 0;
+    let matchedSql: string | null = null;
+
+    for (const stmt of statements) {
+      const idx = fullText.indexOf(stmt, searchFrom);
+      if (idx === -1) continue;
+      const stmtEnd = idx + stmt.length;
+      if (cursorPos >= idx && cursorPos <= stmtEnd) {
+        matchedSql = stmt;
+        break;
+      }
+      searchFrom = stmtEnd;
+    }
+
+    if (matchedSql === null) {
+      // Cursor is between statements — find the nearest one before cursor
+      searchFrom = 0;
+      let lastBeforeCursor: string | null = null;
+      for (const stmt of statements) {
+        const idx = fullText.indexOf(stmt, searchFrom);
+        if (idx === -1) continue;
+        if (idx <= cursorPos) {
+          lastBeforeCursor = stmt;
+        }
+        searchFrom = idx + stmt.length;
+      }
+      matchedSql = lastBeforeCursor ?? statements[0];
+    }
+
+    const requestId = crypto.randomUUID();
+    const resultId = newId();
+    tab.running = true;
+    tab.runningRequestId = requestId;
+    tab.splitterError = null;
+    tab.results = [];
+    tab.activeResultId = null;
+
+    const sqlToRun = stripTrailingSemicolon(matchedSql);
+    try {
+      const res = await queryExecute(sqlToRun, requestId);
+      const tabResult: TabResult = {
+        id: resultId,
+        statementIndex: 0,
+        sqlPreview: makeSqlPreview(sqlToRun),
+        status: res.ok ? "ok" : "error",
+        result: res.ok ? res.data : null,
+        error: res.ok ? null : res.error,
+        elapsedMs: res.ok ? res.data.elapsedMs : 0,
+      };
+      tab.results = [tabResult];
+      tab.activeResultId = resultId;
     } finally {
       tab.running = false;
       tab.runningRequestId = null;
@@ -188,7 +438,7 @@ export const sqlEditor = {
     const tab = this.active;
     if (tab === null || tab.runningRequestId === null) return;
     await queryCancel(tab.runningRequestId);
-    // The original runActive promise will reject with code -2;
+    // The original run promise will reject with code -2;
     // its finally block will clear running / runningRequestId.
   },
 

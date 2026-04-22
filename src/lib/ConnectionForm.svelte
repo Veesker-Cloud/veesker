@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import { open } from "@tauri-apps/plugin-dialog";
   import {
     walletInspect,
@@ -41,22 +42,24 @@
     onCancel: () => void;
   } = $props();
 
-  let authType = $state<"basic" | "wallet">(initial.authType);
-  let id = $state<string | undefined>(initial.id);
-  let name = $state(initial.name);
-  let username = $state(initial.username);
-  let password = $state(initial.password);
+  let authType = $state<"basic" | "wallet">(untrack(() => initial.authType));
+  let id = $state<string | undefined>(untrack(() => initial.id));
+  let name = $state(untrack(() => initial.name));
+  let username = $state(untrack(() => initial.username));
+  let password = $state(untrack(() => initial.password));
 
-  let host = $state(initial.authType === "basic" ? initial.host : "localhost");
-  let port = $state(initial.authType === "basic" ? initial.port : 1521);
-  let serviceName = $state(initial.authType === "basic" ? initial.serviceName : "FREEPDB1");
+  let host = $state(untrack(() => initial.authType === "basic" ? initial.host : "localhost"));
+  let port = $state(untrack(() => initial.authType === "basic" ? initial.port : 1521));
+  let serviceName = $state(untrack(() => initial.authType === "basic" ? initial.serviceName : "FREEPDB1"));
 
-  let walletPassword = $state(initial.authType === "wallet" ? initial.walletPassword : "");
-  let connectAlias = $state(initial.authType === "wallet" ? initial.connectAlias : "");
+  let walletPassword = $state(untrack(() => initial.authType === "wallet" ? initial.walletPassword : ""));
+  let connectAlias = $state(untrack(() => initial.authType === "wallet" ? initial.connectAlias : ""));
   let walletPick = $state<WalletPick>(
-    initial.authType === "wallet" && isEdit
-      ? { kind: "ready", path: "(saved)", aliases: [initial.connectAlias] }
-      : { kind: "none" }
+    untrack(() =>
+      initial.authType === "wallet" && isEdit
+        ? { kind: "ready", path: "(saved)", aliases: [initial.connectAlias] }
+        : { kind: "none" }
+    )
   );
 
   let testState = $state<TestState>({ kind: "idle" });

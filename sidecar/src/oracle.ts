@@ -166,7 +166,8 @@ export async function withActiveSession<T>(
   }
 }
 
-import { OBJECT_NOT_FOUND, QUERY_CANCELLED } from "./errors";
+import { OBJECT_NOT_FOUND, QUERY_CANCELLED, SPLITTER_ERROR } from "./errors";
+import { splitSql } from "./sql-splitter";
 
 export type SchemaRow = { name: string; isCurrent: boolean };
 export type ObjectRef = { name: string };
@@ -386,10 +387,106 @@ function isCancelError(err: unknown): boolean {
   return m.includes("ORA-01013") || m.includes("NJS-018");
 }
 
-export async function queryExecute(p: { sql: string; requestId?: string }): Promise<QueryResult> {
+// Discriminated union for multi-statement server results.
+export type ServerStatementResult =
+  | { status: "ok"; statementIndex: number; sql: string; elapsedMs: number; columns: QueryColumn[]; rows: unknown[][]; rowCount: number }
+  | { status: "error"; statementIndex: number; sql: string; elapsedMs: number; error: { code: number; message: string } }
+  | { status: "cancelled"; statementIndex: number; sql: string; elapsedMs: number };
+
+export type MultiQueryResult = { multi: true; results: ServerStatementResult[] };
+
+/** Run a single statement against the active session; returns QueryResult. */
+async function executeSingleStatement(
+  conn: oracledb.Connection,
+  sql: string,
+  requestId: string
+): Promise<QueryResult> {
+  const started = Date.now();
+  let r: any;
+  try {
+    r = await conn.execute(sql, [], {
+      maxRows: 100,
+      outFormat: oracledb.OUT_FORMAT_ARRAY,
+    });
+  } catch (execErr) {
+    if (_running?.requestId === requestId && _running.cancelled && isCancelError(execErr)) {
+      throw new RpcCodedError(QUERY_CANCELLED, "Cancelled by user");
+    }
+    throw execErr;
+  }
+  const elapsedMs = Date.now() - started;
+  const meta: any[] = r.metaData ?? [];
+  const rawRows: any[][] = r.rows ?? [];
+  const columns: QueryColumn[] = meta.map((m) => ({
+    name: m.name,
+    dataType: formatColumnType(m),
+  }));
+  const rows: QueryResultRow[] = rawRows.map((row) => row.map(normalizeCell));
+  const rowCount = rawRows.length > 0 ? rawRows.length : (r.rowsAffected ?? 0);
+  return { columns, rows, rowCount, elapsedMs };
+}
+
+export async function queryExecute(p: { sql: string; requestId?: string; splitMulti?: boolean }): Promise<QueryResult | MultiQueryResult> {
   // Assign or generate a requestId so cancellation can be matched.
   const requestId = p.requestId ?? crypto.randomUUID();
   _running = { requestId, cancelled: false };
+
+  // ── Multi-statement path ──────────────────────────────────────────────────
+  if (p.splitMulti === true) {
+    try {
+      const { statements, errors } = splitSql(p.sql);
+      if (errors.length > 0) {
+        const msg = errors.map((e) => `line ${e.line}: ${e.message}`).join("; ");
+        throw new RpcCodedError(SPLITTER_ERROR, `Splitter error: ${msg}`);
+      }
+      if (statements.length === 0) {
+        return { multi: true, results: [] };
+      }
+
+      const collected: ServerStatementResult[] = [];
+
+      for (let i = 0; i < statements.length; i++) {
+        const stmt = statements[i];
+
+        // Check for cancellation between statements.
+        if (_running?.requestId === requestId && _running.cancelled) {
+          const started = Date.now();
+          collected.push({ status: "cancelled", statementIndex: i, sql: stmt, elapsedMs: Date.now() - started });
+          break;
+        }
+
+        try {
+          const qr = await withActiveSession((conn) => executeSingleStatement(conn, stmt, requestId));
+          collected.push({
+            status: "ok",
+            statementIndex: i,
+            sql: stmt,
+            elapsedMs: qr.elapsedMs,
+            columns: qr.columns,
+            rows: qr.rows,
+            rowCount: qr.rowCount,
+          });
+        } catch (err) {
+          if (err instanceof RpcCodedError && err.code === QUERY_CANCELLED) {
+            collected.push({ status: "cancelled", statementIndex: i, sql: stmt, elapsedMs: 0 });
+          } else {
+            const code = err instanceof RpcCodedError ? err.code : (err instanceof Error ? -32013 : -32000);
+            const message = err instanceof Error ? err.message : String(err);
+            collected.push({ status: "error", statementIndex: i, sql: stmt, elapsedMs: 0, error: { code, message } });
+          }
+          break; // Stop on error or cancel
+        }
+      }
+
+      return { multi: true, results: collected };
+    } finally {
+      if (_running?.requestId === requestId) {
+        _running = null;
+      }
+    }
+  }
+
+  // ── Single-statement path (default, back-compat) ──────────────────────────
   try {
     return await withActiveSession(async (conn) => {
       const started = Date.now();
