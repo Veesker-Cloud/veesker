@@ -438,6 +438,73 @@ describe("sqlEditor.editorRatio", () => {
   });
 });
 
+// ── setActiveResult ───────────────────────────────────────────────────────────
+
+describe("sqlEditor.setActiveResult", () => {
+  it("updates activeResultId when tab and result exist", async () => {
+    sqlEditor.openBlank();
+    sqlEditor.updateSql(sqlEditor.activeId!, "SELECT 1 FROM DUAL");
+    mockedQueryExecute.mockResolvedValue(okResult());
+    await sqlEditor.runActive();
+    const tab = sqlEditor.active!;
+    expect(tab.results).toHaveLength(1);
+    const rid = tab.results[0].id;
+    // Reset activeResultId to simulate no selection
+    tab.activeResultId = null;
+    sqlEditor.setActiveResult(tab.id, rid);
+    expect(tab.activeResultId).toBe(rid);
+  });
+
+  it("is a no-op when the tab does not exist", () => {
+    sqlEditor.openBlank();
+    const tab = sqlEditor.active!;
+    tab.activeResultId = null;
+    sqlEditor.setActiveResult("nonexistent-tab", "some-result");
+    expect(tab.activeResultId).toBeNull();
+  });
+
+  it("is a no-op when the resultId does not exist on the tab", async () => {
+    sqlEditor.openBlank();
+    sqlEditor.updateSql(sqlEditor.activeId!, "SELECT 1 FROM DUAL");
+    mockedQueryExecute.mockResolvedValue(okResult());
+    await sqlEditor.runActive();
+    const tab = sqlEditor.active!;
+    const before = tab.activeResultId;
+    sqlEditor.setActiveResult(tab.id, "nonexistent-result");
+    expect(tab.activeResultId).toBe(before);
+  });
+});
+
+// ── toggleLog / logCollapsed ──────────────────────────────────────────────────
+
+describe("sqlEditor.toggleLog", () => {
+  it("logCollapsed starts false after reset", () => {
+    expect(sqlEditor.logCollapsed).toBe(false);
+  });
+
+  it("toggleLog flips logCollapsed", () => {
+    expect(sqlEditor.logCollapsed).toBe(false);
+    sqlEditor.toggleLog();
+    expect(sqlEditor.logCollapsed).toBe(true);
+    sqlEditor.toggleLog();
+    expect(sqlEditor.logCollapsed).toBe(false);
+  });
+
+  it("toggleLog persists to localStorage", () => {
+    sqlEditor.toggleLog();
+    expect(localStorage.getItem("veesker.sql.logCollapsed")).toBe("true");
+    sqlEditor.toggleLog();
+    expect(localStorage.getItem("veesker.sql.logCollapsed")).toBe("false");
+  });
+
+  it("reset sets logCollapsed back to false", () => {
+    sqlEditor.toggleLog(); // now true
+    expect(sqlEditor.logCollapsed).toBe(true);
+    sqlEditor.reset();
+    expect(sqlEditor.logCollapsed).toBe(false);
+  });
+});
+
 // ── cancelActive ──────────────────────────────────────────────────────────────
 
 describe("sqlEditor.cancelActive", () => {
