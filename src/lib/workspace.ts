@@ -69,3 +69,26 @@ export const objectsListPlsql = (owner: string, kind: string) =>
 
 export const objectDdlGet = (owner: string, objectType: string, objectName: string) =>
   call<string>("object_ddl_get", { owner, objectType, objectName });
+
+export type DataFlowNode = { owner: string; name: string; objectType: string };
+export type DataFlowTriggerInfo = { name: string; triggerType: string; event: string; status: string };
+export type DataFlowResult = {
+  upstream: DataFlowNode[];
+  downstream: DataFlowNode[];
+  fkParents: DataFlowNode[];
+  fkChildren: DataFlowNode[];
+  triggers: DataFlowTriggerInfo[];
+};
+
+export async function objectDataflowGet(
+  owner: string,
+  objectType: string,
+  objectName: string,
+): Promise<Result<DataFlowResult>> {
+  try {
+    const data = await invoke<DataFlowResult>("object_dataflow_get", { owner, objectType, objectName });
+    return { ok: true, data };
+  } catch (err) {
+    return { ok: false, error: err as WorkspaceError };
+  }
+}

@@ -13,7 +13,7 @@ export type QueryResult = {
 export type ServerStatementResult =
   | { status: "ok"; statementIndex: number; sql: string; elapsedMs: number; columns: QueryColumn[]; rows: unknown[][]; rowCount: number; output: string[] | null }
   | { status: "error"; statementIndex: number; sql: string; elapsedMs: number; error: { code: number; message: string }; output: string[] | null }
-  | { status: "cancelled"; statementIndex: number; sql: string; elapsedMs: number };
+  | { status: "cancelled"; statementIndex: number; sql: string; elapsedMs: number; output: null };
 
 export type MultiQueryResult = { multi: true; results: ServerStatementResult[] };
 

@@ -14,12 +14,14 @@
     objectsList,
     objectsListPlsql,
     objectDdlGet,
+    objectDataflowGet,
     tableDescribe,
     SESSION_LOST,
     type WorkspaceInfo,
     type ObjectKind,
     type TableDetails,
     type Loadable,
+    type DataFlowResult,
   } from "$lib/workspace";
   import { getConnection, type ConnectionMeta } from "$lib/connections";
 
@@ -32,6 +34,10 @@
   let details  = $state<Loadable<TableDetails>>({ kind: "idle" });
   let fatal    = $state<string | null>(null);
   let sessionLost = $state(false);
+  let detailError = $state<string | null>(null);
+  let dataflow = $state<DataFlowResult | null>(null);
+  let dataflowLoading = $state(false);
+  let dataflowError = $state<string | null>(null);
 
   function userLabel(m: ConnectionMeta): string {
     if (m.authType === "basic") {
@@ -107,7 +113,20 @@
     void loadKind(node, kind);
   }
 
-  async function loadDetails(owner: string, name: string): Promise<void> {
+  async function loadDataflow(owner: string, objectType: string, objectName: string): Promise<void> {
+    dataflow = null;
+    dataflowLoading = true;
+    dataflowError = null;
+    const res = await objectDataflowGet(owner, objectType, objectName);
+    dataflowLoading = false;
+    if (res.ok) {
+      dataflow = res.data;
+    } else {
+      dataflowError = res.error.message;
+    }
+  }
+
+  async function loadDetails(owner: string, name: string, kind: ObjectKind): Promise<void> {
     details = { kind: "loading" };
     const res = await tableDescribe(owner, name);
     if (res.ok) {
@@ -116,10 +135,15 @@
       if (res.error.code === SESSION_LOST) sessionLost = true;
       details = { kind: "err", message: res.error.message };
     }
+    void loadDataflow(owner, kind, name);
   }
 
   function onSelect(owner: string, name: string, kind: ObjectKind): void {
     selected = { owner, name, kind };
+    detailError = null;
+    dataflow = null;
+    dataflowLoading = false;
+    dataflowError = null;
     if (PLSQL_KINDS.includes(kind)) {
       details = { kind: "idle" };
       void (async () => {
@@ -127,21 +151,27 @@
         if (res.ok) {
           sqlEditor.openWithDdl(`${owner}.${name}`, res.data);
         } else {
-          if (res.error.code === SESSION_LOST) sessionLost = true;
+          if (res.error.code === SESSION_LOST) {
+            sessionLost = true;
+          } else {
+            detailError = `Failed to load DDL: ${res.error.message}`;
+          }
         }
       })();
+      void loadDataflow(owner, kind, name);
       return;
     }
     if (kind === "SEQUENCE") {
       details = { kind: "idle" };
+      void loadDataflow(owner, kind, name);
       return;
     }
-    void loadDetails(owner, name);
+    void loadDetails(owner, name, kind);
   }
 
   function onRetryDetails(): void {
     if (selected && selected.kind !== "SEQUENCE" && !PLSQL_KINDS.includes(selected.kind)) {
-      void loadDetails(selected.owner, selected.name);
+      void loadDetails(selected.owner, selected.name, selected.kind);
     }
   }
 
@@ -179,7 +209,7 @@
     sessionLost = false;
     await bootstrap();
     if (selected && selected.kind !== "SEQUENCE" && !PLSQL_KINDS.includes(selected.kind)) {
-      await loadDetails(selected.owner, selected.name);
+      await loadDetails(selected.owner, selected.name, selected.kind);
     }
   }
 
@@ -289,6 +319,11 @@
         onRetry={onRetryDetails}
         onReconnect={onReconnect}
         sessionLost={sessionLost}
+        detailError={detailError}
+        dataflow={dataflow}
+        dataflowLoading={dataflowLoading}
+        dataflowError={dataflowError}
+        onNavigateDataflow={(owner, objectType, name) => onSelect(owner, name, objectType as ObjectKind)}
       />
     </div>
     <SqlDrawer />

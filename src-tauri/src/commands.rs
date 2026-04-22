@@ -450,3 +450,49 @@ pub async fn object_ddl_get(
         .to_string();
     Ok(ddl)
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DataFlowNode {
+    pub owner: String,
+    pub name: String,
+    pub object_type: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DataFlowTriggerInfo {
+    pub name: String,
+    pub trigger_type: String,
+    pub event: String,
+    pub status: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DataFlowResult {
+    pub upstream: Vec<DataFlowNode>,
+    pub downstream: Vec<DataFlowNode>,
+    pub fk_parents: Vec<DataFlowNode>,
+    pub fk_children: Vec<DataFlowNode>,
+    pub triggers: Vec<DataFlowTriggerInfo>,
+}
+
+#[tauri::command]
+pub async fn object_dataflow_get(
+    app: AppHandle,
+    owner: String,
+    object_type: String,
+    object_name: String,
+) -> Result<DataFlowResult, ConnectionTestErr> {
+    let res = call_sidecar(
+        &app,
+        "object.dataflow",
+        json!({ "owner": owner, "objectType": object_type, "objectName": object_name }),
+    )
+    .await?;
+    serde_json::from_value(res).map_err(|e| ConnectionTestErr {
+        code: -32099,
+        message: format!("decode object.dataflow: {e}"),
+    })
+}

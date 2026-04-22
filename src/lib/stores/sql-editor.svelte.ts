@@ -51,16 +51,16 @@ function makeSqlPreview(sql: string): string {
 
 // ── Compile detection ─────────────────────────────────────────────────────────
 
-const COMPILE_REGEX =
-  /^\s*CREATE\s+(OR\s+REPLACE\s+)?(PROCEDURE|FUNCTION|TRIGGER|PACKAGE(\s+BODY)?|TYPE(\s+BODY)?)\s+("?\w+"?\.)?"?(\w+)"?/i;
+export const COMPILE_REGEX =
+  /^\s*CREATE\s+(OR\s+REPLACE\s+)?(EDITIONABLE\s+|NONEDITIONABLE\s+)?(PROCEDURE|FUNCTION|TRIGGER|PACKAGE(\s+BODY)?|TYPE(\s+BODY)?)\s+("?\w+"?\.)?"?(\w+)"?/i;
 
 function extractCompilable(sql: string): { objectType: string; objectName: string } | null {
   const m = COMPILE_REGEX.exec(sql);
   if (!m) return null;
-  const rawType = m[2].toUpperCase().replace(/\s+BODY$/i, "");
-  const body = (m[3] || m[4]) ? " BODY" : "";
+  const rawType = m[3].toUpperCase();
+  const body = (m[4] || m[5]) ? " BODY" : "";
   const objectType = rawType + body;
-  const objectName = (m[6] ?? "").toUpperCase();
+  const objectName = (m[7] ?? "").toUpperCase();
   if (!objectName) return null;
   return { objectType, objectName };
 }
@@ -656,6 +656,13 @@ export const sqlEditor = {
   },
 
   openWithDdl(title: string, ddl: string): void {
+    // If a tab with this title already exists, just activate it
+    const existing = _tabs.find(t => t.title === title);
+    if (existing) {
+      _activeId = existing.id;
+      if (!_drawerOpen) _drawerOpen = true;
+      return;
+    }
     const id = crypto.randomUUID();
     const tab: SqlTab = {
       id,
