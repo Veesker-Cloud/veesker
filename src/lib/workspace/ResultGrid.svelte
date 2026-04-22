@@ -2,6 +2,8 @@
   import type { SqlTab } from "$lib/stores/sql-editor.svelte";
   import { activeResult } from "$lib/stores/sql-editor.svelte";
   import CancelOverlay from "./CancelOverlay.svelte";
+  import { toCsv, toJson } from "$lib/csv-export";
+  import { saveBlob } from "$lib/sql-files";
 
   type Props = { tab: SqlTab | null; onCancel: () => void };
   let { tab, onCancel }: Props = $props();
@@ -31,6 +33,105 @@
 
   // Derived: get the active result for display
   let ar = $derived(tab ? activeResult(tab) : null);
+
+  // ── Sort state ───────────────────────────────────────────────────────────────
+  type SortDir = "asc" | "desc" | "none";
+  let sortCol = $state<number | null>(null);
+  let sortDir = $state<SortDir>("none");
+
+  function toggleSort(colIdx: number) {
+    if (sortCol !== colIdx) {
+      sortCol = colIdx;
+      sortDir = "asc";
+    } else if (sortDir === "asc") {
+      sortDir = "desc";
+    } else {
+      sortCol = null;
+      sortDir = "none";
+    }
+  }
+
+  // Reset sort when the active result changes
+  $effect(() => {
+    ar; // track
+    sortCol = null;
+    sortDir = "none";
+  });
+
+  // Sorted rows (derived)
+  let sortedRows = $derived.by(() => {
+    if (!ar?.result) return [];
+    const rows = ar.result.rows;
+    if (sortCol === null || sortDir === "none") return rows;
+    const idx = sortCol;
+    return [...rows].sort((a, b) => {
+      const av = a[idx], bv = b[idx];
+      if (av === null || av === undefined) return 1;
+      if (bv === null || bv === undefined) return -1;
+      let cmp = 0;
+      if (typeof av === "number" && typeof bv === "number") {
+        cmp = av - bv;
+      } else {
+        cmp = String(av).localeCompare(String(bv));
+      }
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+  });
+
+  // ── Resize state ─────────────────────────────────────────────────────────────
+  let colWidths = $state<number[]>([]);
+
+  $effect(() => {
+    if (ar?.result) {
+      colWidths = ar.result.columns.map(() => 120);
+    }
+  });
+
+  function onResizePointerDown(e: PointerEvent, colIdx: number) {
+    const handle = e.currentTarget as HTMLDivElement;
+    handle.setPointerCapture(e.pointerId);
+    const startX = e.clientX;
+    const startW = colWidths[colIdx];
+
+    function onMove(ev: PointerEvent) {
+      const newW = Math.max(60, Math.min(800, startW + (ev.clientX - startX)));
+      colWidths = colWidths.map((w, i) => (i === colIdx ? newW : w));
+    }
+
+    function onUp() {
+      handle.removeEventListener("pointermove", onMove);
+      handle.removeEventListener("pointerup", onUp);
+    }
+
+    handle.addEventListener("pointermove", onMove);
+    handle.addEventListener("pointerup", onUp);
+  }
+
+  function autoFitCol(colIdx: number) {
+    // Simple auto-fit: just set a reasonable default
+    colWidths = colWidths.map((w, i) => (i === colIdx ? 160 : w));
+  }
+
+  // ── Export ───────────────────────────────────────────────────────────────────
+  let exportMenuOpen = $state(false);
+
+  async function exportCsv() {
+    exportMenuOpen = false;
+    if (!ar?.result) return;
+    const cols = ar.result.columns.map((c) => c.name);
+    const content = toCsv(cols, sortedRows);
+    const tabTitle = tab?.title ?? "export";
+    await saveBlob(tabTitle, content, "csv");
+  }
+
+  async function exportJson() {
+    exportMenuOpen = false;
+    if (!ar?.result) return;
+    const cols = ar.result.columns.map((c) => c.name);
+    const content = toJson(cols, sortedRows);
+    const tabTitle = tab?.title ?? "export";
+    await saveBlob(tabTitle, content, "json");
+  }
 </script>
 
 <section class="grid">
@@ -67,18 +168,35 @@
       <table>
         <thead>
           <tr>
-            {#each r.columns as c (c.name)}
-              <th class:numeric={isNumericType(c.dataType)}>
+            {#each r.columns as c, ci (c.name)}
+              <th
+                class:numeric={isNumericType(c.dataType)}
+                style="width: {colWidths[ci] ?? 120}px; min-width: {colWidths[ci] ?? 120}px; max-width: {colWidths[ci] ?? 120}px"
+                onclick={() => toggleSort(ci)}
+                style:cursor="pointer"
+              >
                 <div class="th-stack">
-                  <span class="cname">{c.name}</span>
+                  <span class="cname">
+                    {c.name}
+                    {#if sortCol === ci}
+                      {sortDir === "asc" ? " ▲" : " ▼"}
+                    {/if}
+                  </span>
                   <span class="ctype">{c.dataType}</span>
                 </div>
+                <div
+                  class="resize-handle"
+                  role="separator"
+                  aria-orientation="vertical"
+                  ondblclick={(e) => { e.stopPropagation(); autoFitCol(ci); }}
+                  onpointerdown={(e) => { e.stopPropagation(); onResizePointerDown(e, ci); }}
+                ></div>
               </th>
             {/each}
           </tr>
         </thead>
         <tbody>
-          {#each r.rows as row, i (i)}
+          {#each sortedRows as row, i (i)}
             <tr>
               {#each row as cell, j (j)}
                 <td class:numeric={isNumericType(r.columns[j].dataType)} class:null-cell={cell === null}>{formatCell(cell)}</td>
@@ -88,7 +206,22 @@
         </tbody>
       </table>
     </div>
-    <div class="footer">{r.rowCount} rows · {r.elapsedMs}ms</div>
+    <div class="footer">
+      <div class="footer-left">
+        <div class="export-wrap">
+          <button class="export-btn" onclick={() => exportMenuOpen = !exportMenuOpen}>
+            Export ▼
+          </button>
+          {#if exportMenuOpen}
+            <div class="export-menu">
+              <button onclick={exportCsv}>CSV</button>
+              <button onclick={exportJson}>JSON</button>
+            </div>
+          {/if}
+        </div>
+      </div>
+      <span>{r.rowCount} rows · {r.elapsedMs}ms</span>
+    </div>
   {/if}
 </section>
 
@@ -154,7 +287,10 @@
     color: rgba(26, 22, 18, 0.7);
     white-space: nowrap;
     min-width: 80px;
+    cursor: pointer;
+    user-select: none;
   }
+  thead th:hover { background: rgba(179, 62, 31, 0.15); }
   .th-stack {
     display: flex;
     flex-direction: column;
@@ -186,13 +322,62 @@
     color: rgba(26, 22, 18, 0.4);
     font-style: italic;
   }
+  .resize-handle {
+    position: absolute;
+    right: 0; top: 0; bottom: 0;
+    width: 4px;
+    cursor: col-resize;
+    background: transparent;
+  }
+  .resize-handle:hover { background: rgba(179, 62, 31, 0.5); }
   .footer {
     border-top: 1px solid rgba(26, 22, 18, 0.08);
     padding: 0.4rem 0.8rem;
     color: rgba(26, 22, 18, 0.55);
     font-size: 11px;
     background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
   }
+  .footer-left { display: flex; align-items: center; gap: 0.5rem; }
+  .export-wrap { position: relative; }
+  .export-btn {
+    background: transparent;
+    border: 1px solid rgba(26,22,18,0.2);
+    border-radius: 3px;
+    padding: 0.2rem 0.5rem;
+    font-size: 10.5px;
+    font-family: "Space Grotesk", sans-serif;
+    cursor: pointer;
+    color: rgba(26,22,18,0.7);
+  }
+  .export-btn:hover { background: rgba(26,22,18,0.06); }
+  .export-menu {
+    position: absolute;
+    bottom: calc(100% + 4px);
+    left: 0;
+    background: #fff;
+    border: 1px solid rgba(26,22,18,0.15);
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    min-width: 90px;
+    z-index: 100;
+    overflow: hidden;
+  }
+  .export-menu button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    padding: 0.45rem 0.75rem;
+    font-size: 12px;
+    font-family: "Space Grotesk", sans-serif;
+    cursor: pointer;
+    color: #1a1612;
+  }
+  .export-menu button:hover { background: rgba(26,22,18,0.06); }
   .spinner {
     display: inline-block;
     width: 12px; height: 12px;
