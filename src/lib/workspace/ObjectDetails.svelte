@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { TableDetails, ObjectKind, Loadable } from "$lib/workspace";
+  import { sqlEditor } from "$lib/stores/sql-editor.svelte";
 
   type Props = {
     selected: { owner: string; name: string; kind: ObjectKind } | null;
@@ -9,6 +10,12 @@
     sessionLost?: boolean;
   };
   let { selected, details, onRetry, onReconnect, sessionLost = false }: Props = $props();
+
+  function previewData() {
+    if (selected && selected.kind !== "SEQUENCE") {
+      void sqlEditor.openPreview(selected.owner, selected.name);
+    }
+  }
 </script>
 
 <section class="details">
@@ -45,7 +52,12 @@
   {:else if details.kind === "ok"}
     {@const d = details.value}
     <header>
-      <h2>{selected.owner}.{selected.name}</h2>
+      <div class="title-row">
+        <h2>{selected.owner}.{selected.name}</h2>
+        {#if selected.kind === "TABLE" || selected.kind === "VIEW"}
+          <button class="preview-btn" onclick={previewData}>Preview data →</button>
+        {/if}
+      </div>
       <p class="muted">
         {#if d.rowCount === null}
           ~ unknown rows
@@ -185,4 +197,22 @@
     font-size: 11px;
     cursor: pointer;
   }
+  .title-row {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+  }
+  .preview-btn {
+    background: #b33e1f;
+    color: #f6f1e8;
+    border: none;
+    padding: 0.3rem 0.7rem;
+    border-radius: 4px;
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+  }
+  .preview-btn:hover { background: #7a2a14; }
 </style>
