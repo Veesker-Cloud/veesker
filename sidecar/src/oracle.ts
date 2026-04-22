@@ -390,7 +390,10 @@ function isCancelError(err: unknown): boolean {
 async function drainDbmsOutput(conn: oracledb.Connection): Promise<string[] | null> {
   try {
     const lines: string[] = [];
-    while (true) {
+    let iterations = 0;
+    const MAX_LINES = 10_000;
+    while (iterations < MAX_LINES) {
+      iterations++;
       const r = await conn.execute<{ LINE: string; STATUS: number }>(
         `BEGIN DBMS_OUTPUT.GET_LINE(:line, :status); END;`,
         {
@@ -421,7 +424,7 @@ export type MultiQueryResult = { multi: true; results: ServerStatementResult[] }
 // the trailing `;` from PL/SQL anonymous blocks, producing ORA-06550. Avoid both problems
 // by using empty options for any PL/SQL statement.
 const PLSQL_EXEC_RE =
-  /^\s*(?:BEGIN|DECLARE|CREATE\s+(?:OR\s+REPLACE\s+)?(?:FUNCTION|PROCEDURE|TRIGGER|PACKAGE(?:\s+BODY)?|TYPE(?:\s+BODY)?))\b/i;
+  /^\s*(?:BEGIN|DECLARE|CREATE\s+(?:OR\s+REPLACE\s+)?(?:EDITIONABLE\s+|NONEDITIONABLE\s+)?(?:FUNCTION|PROCEDURE|TRIGGER|PACKAGE(?:\s+BODY)?|TYPE(?:\s+BODY)?))\b/i;
 
 /** Run a single statement against the active session; returns QueryResult. */
 async function executeSingleStatement(
@@ -531,37 +534,10 @@ export async function queryExecute(p: { sql: string; requestId?: string; splitMu
   // ── Single-statement path (default, back-compat) ──────────────────────────
   try {
     return await withActiveSession(async (conn) => {
-      const started = Date.now();
-      let r: any;
-      try {
-        r = await conn.execute(p.sql, [], {
-          maxRows: 100,
-          outFormat: oracledb.OUT_FORMAT_ARRAY,
-        });
-      } catch (execErr) {
-        // If we were cancelled and this looks like a break error, raise code -2.
-        if (_running?.requestId === requestId && _running.cancelled && isCancelError(execErr)) {
-          throw new RpcCodedError(QUERY_CANCELLED, "Cancelled by user");
-        }
-        throw execErr;
-      }
-      const elapsedMs = Date.now() - started;
-
-      const meta: any[] = r.metaData ?? [];
-      const rawRows: any[][] = r.rows ?? [];
-      const columns: QueryColumn[] = meta.map((m) => ({
-        name: m.name,
-        dataType: formatColumnType(m),
-      }));
-      const rows: QueryResultRow[] = rawRows.map((row) => row.map(normalizeCell));
-      const rowCount = rawRows.length > 0 ? rawRows.length : (r.rowsAffected ?? 0);
-      return { columns, rows, rowCount, elapsedMs };
+      return executeSingleStatement(conn, p.sql, requestId);
     });
   } finally {
-    // Clear only if this request is still current (avoid clobbering a newer query).
-    if (_running?.requestId === requestId) {
-      _running = null;
-    }
+    if (_running?.requestId === requestId) _running = null;
   }
 }
 
@@ -616,22 +592,43 @@ export async function objectDdl(p: {
   objectName: string;
 }): Promise<{ ddl: string }> {
   return withActiveSession(async (conn) => {
-    const res = await conn.execute<[string]>(
+    const fetchOpts = {
+      outFormat: oracledb.OUT_FORMAT_ARRAY,
+      fetchTypeHandler: (meta: any) =>
+        meta.dbType === oracledb.DB_TYPE_CLOB ? { type: oracledb.STRING } : undefined,
+    };
+
+    const specRes = await conn.execute<[string]>(
       `SELECT DBMS_METADATA.GET_DDL(UPPER(:type), UPPER(:name), UPPER(:owner)) FROM dual`,
       { type: p.objectType, name: p.objectName, owner: p.owner },
-      {
-        outFormat: oracledb.OUT_FORMAT_ARRAY,
-        fetchTypeHandler: (meta: any) =>
-          meta.dbType === oracledb.DB_TYPE_CLOB ? { type: oracledb.STRING } : undefined,
-      }
+      fetchOpts
     );
-    return { ddl: (res.rows?.[0]?.[0] as string) ?? "" };
+    const specDdl: string = (specRes.rows?.[0]?.[0] as string) ?? "";
+
+    // For PACKAGE, also fetch the body (may not exist — ORA-31603 is non-fatal)
+    if (p.objectType.toUpperCase() === "PACKAGE") {
+      try {
+        const bodyRes = await conn.execute<[string]>(
+          `SELECT DBMS_METADATA.GET_DDL('PACKAGE BODY', UPPER(:name), UPPER(:owner)) FROM dual`,
+          { name: p.objectName, owner: p.owner },
+          fetchOpts
+        );
+        const bodyDdl: string = (bodyRes.rows?.[0]?.[0] as string) ?? "";
+        if (bodyDdl.trim()) {
+          return { ddl: specDdl.trimEnd() + "\n\n" + bodyDdl };
+        }
+      } catch {
+        // No body exists — return spec only
+      }
+    }
+
+    return { ddl: specDdl };
   });
 }
 
 export async function objectsListPlsql(p: {
   owner: string;
-  kind: string;
+  kind: PlsqlKind;
 }): Promise<{ objects: ObjectRefWithStatus[] }> {
   return withActiveSession(async (conn) => {
     const res = await conn.execute<{ NAME: string; STATUS: string }>(
@@ -645,5 +642,110 @@ export async function objectsListPlsql(p: {
     return {
       objects: (res.rows ?? []).map((r) => ({ name: r.NAME, status: r.STATUS })),
     };
+  });
+}
+
+export type DataFlowNode = { owner: string; name: string; objectType: string };
+export type DataFlowTriggerInfo = { name: string; triggerType: string; event: string; status: string };
+export type DataFlowResult = {
+  upstream: DataFlowNode[];
+  downstream: DataFlowNode[];
+  fkParents: DataFlowNode[];
+  fkChildren: DataFlowNode[];
+  triggers: DataFlowTriggerInfo[];
+};
+
+export async function objectDataflow(p: {
+  owner: string;
+  objectType: string;
+  objectName: string;
+}): Promise<DataFlowResult> {
+  return withActiveSession(async (conn) => {
+    const opts = { outFormat: oracledb.OUT_FORMAT_ARRAY, maxRows: 200 };
+
+    // What this object depends on (upstream)
+    const upstreamTypes = p.objectType.toUpperCase() === "PACKAGE"
+      ? ["PACKAGE", "PACKAGE BODY"]
+      : [p.objectType.toUpperCase()];
+
+    const upstreamPlaceholders = upstreamTypes.map((_, i) => `:t${i}`).join(", ");
+    const upstreamBinds: Record<string, string> = { owner: p.owner, name: p.objectName };
+    upstreamTypes.forEach((t, i) => { upstreamBinds[`t${i}`] = t; });
+
+    const upRes = await conn.execute<[string, string, string]>(
+      `SELECT DISTINCT d.referenced_owner, d.referenced_name, d.referenced_type
+       FROM all_dependencies d
+       WHERE d.owner = UPPER(:owner) AND d.name = UPPER(:name)
+         AND d.type IN (${upstreamPlaceholders})
+         AND d.referenced_type NOT IN ('NON-EXISTENT', 'UNDEFINED', 'SYNONYM')
+         AND NOT (d.referenced_owner = UPPER(:owner) AND d.referenced_name = UPPER(:name))
+       ORDER BY d.referenced_type, d.referenced_name`,
+      upstreamBinds,
+      opts
+    );
+
+    // What depends on this object (downstream)
+    const dnRes = await conn.execute<[string, string, string]>(
+      `SELECT DISTINCT d.owner, d.name, d.type
+       FROM all_dependencies d
+       WHERE d.referenced_owner = UPPER(:owner) AND d.referenced_name = UPPER(:name)
+         AND d.referenced_type = UPPER(:objectType)
+         AND NOT (d.owner = UPPER(:owner) AND d.name = UPPER(:name))
+       ORDER BY d.type, d.name`,
+      { owner: p.owner, name: p.objectName, objectType: p.objectType },
+      opts
+    );
+
+    const toNode = (row: [string, string, string]): DataFlowNode => ({
+      owner: row[0], name: row[1], objectType: row[2],
+    });
+
+    const upstream: DataFlowNode[] = (upRes.rows ?? []).map(toNode);
+    const downstream: DataFlowNode[] = (dnRes.rows ?? []).map(toNode);
+
+    let fkParents: DataFlowNode[] = [];
+    let fkChildren: DataFlowNode[] = [];
+    let triggers: DataFlowTriggerInfo[] = [];
+
+    if (p.objectType.toUpperCase() === "TABLE") {
+      // FK parents: tables that this table references
+      const parRes = await conn.execute<[string, string]>(
+        `SELECT DISTINCT cc.owner, cc.table_name
+         FROM all_constraints c
+         JOIN all_constraints cc ON cc.constraint_name = c.r_constraint_name AND cc.owner = c.r_owner
+         WHERE c.table_name = UPPER(:name) AND c.owner = UPPER(:owner) AND c.constraint_type = 'R'
+         ORDER BY cc.table_name`,
+        { name: p.objectName, owner: p.owner },
+        opts
+      );
+      fkParents = (parRes.rows ?? []).map(r => ({ owner: r[0], name: r[1], objectType: "TABLE" }));
+
+      // FK children: tables that reference this table
+      const chRes = await conn.execute<[string, string]>(
+        `SELECT DISTINCT c.owner, c.table_name
+         FROM all_constraints c
+         JOIN all_constraints rc ON rc.constraint_name = c.r_constraint_name AND rc.owner = c.r_owner
+         WHERE rc.table_name = UPPER(:name) AND rc.owner = UPPER(:owner) AND c.constraint_type = 'R'
+         ORDER BY c.table_name`,
+        { name: p.objectName, owner: p.owner },
+        opts
+      );
+      fkChildren = (chRes.rows ?? []).map(r => ({ owner: r[0], name: r[1], objectType: "TABLE" }));
+
+      // Triggers on this table
+      const trgRes = await conn.execute<[string, string, string, string]>(
+        `SELECT trigger_name, trigger_type, triggering_event, status
+         FROM all_triggers
+         WHERE table_name = UPPER(:name) AND owner = UPPER(:owner)
+         ORDER BY trigger_name`,
+        { name: p.objectName, owner: p.owner },
+        opts
+      );
+      triggers = (trgRes.rows ?? []).map(r => ({
+        name: r[0], triggerType: r[1], event: r[2], status: r[3],
+      }));
+    }
+
+    return { upstream, downstream, fkParents, fkChildren, triggers };
   });
 }

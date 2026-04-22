@@ -12,6 +12,7 @@ import {
   compileErrors,
   objectDdl,
   objectsListPlsql,
+  objectDataflow,
 } from "./oracle";
 
 const handlers: HandlerMap = {
@@ -26,6 +27,7 @@ const handlers: HandlerMap = {
   "compile.errors": (params) => compileErrors(params as any),
   "object.ddl": (params) => objectDdl(params as any),
   "objects.list.plsql": (params) => objectsListPlsql(params as any),
+  "object.dataflow": (params) => objectDataflow(params as any),
   ping: async () => ({ pong: true }),
 };
 
