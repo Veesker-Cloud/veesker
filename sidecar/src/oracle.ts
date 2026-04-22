@@ -943,14 +943,14 @@ export async function tableRelated(p: {
     }>(
       `SELECT ac.constraint_name, ac.constraint_type,
               NVL(LISTAGG(acc.column_name, ', ') WITHIN GROUP (ORDER BY acc.position), '') AS columns,
-              CAST(ac.search_condition AS VARCHAR2(500)) AS search_condition,
+              ac.search_condition_vc AS search_condition,
               ac.status
          FROM all_constraints ac
          LEFT JOIN all_cons_columns acc
            ON acc.owner = ac.owner AND acc.constraint_name = ac.constraint_name
         WHERE ac.owner = :owner AND ac.table_name = :name
           AND ac.constraint_type IN ('C', 'U')
-        GROUP BY ac.constraint_name, ac.constraint_type, ac.search_condition, ac.status
+        GROUP BY ac.constraint_name, ac.constraint_type, ac.search_condition_vc, ac.status
         ORDER BY ac.constraint_type, ac.constraint_name`,
       { owner: p.owner, name: p.name },
       opts
