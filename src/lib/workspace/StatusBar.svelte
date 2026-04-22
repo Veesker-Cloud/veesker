@@ -21,7 +21,8 @@
   <button
     class="sql-toggle"
     class:active={sqlEditor.drawerOpen}
-    aria-label="SQL"
+    aria-label="Toggle SQL drawer"
+    title="Toggle SQL drawer (⌘J)"
     onclick={() => sqlEditor.toggleDrawer()}
   >
     SQL

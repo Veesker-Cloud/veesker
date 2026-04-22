@@ -157,6 +157,18 @@
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j") {
       e.preventDefault();
       sqlEditor.toggleDrawer();
+      return;
+    }
+    // Cmd+W (or Ctrl+W) closes the active SQL tab when the drawer is open
+    // and a tab is focused. Falls through to the OS / window when no tab.
+    if (
+      (e.metaKey || e.ctrlKey) &&
+      e.key.toLowerCase() === "w" &&
+      sqlEditor.drawerOpen &&
+      sqlEditor.activeId !== null
+    ) {
+      e.preventDefault();
+      sqlEditor.closeTab(sqlEditor.activeId);
     }
   }
 
