@@ -190,6 +190,7 @@
 <style>
   .tree {
     width: 100%;
+    height: 100%;
     min-width: 0;
     background: #18140f;
     border-right: 1px solid rgba(255,255,255,0.06);

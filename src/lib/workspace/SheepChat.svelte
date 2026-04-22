@@ -213,6 +213,7 @@
 <style>
   .sheep-panel {
     width: 100%;
+    height: 100%;
     min-width: 0;
     background: #1c1710;
     border-left: 1px solid rgba(255,255,255,0.07);

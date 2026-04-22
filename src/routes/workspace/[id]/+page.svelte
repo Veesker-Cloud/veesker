@@ -494,11 +494,10 @@
     overflow: hidden;
   }
   .panel-wrap {
-    display: flex;
-    flex-direction: column;
     flex-shrink: 0;
     min-width: 0;
     overflow: hidden;
+    height: 100%;
   }
   .resize-handle {
     width: 4px;
