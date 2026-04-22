@@ -5,6 +5,7 @@ export const NO_ACTIVE_SESSION = -32010;
 export const SESSION_LOST      = -32011;
 export const OBJECT_NOT_FOUND  = -32012;
 export const ORACLE_ERR        = -32013;
+export const SPLITTER_ERROR    = -32014;
 
 // Domain code for user-initiated query cancellation.
 // Intentionally outside the JSON-RPC reserved range.

@@ -9,9 +9,12 @@
   type Props = {
     value: string;
     onChange: (sql: string) => void;
-    onRun: () => void;
+    /** Called for Mod+Enter. selection is the selected text (or null if no selection). */
+    onRunCursor: (selection: string | null, cursorPos: number, docText: string) => void;
+    /** Called for Mod+Shift+Enter and F5 — runs all statements. */
+    onRunAll: () => void;
   };
-  let { value, onChange, onRun }: Props = $props();
+  let { value, onChange, onRunCursor, onRunAll }: Props = $props();
 
   let host: HTMLDivElement | undefined = $state();
   let view: EditorView | null = null;
@@ -28,8 +31,29 @@
               {
                 key: "Mod-Enter",
                 preventDefault: true,
+                run: (v) => {
+                  const sel = v.state.selection.main;
+                  if (sel.from !== sel.to) {
+                    onRunCursor(v.state.sliceDoc(sel.from, sel.to), sel.from, v.state.doc.toString());
+                  } else {
+                    onRunCursor(null, sel.from, v.state.doc.toString());
+                  }
+                  return true;
+                },
+              },
+              {
+                key: "Mod-Shift-Enter",
+                preventDefault: true,
                 run: () => {
-                  onRun();
+                  onRunAll();
+                  return true;
+                },
+              },
+              {
+                key: "F5",
+                preventDefault: true,
+                run: () => {
+                  onRunAll();
                   return true;
                 },
               },

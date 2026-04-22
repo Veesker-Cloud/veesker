@@ -16,12 +16,12 @@ const baseProps = {
 describe("StatusBar SQL toggle", () => {
   it("renders SQL toggle button", () => {
     render(StatusBar, { props: baseProps });
-    expect(screen.getByRole("button", { name: /^sql$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /toggle sql drawer/i })).toBeInTheDocument();
   });
 
   it("clicking the toggle flips drawerOpen", async () => {
     render(StatusBar, { props: baseProps });
-    const btn = screen.getByRole("button", { name: /^sql$/i });
+    const btn = screen.getByRole("button", { name: /toggle sql drawer/i });
     expect(sqlEditor.drawerOpen).toBe(false);
     await fireEvent.click(btn);
     expect(sqlEditor.drawerOpen).toBe(true);
@@ -29,7 +29,7 @@ describe("StatusBar SQL toggle", () => {
 
   it("toggle has active class when drawerOpen is true", async () => {
     render(StatusBar, { props: baseProps });
-    const btn = screen.getByRole("button", { name: /^sql$/i });
+    const btn = screen.getByRole("button", { name: /toggle sql drawer/i });
     sqlEditor.toggleDrawer();
     await new Promise((r) => setTimeout(r, 0));
     expect(btn.className).toMatch(/active/);

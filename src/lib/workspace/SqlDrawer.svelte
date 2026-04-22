@@ -145,7 +145,14 @@
           <SqlEditor
             value={tab.sql}
             onChange={(s) => sqlEditor.updateSql(tab.id, s)}
-            onRun={() => sqlEditor.runActive()}
+            onRunCursor={(selection, cursorPos, docText) => {
+              if (selection !== null) {
+                void sqlEditor.runSelection(selection);
+              } else {
+                void sqlEditor.runStatementAtCursor(docText, cursorPos);
+              }
+            }}
+            onRunAll={() => void sqlEditor.runActiveAll()}
           />
         {/if}
       </div>

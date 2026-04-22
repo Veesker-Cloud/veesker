@@ -2,13 +2,21 @@ import { describe, expect, it, beforeEach, vi } from "vitest";
 
 vi.mock("$lib/sql-query", () => ({
   queryExecute: vi.fn(),
+  queryExecuteMulti: vi.fn(),
   queryCancel: vi.fn(),
 }));
 
-import { queryExecute, queryCancel } from "$lib/sql-query";
-import { sqlEditor } from "./sql-editor.svelte";
+// sql-splitter is pure TS — use the real implementation.
+vi.mock("$lib/sql-splitter", async () => {
+  const real = await vi.importActual<typeof import("$lib/sql-splitter")>("$lib/sql-splitter");
+  return real;
+});
+
+import { queryExecute, queryExecuteMulti, queryCancel } from "$lib/sql-query";
+import { sqlEditor, activeResult, type SqlTab } from "./sql-editor.svelte";
 
 const mockedQueryExecute = vi.mocked(queryExecute);
+const mockedQueryExecuteMulti = vi.mocked(queryExecuteMulti);
 const mockedQueryCancel = vi.mocked(queryCancel);
 
 // localStorage in this jsdom env is a stub without .clear().
@@ -25,9 +33,30 @@ vi.stubGlobal("localStorage", mockLocalStorage);
 beforeEach(() => {
   sqlEditor.reset();
   mockedQueryExecute.mockReset();
+  mockedQueryExecuteMulti.mockReset();
   mockedQueryCancel.mockReset();
   mockLocalStorage.clear();
 });
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function okResult(rowCount = 1, withColumns = true) {
+  return {
+    ok: true as const,
+    data: {
+      columns: withColumns ? [{ name: "X", dataType: "NUMBER" }] : [],
+      rows: withColumns ? [[rowCount]] : [],
+      rowCount,
+      elapsedMs: 5,
+    },
+  };
+}
+
+function errResult(code = -32013, message = "ORA-00942: table or view does not exist") {
+  return { ok: false as const, error: { code, message } };
+}
+
+// ── openBlank ────────────────────────────────────────────────────────────────
 
 describe("sqlEditor.openBlank", () => {
   it("creates a tab named 'Query 1' and opens the drawer", () => {
@@ -55,12 +84,11 @@ describe("sqlEditor.openBlank", () => {
   });
 });
 
+// ── openPreview ───────────────────────────────────────────────────────────────
+
 describe("sqlEditor.openPreview", () => {
   it("builds a quoted SELECT * SQL and runs it", async () => {
-    mockedQueryExecute.mockResolvedValue({
-      ok: true,
-      data: { columns: [{ name: "X", dataType: "NUMBER" }], rows: [[1]], rowCount: 1, elapsedMs: 5 },
-    });
+    mockedQueryExecute.mockResolvedValue(okResult());
     await sqlEditor.openPreview("SYSTEM", "HELP");
     expect(mockedQueryExecute).toHaveBeenCalledWith(
       `SELECT * FROM "SYSTEM"."HELP" FETCH FIRST 100 ROWS ONLY`,
@@ -68,35 +96,34 @@ describe("sqlEditor.openPreview", () => {
     );
     expect(sqlEditor.tabs[0].title).toBe("SYSTEM.HELP");
     expect(sqlEditor.drawerOpen).toBe(true);
-    expect(sqlEditor.tabs[0].result?.rowCount).toBe(1);
+    const ar = activeResult(sqlEditor.tabs[0]);
+    expect(ar?.result?.rowCount).toBe(1);
   });
 });
+
+// ── runActive ─────────────────────────────────────────────────────────────────
 
 describe("sqlEditor.runActive", () => {
   it("sets running, then sets result on success", async () => {
     sqlEditor.openBlank();
     const id = sqlEditor.activeId!;
     sqlEditor.updateSql(id, "SELECT 1 FROM DUAL");
-    mockedQueryExecute.mockResolvedValue({
-      ok: true,
-      data: { columns: [{ name: "X", dataType: "NUMBER" }], rows: [[1]], rowCount: 1, elapsedMs: 5 },
-    });
+    mockedQueryExecute.mockResolvedValue(okResult());
     await sqlEditor.runActive();
     expect(sqlEditor.active?.running).toBe(false);
-    expect(sqlEditor.active?.result?.rowCount).toBe(1);
-    expect(sqlEditor.active?.error).toBeNull();
+    const ar = activeResult(sqlEditor.active!);
+    expect(ar?.result?.rowCount).toBe(1);
+    expect(ar?.error).toBeNull();
   });
 
   it("sets error on failure and clears prior result", async () => {
     sqlEditor.openBlank();
     sqlEditor.updateSql(sqlEditor.activeId!, "SELECT * FROM nope");
-    mockedQueryExecute.mockResolvedValue({
-      ok: false,
-      error: { code: -32013, message: "ORA-00942: table or view does not exist" },
-    });
+    mockedQueryExecute.mockResolvedValue(errResult());
     await sqlEditor.runActive();
-    expect(sqlEditor.active?.error?.code).toBe(-32013);
-    expect(sqlEditor.active?.result).toBeNull();
+    const ar = activeResult(sqlEditor.active!);
+    expect(ar?.error?.code).toBe(-32013);
+    expect(ar?.result).toBeNull();
     expect(sqlEditor.active?.running).toBe(false);
   });
 
@@ -111,10 +138,7 @@ describe("sqlEditor.runActive", () => {
   it("strips a single trailing semicolon before invoke", async () => {
     sqlEditor.openBlank();
     sqlEditor.updateSql(sqlEditor.activeId!, "SELECT 1 FROM DUAL ;  ");
-    mockedQueryExecute.mockResolvedValue({
-      ok: true,
-      data: { columns: [], rows: [], rowCount: 0, elapsedMs: 1 },
-    });
+    mockedQueryExecute.mockResolvedValue(okResult(0, false));
     await sqlEditor.runActive();
     expect(mockedQueryExecute).toHaveBeenCalledWith("SELECT 1 FROM DUAL", expect.any(String));
   });
@@ -124,6 +148,173 @@ describe("sqlEditor.runActive", () => {
     expect(mockedQueryExecute).not.toHaveBeenCalled();
   });
 });
+
+// ── runActiveAll ──────────────────────────────────────────────────────────────
+
+describe("sqlEditor.runActiveAll", () => {
+  it("populates tab.results with multiple entries for 3 statements", async () => {
+    sqlEditor.openBlank();
+    sqlEditor.updateSql(sqlEditor.activeId!, "SELECT 1 FROM dual;\nSELECT 2 FROM dual;\nSELECT 3 FROM dual;");
+    mockedQueryExecuteMulti.mockResolvedValue({
+      ok: true,
+      data: {
+        multi: true,
+        results: [
+          { status: "ok", statementIndex: 0, sql: "SELECT 1 FROM dual", elapsedMs: 1, columns: [{ name: "X", dataType: "NUMBER" }], rows: [[1]], rowCount: 1 },
+          { status: "ok", statementIndex: 1, sql: "SELECT 2 FROM dual", elapsedMs: 2, columns: [{ name: "Y", dataType: "NUMBER" }], rows: [[2]], rowCount: 1 },
+          { status: "ok", statementIndex: 2, sql: "SELECT 3 FROM dual", elapsedMs: 3, columns: [{ name: "Z", dataType: "NUMBER" }], rows: [[3]], rowCount: 1 },
+        ],
+      },
+    });
+    await sqlEditor.runActiveAll();
+    expect(sqlEditor.active?.results).toHaveLength(3);
+    expect(sqlEditor.active?.results[0].status).toBe("ok");
+    expect(sqlEditor.active?.results[1].status).toBe("ok");
+    expect(sqlEditor.active?.results[2].status).toBe("ok");
+    expect(sqlEditor.active?.running).toBe(false);
+  });
+
+  it("sets activeResultId to the last SELECT with rows", async () => {
+    sqlEditor.openBlank();
+    sqlEditor.updateSql(sqlEditor.activeId!, "INSERT INTO t VALUES(1);\nSELECT * FROM t;");
+    mockedQueryExecuteMulti.mockResolvedValue({
+      ok: true,
+      data: {
+        multi: true,
+        results: [
+          { status: "ok", statementIndex: 0, sql: "INSERT INTO t VALUES(1)", elapsedMs: 1, columns: [], rows: [], rowCount: 1 },
+          { status: "ok", statementIndex: 1, sql: "SELECT * FROM t", elapsedMs: 2, columns: [{ name: "X", dataType: "NUMBER" }], rows: [[1]], rowCount: 1 },
+        ],
+      },
+    });
+    await sqlEditor.runActiveAll();
+    const tab = sqlEditor.active!;
+    const ar = activeResult(tab);
+    expect(ar).not.toBeNull();
+    expect(ar?.result?.columns).toHaveLength(1); // the SELECT result
+    expect(ar?.statementIndex).toBe(1);
+  });
+
+  it("stops iteration on error — 2 results returned, second is error", async () => {
+    sqlEditor.openBlank();
+    sqlEditor.updateSql(sqlEditor.activeId!, "SELECT 1 FROM dual;\nSELECT * FROM nope;\nSELECT 3 FROM dual;");
+    mockedQueryExecuteMulti.mockResolvedValue({
+      ok: true,
+      data: {
+        multi: true,
+        results: [
+          { status: "ok", statementIndex: 0, sql: "SELECT 1 FROM dual", elapsedMs: 1, columns: [{ name: "X", dataType: "NUMBER" }], rows: [[1]], rowCount: 1 },
+          { status: "error", statementIndex: 1, sql: "SELECT * FROM nope", elapsedMs: 0, error: { code: -32013, message: "ORA-00942" } },
+        ],
+      },
+    });
+    await sqlEditor.runActiveAll();
+    const tab = sqlEditor.active!;
+    expect(tab.results).toHaveLength(2);
+    expect(tab.results[1].status).toBe("error");
+    expect(tab.results[1].error?.message).toContain("ORA-00942");
+  });
+
+  it("sets splitterError and doesn't run when splitter fails", async () => {
+    sqlEditor.openBlank();
+    sqlEditor.updateSql(sqlEditor.activeId!, "SELECT 'unterminated FROM dual;");
+    await sqlEditor.runActiveAll();
+    expect(mockedQueryExecuteMulti).not.toHaveBeenCalled();
+    expect(sqlEditor.active?.splitterError).toBeTruthy();
+    expect(sqlEditor.active?.results).toHaveLength(0);
+  });
+
+  it("doesn't run when SQL is empty", async () => {
+    sqlEditor.openBlank();
+    await sqlEditor.runActiveAll();
+    expect(mockedQueryExecuteMulti).not.toHaveBeenCalled();
+  });
+});
+
+// ── runSelection ──────────────────────────────────────────────────────────────
+
+describe("sqlEditor.runSelection", () => {
+  it("runs selected text as a single statement, results.length === 1", async () => {
+    sqlEditor.openBlank();
+    mockedQueryExecute.mockResolvedValue(okResult());
+    await sqlEditor.runSelection("SELECT 1 FROM dual");
+    const tab = sqlEditor.active!;
+    expect(tab.results).toHaveLength(1);
+    expect(tab.results[0].status).toBe("ok");
+    expect(mockedQueryExecute).toHaveBeenCalledWith("SELECT 1 FROM dual", expect.any(String));
+  });
+
+  it("strips trailing semicolon from selection", async () => {
+    sqlEditor.openBlank();
+    mockedQueryExecute.mockResolvedValue(okResult(0, false));
+    await sqlEditor.runSelection("UPDATE t SET x=1;");
+    expect(mockedQueryExecute).toHaveBeenCalledWith("UPDATE t SET x=1", expect.any(String));
+  });
+});
+
+// ── runStatementAtCursor ──────────────────────────────────────────────────────
+
+describe("sqlEditor.runStatementAtCursor", () => {
+  it("runs the statement the cursor is inside based on character position", async () => {
+    sqlEditor.openBlank();
+    const sql = "SELECT 1 FROM dual;\nSELECT 2 FROM dual;\nSELECT 3 FROM dual;";
+    sqlEditor.updateSql(sqlEditor.activeId!, sql);
+    mockedQueryExecute.mockResolvedValue(okResult());
+
+    // cursor at position 25 — inside second statement "SELECT 2 FROM dual"
+    // First statement ends at ~19 chars ("SELECT 1 FROM dual;")
+    // Second statement starts after the newline at ~20
+    const cursorPos = 25;
+    await sqlEditor.runStatementAtCursor(sql, cursorPos);
+
+    const called = mockedQueryExecute.mock.calls[0][0];
+    expect(called).toContain("SELECT 2");
+  });
+
+  it("falls back to nearest statement before cursor when cursor is in whitespace", async () => {
+    sqlEditor.openBlank();
+    const sql = "SELECT 1 FROM dual;\n\n\nSELECT 2 FROM dual;";
+    sqlEditor.updateSql(sqlEditor.activeId!, sql);
+    mockedQueryExecute.mockResolvedValue(okResult());
+
+    // cursor at position 21 — in the blank lines between statements
+    await sqlEditor.runStatementAtCursor(sql, 21);
+    const called = mockedQueryExecute.mock.calls[0][0];
+    // Should run statement 1 (the one before the cursor)
+    expect(called).toContain("SELECT 1");
+  });
+});
+
+// ── activeResult helper ───────────────────────────────────────────────────────
+
+describe("activeResult", () => {
+  it("returns null when tab.activeResultId is null", () => {
+    sqlEditor.openBlank();
+    const tab = sqlEditor.active!;
+    expect(activeResult(tab)).toBeNull();
+  });
+
+  it("returns the TabResult matching activeResultId", async () => {
+    sqlEditor.openBlank();
+    sqlEditor.updateSql(sqlEditor.activeId!, "SELECT 1 FROM DUAL");
+    mockedQueryExecute.mockResolvedValue(okResult(42));
+    await sqlEditor.runActive();
+    const tab = sqlEditor.active!;
+    expect(tab.activeResultId).not.toBeNull();
+    const ar = activeResult(tab);
+    expect(ar).not.toBeNull();
+    expect(ar?.result?.rowCount).toBe(42);
+  });
+
+  it("returns null when activeResultId doesn't match any result", () => {
+    sqlEditor.openBlank();
+    const tab = sqlEditor.active!;
+    tab.activeResultId = "nonexistent-id";
+    expect(activeResult(tab)).toBeNull();
+  });
+});
+
+// ── closeTab ──────────────────────────────────────────────────────────────────
 
 describe("sqlEditor.closeTab", () => {
   it("picks the left neighbor when active tab is closed", () => {
@@ -160,6 +351,8 @@ describe("sqlEditor.closeTab", () => {
   });
 });
 
+// ── toggleDrawer + reset ──────────────────────────────────────────────────────
+
 describe("sqlEditor.toggleDrawer + reset", () => {
   it("toggleDrawer flips drawerOpen", () => {
     expect(sqlEditor.drawerOpen).toBe(false);
@@ -180,6 +373,8 @@ describe("sqlEditor.toggleDrawer + reset", () => {
   });
 });
 
+// ── drawerHeight ──────────────────────────────────────────────────────────────
+
 describe("sqlEditor.drawerHeight", () => {
   it("falls back to default when localStorage is empty", () => {
     // jsdom window.innerHeight is 768, so default = Math.round(768 * 0.4) = 307
@@ -189,14 +384,11 @@ describe("sqlEditor.drawerHeight", () => {
 
   it("returns persisted value when valid", () => {
     localStorage.setItem("veesker.sql.drawerHeight", "500");
-    // The store's _drawerHeight is already loaded; use setDrawerHeight to simulate
-    // reading from localStorage by calling set then checking via getter
     sqlEditor.setDrawerHeight(500);
     expect(sqlEditor.drawerHeight).toBe(500);
   });
 
   it("falls back to default when persisted value is out of range", () => {
-    // setDrawerHeight clamps, so test below-minimum clamping
     sqlEditor.setDrawerHeight(50); // below 120
     expect(sqlEditor.drawerHeight).toBe(120);
   });
@@ -217,11 +409,10 @@ describe("sqlEditor.drawerHeight", () => {
   });
 });
 
+// ── editorRatio ───────────────────────────────────────────────────────────────
+
 describe("sqlEditor.editorRatio", () => {
   it("defaults to 0.35 when localStorage is empty", () => {
-    // The module-level default is 0.35 (loaded before tests ran),
-    // but after setDrawerHeight tests may have mutated it. Use setEditorRatio
-    // to reset and confirm valid range.
     sqlEditor.setEditorRatio(0.35);
     expect(sqlEditor.editorRatio).toBe(0.35);
   });
@@ -247,16 +438,16 @@ describe("sqlEditor.editorRatio", () => {
   });
 });
 
+// ── cancelActive ──────────────────────────────────────────────────────────────
+
 describe("sqlEditor.cancelActive", () => {
   it("is a no-op when there is no active tab", async () => {
-    // No tabs open — cancelActive should resolve without throwing or calling queryCancel.
     await sqlEditor.cancelActive();
     expect(mockedQueryCancel).not.toHaveBeenCalled();
   });
 
   it("is a no-op when active tab has no running request", async () => {
     sqlEditor.openBlank();
-    // runningRequestId is null by default; no cancel should fire.
     await sqlEditor.cancelActive();
     expect(mockedQueryCancel).not.toHaveBeenCalled();
   });
@@ -264,7 +455,6 @@ describe("sqlEditor.cancelActive", () => {
   it("invokes queryCancel with the running requestId", async () => {
     mockedQueryCancel.mockResolvedValue({ ok: true, data: { cancelled: true, requestId: "req-abc" } });
 
-    // Start a query that hangs (deferred) so runningRequestId is set.
     let resolvePending!: (v: any) => void;
     mockedQueryExecute.mockReturnValue(new Promise((res) => { resolvePending = res; }));
 
@@ -272,34 +462,32 @@ describe("sqlEditor.cancelActive", () => {
     sqlEditor.updateSql(sqlEditor.activeId!, "SELECT 1 FROM DUAL");
 
     const runPromise = sqlEditor.runActive();
-    // At this point the tab should have a runningRequestId set.
     const requestId = sqlEditor.active!.runningRequestId;
     expect(requestId).not.toBeNull();
 
     await sqlEditor.cancelActive();
     expect(mockedQueryCancel).toHaveBeenCalledWith(requestId);
 
-    // Resolve the pending execute so runActive can finish.
     resolvePending({ ok: true, data: { columns: [], rows: [], rowCount: 0, elapsedMs: 1 } });
     await runPromise;
   });
 });
+
+// ── runActive requestId lifecycle ─────────────────────────────────────────────
 
 describe("sqlEditor.runActive — requestId lifecycle", () => {
   it("sets runningRequestId on the tab during execute, clears it after", async () => {
     let capturedRequestId: string | null = null;
     mockedQueryExecute.mockImplementation((_sql: string, requestId: string) => {
       capturedRequestId = requestId;
-      return Promise.resolve({ ok: true, data: { columns: [], rows: [], rowCount: 0, elapsedMs: 1 } });
+      return Promise.resolve({ ok: true as const, data: { columns: [], rows: [], rowCount: 0, elapsedMs: 1 } });
     });
 
     sqlEditor.openBlank();
     sqlEditor.updateSql(sqlEditor.activeId!, "SELECT 1 FROM DUAL");
     await sqlEditor.runActive();
 
-    // After completion, runningRequestId should be null.
     expect(sqlEditor.active?.runningRequestId).toBeNull();
-    // A UUID was passed to queryExecute.
     expect(capturedRequestId).toMatch(/^[0-9a-f-]{36}$/);
   });
 });

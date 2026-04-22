@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { SqlTab } from "$lib/stores/sql-editor.svelte";
+  import { activeResult } from "$lib/stores/sql-editor.svelte";
   import CancelOverlay from "./CancelOverlay.svelte";
 
   type Props = { tab: SqlTab | null; onCancel: () => void };
@@ -27,27 +28,41 @@
     if (s.length > 60) return s.slice(0, 60) + "…";
     return s;
   }
+
+  // Derived: get the active result for display
+  let ar = $derived(tab ? activeResult(tab) : null);
 </script>
 
 <section class="grid">
-  {#if tab === null || (tab.result === null && !tab.running && tab.error === null)}
+  {#if tab === null}
     <div class="placeholder">Run a query to see results.</div>
   {:else if tab.running}
     <div class="placeholder" role="status" aria-live="polite">
       <span class="spinner"></span> Running…
     </div>
     <CancelOverlay {onCancel} />
-  {:else if tab.error}
+  {:else if tab.splitterError !== null}
+    <div class="banner banner-splitter">
+      <strong>Split error</strong>
+      <span>Couldn't split: {tab.splitterError}. No statements run.</span>
+    </div>
+  {:else if ar === null}
+    <div class="placeholder">Run a query to see results.</div>
+  {:else if ar.status === "cancelled"}
+    <div class="banner banner-cancelled">
+      <span>⏸ Cancelled by user</span>
+    </div>
+  {:else if ar.status === "error"}
     <div class="banner">
-      <strong>{tab.error.code}</strong>
-      <span>{tab.error.message}</span>
+      <strong>{ar.error?.code}</strong>
+      <span>{ar.error?.message}</span>
     </div>
-  {:else if tab.result && tab.result.columns.length === 0}
+  {:else if ar.result && ar.result.columns.length === 0}
     <div class="ok">
-      ✓ Statement executed · {tab.result.rowCount} rows affected · {tab.result.elapsedMs}ms
+      ✓ Statement executed · {ar.result.rowCount} rows affected · {ar.result.elapsedMs}ms
     </div>
-  {:else if tab.result}
-    {@const r = tab.result}
+  {:else if ar.result}
+    {@const r = ar.result}
     <div class="scroll">
       <table>
         <thead>
@@ -106,6 +121,17 @@
     font-size: 11.5px;
   }
   .banner strong { font-family: "Space Grotesk", sans-serif; }
+  .banner-splitter {
+    background: rgba(179, 62, 31, 0.12);
+    color: #7a2a14;
+  }
+  .banner-cancelled {
+    background: rgba(26, 22, 18, 0.05);
+    color: rgba(26, 22, 18, 0.6);
+    border-bottom: 1px solid rgba(26, 22, 18, 0.12);
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 12px;
+  }
   .scroll {
     flex: 1;
     overflow: auto;
