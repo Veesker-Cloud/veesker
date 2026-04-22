@@ -130,16 +130,18 @@ async function aiChatViaCli(params: AiChatParams): Promise<AiChatResult> {
   const system = buildSystem(params.context);
   const lastUser = params.messages.filter((m) => m.role === "user").pop()?.content ?? "";
 
-  // Build a single prompt that includes conversation history + system context
   const history = params.messages.slice(0, -1).map((m) =>
     `${m.role === "user" ? "Human" : "Assistant"}: ${m.content}`
   ).join("\n\n");
-  const fullPrompt = history
-    ? `${history}\n\nHuman: ${lastUser}`
-    : lastUser;
+
+  // Embed system context + history into the prompt (claude CLI has no --system flag)
+  const fullPrompt = [
+    system,
+    history ? `\n\n${history}\n\nHuman: ${lastUser}` : lastUser,
+  ].join("\n\n");
 
   const proc = Bun.spawn(
-    ["claude", "-p", fullPrompt, "--system", system],
+    ["claude", "-p", fullPrompt],
     { stdout: "pipe", stderr: "pipe" }
   );
 
