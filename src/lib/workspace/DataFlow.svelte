@@ -1,305 +1,370 @@
 <script lang="ts">
-  import type { DataFlowResult, DataFlowNode } from "$lib/workspace";
+  import { onMount } from "svelte";
+  import type { DataFlowResult } from "$lib/workspace";
 
   type Props = {
+    objectName: string;
+    objectType: string;
     result: DataFlowResult;
     onNavigate?: (owner: string, objectType: string, name: string) => void;
   };
-  const { result, onNavigate }: Props = $props();
+  const { objectName, objectType, result, onNavigate }: Props = $props();
 
   const TYPE_COLOR: Record<string, string> = {
-    TABLE:        "#4a7fa5",
-    VIEW:         "#4a9e8a",
-    PROCEDURE:    "#b87333",
-    FUNCTION:     "#a07840",
-    PACKAGE:      "#7b5ea7",
-    "PACKAGE BODY": "#7b5ea7",
-    TRIGGER:      "#b34a4a",
-    TYPE:         "#5a7a9a",
-    "TYPE BODY":  "#5a7a9a",
-    SEQUENCE:     "#6b8c6b",
-    INDEX:        "#888",
-    SYNONYM:      "#888",
+    TABLE: "#4a90d9", VIEW: "#27ae8a", PROCEDURE: "#e07b30",
+    FUNCTION: "#c9a227", PACKAGE: "#8e5fb5", "PACKAGE BODY": "#8e5fb5",
+    TRIGGER: "#c0392b", TYPE: "#5a8fb5", "TYPE BODY": "#5a8fb5",
+    SEQUENCE: "#5aab5a", SYNONYM: "#888", INDEX: "#888",
   };
-
   const TYPE_BADGE: Record<string, string> = {
-    TABLE: "tbl", VIEW: "view", PROCEDURE: "proc", FUNCTION: "fn",
-    PACKAGE: "pkg", "PACKAGE BODY": "pkg", TRIGGER: "trg",
-    TYPE: "type", SEQUENCE: "seq",
+    TABLE: "TBL", VIEW: "VIEW", PROCEDURE: "PROC", FUNCTION: "FN",
+    PACKAGE: "PKG", "PACKAGE BODY": "PKG", TRIGGER: "TRG",
+    TYPE: "TYPE", "TYPE BODY": "TYPE", SEQUENCE: "SEQ",
   };
 
-  function color(t: string) { return TYPE_COLOR[t.toUpperCase()] ?? "#888"; }
-  function badge(t: string) { return TYPE_BADGE[t.toUpperCase()] ?? t.toLowerCase().slice(0, 4); }
+  function col(t: string) { return TYPE_COLOR[t.toUpperCase()] ?? "#888"; }
+  function bdg(t: string) { return TYPE_BADGE[t.toUpperCase()] ?? t.slice(0, 4).toUpperCase(); }
 
-  // Merge upstream + fkParents for left column, downstream + fkChildren for right
   const leftNodes = $derived([
-    ...result.fkParents.map(n => ({ ...n, rel: "fk-parent" as const })),
-    ...result.upstream.map(n => ({ ...n, rel: "dep" as const })),
+    ...result.fkParents.map(n => ({ ...n, rel: "FK parent" })),
+    ...result.upstream.filter(n => n.name !== objectName).map(n => ({ ...n, rel: "uses" })),
   ]);
-
   const rightNodes = $derived([
-    ...result.downstream.map(n => ({ ...n, rel: "dep" as const })),
-    ...result.fkChildren.map(n => ({ ...n, rel: "fk-child" as const })),
+    ...result.downstream.filter(n => n.name !== objectName).map(n => ({ ...n, rel: "used by" })),
+    ...result.fkChildren.map(n => ({ ...n, rel: "FK child" })),
   ]);
+  const hasData = $derived(leftNodes.length > 0 || rightNodes.length > 0 || result.triggers.length > 0);
 
-  const hasData = $derived(
-    leftNodes.length > 0 || rightNodes.length > 0 || result.triggers.length > 0
-  );
+  // SVG connection lines
+  let container: HTMLElement;
+  let centerEl: HTMLElement;
+  let leftEls: HTMLElement[] = [];
+  let rightEls: HTMLElement[] = [];
+  let paths = $state<{ d: string; color: string }[]>([]);
+  let svgW = $state(0);
+  let svgH = $state(0);
+
+  function mid(el: HTMLElement, ref: HTMLElement) {
+    const er = el.getBoundingClientRect();
+    const rr = ref.getBoundingClientRect();
+    return { x: er.left - rr.left + er.width / 2, y: er.top - rr.top + er.height / 2 };
+  }
+  function rightEdge(el: HTMLElement, ref: HTMLElement) {
+    const er = el.getBoundingClientRect(); const rr = ref.getBoundingClientRect();
+    return { x: er.right - rr.left, y: er.top - rr.top + er.height / 2 };
+  }
+  function leftEdge(el: HTMLElement, ref: HTMLElement) {
+    const er = el.getBoundingClientRect(); const rr = ref.getBoundingClientRect();
+    return { x: er.left - rr.left, y: er.top - rr.top + er.height / 2 };
+  }
+
+  function drawPaths() {
+    if (!container || !centerEl) return;
+    const cr = container.getBoundingClientRect();
+    svgW = cr.width; svgH = cr.height;
+    const c = mid(centerEl, container);
+    const newPaths: { d: string; color: string }[] = [];
+
+    leftEls.forEach((el, i) => {
+      if (!el) return;
+      const p = rightEdge(el, container);
+      const color = col(leftNodes[i]?.objectType ?? "");
+      const cx1 = p.x + (c.x - p.x) * 0.5;
+      newPaths.push({ d: `M${p.x},${p.y} C${cx1},${p.y} ${cx1},${c.y} ${c.x},${c.y}`, color });
+    });
+    rightEls.forEach((el, i) => {
+      if (!el) return;
+      const p = leftEdge(el, container);
+      const color = col(rightNodes[i]?.objectType ?? "");
+      const cx1 = c.x + (p.x - c.x) * 0.5;
+      newPaths.push({ d: `M${c.x},${c.y} C${cx1},${c.y} ${cx1},${p.y} ${p.x},${p.y}`, color });
+    });
+    paths = newPaths;
+  }
+
+  $effect(() => {
+    // re-draw whenever nodes change
+    void leftNodes; void rightNodes;
+    setTimeout(drawPaths, 0);
+  });
+
+  onMount(() => {
+    const ro = new ResizeObserver(drawPaths);
+    ro.observe(container);
+    drawPaths();
+    return () => ro.disconnect();
+  });
 </script>
 
-<div class="dataflow">
+<div class="df-wrap" bind:this={container}>
   {#if !hasData}
-    <p class="empty">No dependencies or dependents found for this object.</p>
+    <p class="empty">No dependencies or dependents found.</p>
   {:else}
-    <div class="flow-grid">
+    <!-- SVG layer for bezier connections -->
+    <svg class="lines" width={svgW} height={svgH} aria-hidden="true">
+      {#each paths as p}
+        <path d={p.d} stroke={p.color} stroke-width="1.5" fill="none" opacity="0.45" />
+      {/each}
+    </svg>
+
+    <div class="df-cols">
       <!-- LEFT: upstream -->
-      <div class="col col-upstream">
+      <div class="lane lane-left">
         {#if leftNodes.length > 0}
-          <div class="col-label">UPSTREAM</div>
-          {#each leftNodes as node}
+          <div class="lane-label">UPSTREAM</div>
+          {#each leftNodes as node, i}
             <button
               class="node"
-              style="--c: {color(node.objectType)}"
+              style="--c:{col(node.objectType)}"
+              bind:this={leftEls[i]}
               onclick={() => onNavigate?.(node.owner, node.objectType, node.name)}
-              title="{node.owner}.{node.name}"
+              title="{node.owner}.{node.name} · {node.rel}"
             >
-              <span class="badge">{badge(node.objectType)}</span>
+              <span class="node-badge">{bdg(node.objectType)}</span>
               <span class="node-name">{node.name}</span>
-              {#if node.rel === "fk-parent"}
-                <span class="rel-tag">FK ↑</span>
-              {/if}
+              <span class="node-rel">{node.rel}</span>
             </button>
           {/each}
         {:else}
-          <div class="col-empty">no upstream</div>
+          <div class="lane-empty">
+            <span class="lane-label">UPSTREAM</span>
+            <span class="none-text">none</span>
+          </div>
         {/if}
       </div>
 
-      <!-- CENTER ARROW LEFT -->
-      <div class="arrow-col">
-        {#if leftNodes.length > 0}
-          <div class="arrow">→</div>
-        {/if}
-      </div>
-
-      <!-- CENTER: this object is shown by caller, just connectors here -->
-      <div class="col col-center">
-        <div class="center-dot"></div>
-      </div>
-
-      <!-- CENTER ARROW RIGHT -->
-      <div class="arrow-col">
-        {#if rightNodes.length > 0}
-          <div class="arrow">→</div>
-        {/if}
+      <!-- CENTER: focal object -->
+      <div class="center-col">
+        <div class="center-node" bind:this={centerEl} style="--c:{col(objectType)}">
+          <span class="center-badge">{bdg(objectType)}</span>
+          <span class="center-name">{objectName}</span>
+        </div>
       </div>
 
       <!-- RIGHT: downstream -->
-      <div class="col col-downstream">
+      <div class="lane lane-right">
         {#if rightNodes.length > 0}
-          <div class="col-label">DOWNSTREAM</div>
-          {#each rightNodes as node}
+          <div class="lane-label">DOWNSTREAM</div>
+          {#each rightNodes as node, i}
             <button
               class="node"
-              style="--c: {color(node.objectType)}"
+              style="--c:{col(node.objectType)}"
+              bind:this={rightEls[i]}
               onclick={() => onNavigate?.(node.owner, node.objectType, node.name)}
-              title="{node.owner}.{node.name}"
+              title="{node.owner}.{node.name} · {node.rel}"
             >
-              <span class="badge">{badge(node.objectType)}</span>
+              <span class="node-badge">{bdg(node.objectType)}</span>
               <span class="node-name">{node.name}</span>
-              {#if node.rel === "fk-child"}
-                <span class="rel-tag">FK ↓</span>
-              {/if}
+              <span class="node-rel">{node.rel}</span>
             </button>
           {/each}
         {:else}
-          <div class="col-empty">no downstream</div>
+          <div class="lane-empty">
+            <span class="lane-label">DOWNSTREAM</span>
+            <span class="none-text">none</span>
+          </div>
         {/if}
       </div>
     </div>
 
     {#if result.triggers.length > 0}
-      <div class="triggers-section">
-        <div class="triggers-label">TRIGGERS</div>
-        <div class="triggers-list">
-          {#each result.triggers as trg}
-            <div class="trigger-row" class:inactive={trg.status !== "ENABLED"}>
-              <span class="trigger-name">{trg.name}</span>
-              <span class="trigger-meta">{trg.triggerType} · {trg.event}</span>
-              {#if trg.status !== "ENABLED"}
-                <span class="trigger-disabled">DISABLED</span>
-              {/if}
-            </div>
-          {/each}
-        </div>
+      <div class="triggers">
+        <div class="triggers-hd">TRIGGERS</div>
+        {#each result.triggers as trg}
+          <div class="trg-row" class:disabled={trg.status !== "ENABLED"}>
+            <span class="trg-dot" style="background:{trg.status === 'ENABLED' ? '#27ae60' : '#888'}"></span>
+            <span class="trg-name">{trg.name}</span>
+            <span class="trg-meta">{trg.triggerType} · {trg.event}</span>
+          </div>
+        {/each}
       </div>
     {/if}
   {/if}
 </div>
 
 <style>
-  .dataflow {
-    padding: 0.75rem 1rem;
+  .df-wrap {
+    position: relative;
+    padding: 1rem 1rem 0.5rem;
   }
 
   .empty {
-    color: var(--text-muted, #888);
     font-size: 0.8rem;
+    color: var(--text-muted, #888);
     font-style: italic;
     margin: 0;
   }
 
-  .flow-grid {
-    display: grid;
-    grid-template-columns: 1fr 20px 40px 20px 1fr;
-    gap: 0.25rem;
-    align-items: center;
-    min-height: 60px;
+  /* SVG bezier lines overlay */
+  .lines {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: visible;
   }
 
-  .col {
+  /* Three-column layout */
+  .df-cols {
+    display: grid;
+    grid-template-columns: 1fr 180px 1fr;
+    gap: 1.5rem;
+    align-items: center;
+    min-height: 80px;
+  }
+
+  /* Lanes */
+  .lane {
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
+    gap: 0.45rem;
   }
+  .lane-left { align-items: flex-end; }
+  .lane-right { align-items: flex-start; }
 
-  .col-label {
-    font-size: 0.65rem;
-    font-weight: 600;
-    letter-spacing: 0.08em;
+  .lane-label {
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
     color: var(--text-muted, #888);
-    margin-bottom: 0.15rem;
+    margin-bottom: 0.1rem;
   }
+  .lane-left .lane-label { text-align: right; }
 
-  .col-empty {
+  .lane-empty {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    opacity: 0.5;
+  }
+  .lane-left .lane-empty { align-items: flex-end; }
+
+  .none-text {
     font-size: 0.75rem;
     color: var(--text-muted, #888);
     font-style: italic;
-    opacity: 0.5;
   }
 
-  .col-center {
-    align-items: center;
-    justify-content: center;
-  }
-
-  .center-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: var(--accent, #b34a1f);
-    flex-shrink: 0;
-  }
-
-  .arrow-col {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .arrow {
-    color: var(--text-muted, #888);
-    font-size: 1rem;
-    opacity: 0.5;
-  }
-
+  /* Node cards */
   .node {
     display: flex;
     align-items: center;
-    gap: 0.35rem;
-    padding: 0.25rem 0.5rem;
-    border-radius: 4px;
-    border: 1px solid color-mix(in srgb, var(--c) 40%, transparent);
-    background: color-mix(in srgb, var(--c) 8%, transparent);
+    gap: 0.4rem;
+    padding: 0.35rem 0.6rem;
+    border-radius: 6px;
+    border: 1px solid color-mix(in srgb, var(--c) 35%, transparent);
+    background: color-mix(in srgb, var(--c) 7%, var(--surface, #1a1a1a));
     cursor: pointer;
-    text-align: left;
-    width: 100%;
-    transition: background 0.1s;
-    font-size: 0.75rem;
     color: inherit;
+    font-size: 0;
+    text-align: left;
+    max-width: 100%;
+    transition: background 0.12s, border-color 0.12s;
   }
-
   .node:hover {
-    background: color-mix(in srgb, var(--c) 18%, transparent);
+    background: color-mix(in srgb, var(--c) 16%, var(--surface, #1a1a1a));
+    border-color: color-mix(in srgb, var(--c) 60%, transparent);
   }
 
-  .badge {
-    font-size: 0.6rem;
-    font-weight: 700;
+  .node-badge {
+    font-size: 0.58rem;
+    font-weight: 800;
+    font-family: monospace;
     letter-spacing: 0.04em;
     color: var(--c);
-    background: color-mix(in srgb, var(--c) 15%, transparent);
-    padding: 1px 4px;
+    background: color-mix(in srgb, var(--c) 18%, transparent);
+    padding: 2px 5px;
     border-radius: 3px;
     flex-shrink: 0;
-    font-family: monospace;
   }
-
   .node-name {
     font-family: monospace;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
+    font-weight: 500;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     flex: 1;
+    min-width: 0;
   }
-
-  .rel-tag {
+  .node-rel {
     font-size: 0.6rem;
     color: var(--text-muted, #888);
+    white-space: nowrap;
     flex-shrink: 0;
+    opacity: 0.7;
   }
 
-  .triggers-section {
-    margin-top: 1rem;
-    padding-top: 0.75rem;
-    border-top: 1px solid var(--border, #333);
+  /* Center focal node */
+  .center-col {
+    display: flex;
+    justify-content: center;
+    align-items: center;
   }
-
-  .triggers-label {
-    font-size: 0.65rem;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    color: var(--text-muted, #888);
-    margin-bottom: 0.4rem;
-  }
-
-  .triggers-list {
+  .center-node {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.75rem 1rem;
+    border-radius: 10px;
+    border: 2px solid color-mix(in srgb, var(--c) 60%, transparent);
+    background: color-mix(in srgb, var(--c) 10%, var(--surface, #1a1a1a));
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 10%, transparent);
+    text-align: center;
+    min-width: 120px;
+  }
+  .center-badge {
+    font-size: 0.62rem;
+    font-weight: 800;
+    font-family: monospace;
+    letter-spacing: 0.08em;
+    color: var(--c);
+    background: color-mix(in srgb, var(--c) 20%, transparent);
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+  .center-name {
+    font-family: monospace;
+    font-size: 0.78rem;
+    font-weight: 600;
+    word-break: break-all;
+    line-height: 1.3;
+    color: color-mix(in srgb, var(--c) 80%, white);
   }
 
-  .trigger-row {
+  /* Triggers section */
+  .triggers {
+    margin-top: 1.25rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border, #2a2a2a);
+  }
+  .triggers-hd {
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    color: var(--text-muted, #888);
+    margin-bottom: 0.5rem;
+  }
+  .trg-row {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    padding: 0.3rem 0;
     font-size: 0.75rem;
-    padding: 0.2rem 0;
   }
-
-  .trigger-row.inactive {
-    opacity: 0.5;
+  .trg-row.disabled { opacity: 0.45; }
+  .trg-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
   }
-
-  .trigger-name {
+  .trg-name {
     font-family: monospace;
-    font-weight: 500;
-    color: #b34a4a;
+    font-weight: 600;
+    color: #c0392b;
   }
-
-  .trigger-meta {
+  .trg-meta {
     color: var(--text-muted, #888);
     font-size: 0.7rem;
-  }
-
-  .trigger-disabled {
-    font-size: 0.6rem;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    color: #888;
-    background: #333;
-    padding: 1px 5px;
-    border-radius: 3px;
   }
 </style>

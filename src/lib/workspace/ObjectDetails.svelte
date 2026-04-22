@@ -54,7 +54,7 @@
     {:else if dataflowError}
       <p class="detail-error">{dataflowError}</p>
     {:else if dataflow}
-      <DataFlow result={dataflow} onNavigate={onNavigateDataflow} />
+      <DataFlow result={dataflow} objectName={selected?.name ?? ""} objectType={selected?.kind ?? ""} onNavigate={onNavigateDataflow} />
     {/if}
   {:else if details.kind === "loading"}
     <header>
@@ -147,7 +147,7 @@
     {:else if dataflowError}
       <p class="detail-error">{dataflowError}</p>
     {:else if dataflow}
-      <DataFlow result={dataflow} onNavigate={onNavigateDataflow} />
+      <DataFlow result={dataflow} objectName={selected?.name ?? ""} objectType={selected?.kind ?? ""} onNavigate={onNavigateDataflow} />
     {/if}
   {:else if details.kind === "idle"}
     <!-- PL/SQL objects: details not loaded, show header + DATA FLOW -->
@@ -166,7 +166,7 @@
       {:else if dataflowError}
         <p class="detail-error">{dataflowError}</p>
       {:else if dataflow}
-        <DataFlow result={dataflow} onNavigate={onNavigateDataflow} />
+        <DataFlow result={dataflow} objectName={selected?.name ?? ""} objectType={selected?.kind ?? ""} onNavigate={onNavigateDataflow} />
       {/if}
     {/if}
   {/if}
