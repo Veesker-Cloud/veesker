@@ -563,6 +563,30 @@ pub async fn connection_rollback(app: AppHandle) -> Result<(), ConnectionTestErr
 }
 
 #[tauri::command]
+pub async fn vector_tables_in_schema(
+    app: AppHandle,
+    owner: String,
+) -> Result<Value, ConnectionTestErr> {
+    let res = call_sidecar(&app, "vector.tables_in_schema", json!({ "owner": owner })).await?;
+    Ok(res)
+}
+
+#[tauri::command]
+pub async fn vector_index_list(
+    app: AppHandle,
+    owner: String,
+    table_name: String,
+) -> Result<Value, ConnectionTestErr> {
+    let res = call_sidecar(
+        &app,
+        "vector.index_list",
+        json!({ "owner": owner, "tableName": table_name }),
+    )
+    .await?;
+    Ok(res)
+}
+
+#[tauri::command]
 pub async fn object_dataflow_get(
     app: AppHandle,
     owner: String,

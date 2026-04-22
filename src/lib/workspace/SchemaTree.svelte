@@ -7,6 +7,7 @@
     expanded: boolean;
     kinds: Partial<Record<ObjectKind, Loadable<Array<{ name: string; status?: string }>>>>;
     kindCounts?: Partial<Record<string, number>>;
+    vectorTables?: Set<string>;
   };
 
   type Props = {
@@ -167,6 +168,9 @@
                         title="{s.name}.{o.name}"
                       >
                         <span class="obj-name">{o.name}</span>
+                        {#if kind === "TABLE" && s.vectorTables?.has(o.name)}
+                          <span class="vector-dot" title="Has VECTOR columns" aria-label="vector">⬡</span>
+                        {/if}
                         {#if o.status && o.status !== "VALID"}
                           <span class="invalid-dot" title="{o.status}" aria-label="invalid"></span>
                         {/if}
@@ -369,6 +373,12 @@
     border-radius: 50%;
     background: #e74c3c;
     flex-shrink: 0;
+  }
+  .vector-dot {
+    font-size: 9px;
+    color: #a78bfa;
+    flex-shrink: 0;
+    line-height: 1;
   }
 
   /* ── States ───────────────────────────────────────────────── */

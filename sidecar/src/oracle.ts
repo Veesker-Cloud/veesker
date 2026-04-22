@@ -180,6 +180,7 @@ export type ColumnDef = {
   isPk: boolean;
   dataDefault: string | null;
   comments: string | null;
+  isVector: boolean;
 };
 export type IndexDef = { name: string; isUnique: boolean; columns: string[] };
 export type TableDetails = {
@@ -295,6 +296,7 @@ export async function tableDescribe(p: {
       isPk: r.IS_PK === 1,
       dataDefault: r.DATA_DEFAULT === null ? null : String(r.DATA_DEFAULT).trim(),
       comments: r.COMMENTS,
+      isVector: r.DATA_TYPE.toUpperCase() === "VECTOR",
     }));
 
     const idxRes = await conn.execute<{
@@ -1038,5 +1040,82 @@ export async function schemaKindCounts(p: {
     const counts: Record<string, number> = {};
     for (const [type, cnt] of res.rows ?? []) counts[type] = cnt;
     return { counts };
+  });
+}
+
+// ── Vector Search (Oracle 23ai+) ────────────────────────────────────────────
+
+export type VectorColumnRef = { tableName: string; columnName: string };
+
+export async function vectorTablesInSchema(p: {
+  owner: string;
+}): Promise<{ columns: VectorColumnRef[] }> {
+  return withActiveSession(async (conn) => {
+    const res = await conn.execute<{ TABLE_NAME: string; COLUMN_NAME: string }>(
+      `SELECT table_name AS TABLE_NAME, column_name AS COLUMN_NAME
+         FROM all_tab_columns
+        WHERE owner = :owner AND data_type = 'VECTOR'
+        ORDER BY table_name, column_name`,
+      { owner: p.owner },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT }
+    );
+    return {
+      columns: (res.rows ?? []).map((r) => ({
+        tableName: r.TABLE_NAME,
+        columnName: r.COLUMN_NAME,
+      })),
+    };
+  });
+}
+
+export type VectorIndex = {
+  indexName: string;
+  targetColumn: string;
+  indexType: string;
+  distanceMetric: string;
+  accuracy: number | null;
+  parameters: string | null;
+};
+
+export async function vectorIndexList(p: {
+  owner: string;
+  tableName: string;
+}): Promise<{ indexes: VectorIndex[] }> {
+  return withActiveSession(async (conn) => {
+    try {
+      const res = await conn.execute<{
+        INDEX_NAME: string;
+        TARGET_COLUMN: string;
+        INDEX_TYPE: string;
+        DISTANCE_METRIC: string;
+        ACCURACY: number | null;
+        PARAMETERS: string | null;
+      }>(
+        `SELECT index_name AS INDEX_NAME,
+                target_column AS TARGET_COLUMN,
+                index_type AS INDEX_TYPE,
+                distance_metric AS DISTANCE_METRIC,
+                accuracy AS ACCURACY,
+                parameters AS PARAMETERS
+           FROM all_vector_indexes
+          WHERE owner = :owner AND target_table = :tableName
+          ORDER BY index_name`,
+        { owner: p.owner, tableName: p.tableName },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+      );
+      return {
+        indexes: (res.rows ?? []).map((r) => ({
+          indexName: r.INDEX_NAME,
+          targetColumn: r.TARGET_COLUMN,
+          indexType: r.INDEX_TYPE,
+          distanceMetric: r.DISTANCE_METRIC,
+          accuracy: r.ACCURACY,
+          parameters: r.PARAMETERS,
+        })),
+      };
+    } catch {
+      // ALL_VECTOR_INDEXES doesn't exist on Oracle < 23ai
+      return { indexes: [] };
+    }
   });
 }
