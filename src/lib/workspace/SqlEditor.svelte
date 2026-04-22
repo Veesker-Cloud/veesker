@@ -13,8 +13,10 @@
     onRunCursor: (selection: string | null, cursorPos: number, docText: string) => void;
     /** Called for Mod+Shift+Enter and F5 — runs all statements. */
     onRunAll: () => void;
+    onSave: () => void;
+    onSaveAs: () => void;
   };
-  let { value, onChange, onRunCursor, onRunAll }: Props = $props();
+  let { value, onChange, onRunCursor, onRunAll, onSave, onSaveAs }: Props = $props();
 
   let host: HTMLDivElement | undefined = $state();
   let view: EditorView | null = null;
@@ -56,6 +58,16 @@
                   onRunAll();
                   return true;
                 },
+              },
+              {
+                key: "Mod-s",
+                preventDefault: true,
+                run: () => { onSave(); return true; },
+              },
+              {
+                key: "Mod-Shift-s",
+                preventDefault: true,
+                run: () => { onSaveAs(); return true; },
               },
             ])
           ),
