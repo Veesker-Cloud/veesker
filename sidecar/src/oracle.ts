@@ -425,6 +425,7 @@ export type MultiQueryResult = { multi: true; results: ServerStatementResult[] }
 // by using empty options for any PL/SQL statement.
 const PLSQL_EXEC_RE =
   /^\s*(?:BEGIN|DECLARE|CREATE\s+(?:OR\s+REPLACE\s+)?(?:EDITIONABLE\s+|NONEDITIONABLE\s+)?(?:FUNCTION|PROCEDURE|TRIGGER|PACKAGE(?:\s+BODY)?|TYPE(?:\s+BODY)?))\b/i;
+const PLSQL_ANON_RE = /^\s*(?:BEGIN|DECLARE)\b/i;
 
 /** Run a single statement against the active session; returns QueryResult. */
 async function executeSingleStatement(
@@ -435,9 +436,13 @@ async function executeSingleStatement(
   const started = Date.now();
   let r: any;
   const isPlsql = PLSQL_EXEC_RE.test(sql);
+  // oracledb thin mode strips the trailing `;` from anonymous PL/SQL blocks when
+  // any options object is passed (including `{}`), causing ORA-06550.
+  // Oracle SQL APIs accept BEGIN...END without the trailing semicolon, so strip it.
+  const sqlToSend = PLSQL_ANON_RE.test(sql) ? sql.replace(/;\s*$/, "") : sql;
   try {
     r = await conn.execute(
-      sql,
+      sqlToSend,
       [],
       isPlsql ? {} : { maxRows: 100, outFormat: oracledb.OUT_FORMAT_ARRAY }
     );
