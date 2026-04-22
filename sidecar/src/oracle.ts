@@ -757,3 +757,17 @@ export async function objectDataflow(p: {
     return { upstream, downstream, fkParents, fkChildren, triggers };
   });
 }
+
+export async function connectionCommit(): Promise<{ committed: true }> {
+  return withActiveSession(async (conn) => {
+    await conn.commit();
+    return { committed: true as const };
+  });
+}
+
+export async function connectionRollback(): Promise<{ rolledBack: true }> {
+  return withActiveSession(async (conn) => {
+    await conn.rollback();
+    return { rolledBack: true as const };
+  });
+}
