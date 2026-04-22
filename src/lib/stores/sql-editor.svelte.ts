@@ -3,7 +3,7 @@ import { queryExecute, queryExecuteMulti, queryCancel, type QueryResult } from "
 import { splitSql } from "$lib/sql-splitter";
 import { historySave, type HistoryEntry } from "$lib/query-history";
 import { saveAs, saveExisting, openFile } from "$lib/sql-files";
-import { compileErrorsGet } from "$lib/workspace";
+import { compileErrorsGet, connectionCommit, connectionRollback } from "$lib/workspace";
 
 export type CompileError = {
   line: number;
@@ -680,6 +680,16 @@ export const sqlEditor = {
     _tabs = [..._tabs, tab];
     _activeId = id;
     if (!_drawerOpen) _drawerOpen = true;
+  },
+
+  async commit(): Promise<void> {
+    const res = await connectionCommit();
+    if (!res.ok) throw new Error(res.error.message ?? "Commit failed");
+  },
+
+  async rollback(): Promise<void> {
+    const res = await connectionRollback();
+    if (!res.ok) throw new Error(res.error.message ?? "Rollback failed");
   },
 
   reset(): void {

@@ -213,6 +213,32 @@
           </button>
         {/if}
       </div>
+      <div class="txn-actions">
+        <button
+          class="txn-btn commit-btn"
+          title="Commit transaction"
+          aria-label="Commit"
+          onclick={() => void sqlEditor.commit().catch(e => alert(String(e)))}
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.2"/>
+            <polyline points="3.5,6 5.5,8 8.5,4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Commit
+        </button>
+        <button
+          class="txn-btn rollback-btn"
+          title="Rollback transaction"
+          aria-label="Rollback"
+          onclick={() => void sqlEditor.rollback().catch(e => alert(String(e)))}
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <path d="M9.5 2.5 A4.5 4.5 0 1 0 11 6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+            <polyline points="9.5,2.5 9.5,5 12,5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Rollback
+        </button>
+      </div>
       <button
         class="collapse"
         aria-label="Collapse drawer"
@@ -407,6 +433,29 @@
   .file-btn svg { flex-shrink: 0; }
   .compile-btn { color: #7a2a14; }
   .compile-btn:hover { background: rgba(179, 62, 31, 0.08); color: #b33e1f; }
+  .txn-actions {
+    display: flex;
+    align-items: stretch;
+    border-left: 1px solid rgba(26, 22, 18, 0.08);
+    border-right: 1px solid rgba(26, 22, 18, 0.08);
+  }
+  .txn-btn {
+    background: transparent;
+    border: none;
+    border-right: 1px solid rgba(26, 22, 18, 0.06);
+    padding: 0 0.6rem;
+    cursor: pointer;
+    font-size: 11px;
+    font-family: "Space Grotesk", sans-serif;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+  .commit-btn { color: #1a6b2e; }
+  .commit-btn:hover { background: rgba(26, 107, 46, 0.08); color: #14522a; }
+  .rollback-btn { color: #7a2a14; }
+  .rollback-btn:hover { background: rgba(122, 42, 20, 0.08); color: #5c1e0f; }
   .plus, .collapse, .history-toggle {
     background: transparent;
     border: none;

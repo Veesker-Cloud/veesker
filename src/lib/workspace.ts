@@ -92,3 +92,21 @@ export async function objectDataflowGet(
     return { ok: false, error: err as WorkspaceError };
   }
 }
+
+export async function connectionCommit(): Promise<Result<void>> {
+  try {
+    await invoke("connection_commit");
+    return { ok: true, data: undefined };
+  } catch (err) {
+    return { ok: false, error: err as WorkspaceError };
+  }
+}
+
+export async function connectionRollback(): Promise<Result<void>> {
+  try {
+    await invoke("connection_rollback");
+    return { ok: true, data: undefined };
+  } catch (err) {
+    return { ok: false, error: err as WorkspaceError };
+  }
+}

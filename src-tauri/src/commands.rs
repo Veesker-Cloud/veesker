@@ -479,6 +479,18 @@ pub struct DataFlowResult {
 }
 
 #[tauri::command]
+pub async fn connection_commit(app: AppHandle) -> Result<(), ConnectionTestErr> {
+    call_sidecar(&app, "connection.commit", json!({})).await?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn connection_rollback(app: AppHandle) -> Result<(), ConnectionTestErr> {
+    call_sidecar(&app, "connection.rollback", json!({})).await?;
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn object_dataflow_get(
     app: AppHandle,
     owner: String,

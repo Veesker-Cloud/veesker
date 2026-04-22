@@ -48,6 +48,8 @@ pub fn run() {
             commands::object_ddl_get,
             commands::object_dataflow_get,
             commands::objects_list_plsql,
+            commands::connection_commit,
+            commands::connection_rollback,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
