@@ -59,6 +59,7 @@
 </svelte:head>
 
 <main>
+  <img src="/veesker-sheep.png" class="home-watermark" alt="" aria-hidden="true" />
   <header>
     <div class="brand">
       <VeeskerMark size={52} />
@@ -204,6 +205,20 @@
     display: flex;
     flex-direction: column;
     gap: 0;
+    position: relative;
+  }
+  .home-watermark {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 200px;
+    height: 200px;
+    object-fit: contain;
+    opacity: 0.07;
+    pointer-events: none;
+    user-select: none;
+    z-index: 0;
   }
 
   /* ── Header ─────────────────────────────────────────────── */
