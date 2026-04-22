@@ -126,9 +126,43 @@ Rules:
 ${ctxLines.length > 0 ? "\n[Current IDE context]\n" + ctxLines.join("\n") : ""}`;
 }
 
+async function aiChatViaCli(params: AiChatParams): Promise<AiChatResult> {
+  const system = buildSystem(params.context);
+  const lastUser = params.messages.filter((m) => m.role === "user").pop()?.content ?? "";
+
+  // Build a single prompt that includes conversation history + system context
+  const history = params.messages.slice(0, -1).map((m) =>
+    `${m.role === "user" ? "Human" : "Assistant"}: ${m.content}`
+  ).join("\n\n");
+  const fullPrompt = history
+    ? `${history}\n\nHuman: ${lastUser}`
+    : lastUser;
+
+  const proc = Bun.spawn(
+    ["claude", "-p", fullPrompt, "--system", system],
+    { stdout: "pipe", stderr: "pipe" }
+  );
+
+  const [stdout, stderr] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+  ]);
+  await proc.exited;
+
+  if (proc.exitCode !== 0) {
+    const errMsg = stderr.trim() || "claude CLI returned non-zero exit code";
+    throw new Error(`claude CLI error: ${errMsg}`);
+  }
+
+  return { content: stdout.trim(), toolsUsed: [] };
+}
+
 export async function aiChat(params: AiChatParams): Promise<AiChatResult> {
   const key = params.apiKey || process.env.ANTHROPIC_API_KEY;
-  if (!key) throw new Error("No API key — set ANTHROPIC_API_KEY or enter one in the AI settings panel");
+
+  // No API key — try the locally installed claude CLI (uses Claude Code auth)
+  if (!key) return aiChatViaCli(params);
+
   const client = new Anthropic({ apiKey: key });
 
   const messages: Anthropic.MessageParam[] = params.messages.map((m) => ({
