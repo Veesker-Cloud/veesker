@@ -387,11 +387,32 @@ function isCancelError(err: unknown): boolean {
   return m.includes("ORA-01013") || m.includes("NJS-018");
 }
 
+async function drainDbmsOutput(conn: oracledb.Connection): Promise<string[] | null> {
+  try {
+    const lines: string[] = [];
+    while (true) {
+      const r = await conn.execute<{ LINE: string; STATUS: number }>(
+        `BEGIN DBMS_OUTPUT.GET_LINE(:line, :status); END;`,
+        {
+          line:   { dir: oracledb.BIND_OUT, type: oracledb.STRING, maxSize: 32767 },
+          status: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+        }
+      );
+      const ob = r.outBinds as { LINE: string | null; STATUS: number };
+      if (ob.STATUS !== 0) break;
+      lines.push(ob.LINE ?? "");
+    }
+    return lines;
+  } catch {
+    return null;
+  }
+}
+
 // Discriminated union for multi-statement server results.
 export type ServerStatementResult =
-  | { status: "ok"; statementIndex: number; sql: string; elapsedMs: number; columns: QueryColumn[]; rows: unknown[][]; rowCount: number }
-  | { status: "error"; statementIndex: number; sql: string; elapsedMs: number; error: { code: number; message: string } }
-  | { status: "cancelled"; statementIndex: number; sql: string; elapsedMs: number };
+  | { status: "ok";        statementIndex: number; sql: string; elapsedMs: number; columns: QueryColumn[]; rows: unknown[][]; rowCount: number; output: string[] | null }
+  | { status: "error";     statementIndex: number; sql: string; elapsedMs: number; error: { code: number; message: string }; output: string[] | null }
+  | { status: "cancelled"; statementIndex: number; sql: string; elapsedMs: number; output: null };
 
 export type MultiQueryResult = { multi: true; results: ServerStatementResult[] };
 
@@ -445,18 +466,29 @@ export async function queryExecute(p: { sql: string; requestId?: string; splitMu
 
       const collected: ServerStatementResult[] = [];
 
+      try {
+        await getActiveSession().execute(`BEGIN DBMS_OUTPUT.ENABLE(1000000); END;`);
+      } catch {
+        // Non-fatal
+      }
+
       for (let i = 0; i < statements.length; i++) {
         const stmt = statements[i];
 
         // Check for cancellation between statements.
         if (_running?.requestId === requestId && _running.cancelled) {
           const started = Date.now();
-          collected.push({ status: "cancelled", statementIndex: i, sql: stmt, elapsedMs: Date.now() - started });
+          collected.push({ status: "cancelled", statementIndex: i, sql: stmt, elapsedMs: Date.now() - started, output: null });
           break;
         }
 
         try {
-          const qr = await withActiveSession((conn) => executeSingleStatement(conn, stmt, requestId));
+          let output: string[] | null = null;
+          const qr = await withActiveSession(async (conn) => {
+            const result = await executeSingleStatement(conn, stmt, requestId);
+            output = await drainDbmsOutput(conn);
+            return result;
+          });
           collected.push({
             status: "ok",
             statementIndex: i,
@@ -465,14 +497,15 @@ export async function queryExecute(p: { sql: string; requestId?: string; splitMu
             columns: qr.columns,
             rows: qr.rows,
             rowCount: qr.rowCount,
+            output,
           });
         } catch (err) {
           if (err instanceof RpcCodedError && err.code === QUERY_CANCELLED) {
-            collected.push({ status: "cancelled", statementIndex: i, sql: stmt, elapsedMs: 0 });
+            collected.push({ status: "cancelled", statementIndex: i, sql: stmt, elapsedMs: 0, output: null });
           } else {
             const code = err instanceof RpcCodedError ? err.code : (err instanceof Error ? -32013 : -32000);
             const message = err instanceof Error ? err.message : String(err);
-            collected.push({ status: "error", statementIndex: i, sql: stmt, elapsedMs: 0, error: { code, message } });
+            collected.push({ status: "error", statementIndex: i, sql: stmt, elapsedMs: 0, error: { code, message }, output: null });
           }
           break; // Stop on error or cancel
         }
