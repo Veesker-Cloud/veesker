@@ -100,6 +100,14 @@
     vectorColName = "";
   });
 
+  // Auto-select first VECTOR column when entering Vectors tab
+  $effect(() => {
+    if (activeTab === "vectors" && !vectorColName && details.kind === "ok") {
+      const first = details.value.columns.find(c => c.isVector);
+      if (first) vectorColName = first.name;
+    }
+  });
+
   $effect(() => {
     const defaults = PROVIDER_DEFAULTS[embedProvider];
     embedModel = loadEmbedConfig().provider === embedProvider
@@ -145,7 +153,7 @@
     }
   });
 
-  const tabs = $derived((): Array<{ id: Tab; label: string; count?: number }> => {
+  const tabs = $derived.by((): Array<{ id: Tab; label: string; count?: number }> => {
     if (!selected) return [];
     if (selected.kind === "TABLE" || selected.kind === "VIEW") {
       const rel = related.kind === "ok" ? related.value : null;
@@ -288,9 +296,9 @@
     </div>
 
     <!-- Tabs -->
-    {#if tabs().length > 1}
+    {#if tabs.length > 1}
       <div class="tabs" role="tablist">
-        {#each tabs() as t}
+        {#each tabs as t}
           <button
             class="tab"
             class:active={activeTab === t.id}
@@ -708,7 +716,6 @@
 
       {:else if activeTab === "vectors"}
         {@const vectorCols = details.kind === "ok" ? details.value.columns.filter(c => c.isVector) : []}
-        {@const _ = vectorColName || (vectorCols[0] && (vectorColName = vectorCols[0].name))}
         <div class="vec-panel">
 
           <!-- Provider config bar -->
