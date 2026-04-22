@@ -43,6 +43,7 @@
   let sessionLost = $state(false);
   let showPalette = $state(false);
   let showChat = $state(false);
+  let refreshing = $state(false);
   let detailError = $state<string | null>(null);
   let dataflow = $state<DataFlowResult | null>(null);
   let dataflowLoading = $state(false);
@@ -300,6 +301,31 @@
     await goto("/");
   }
 
+  async function onSwitchConnection(): Promise<void> {
+    await workspaceClose();
+    await goto("/");
+  }
+
+  async function refreshSchemas(): Promise<void> {
+    if (refreshing) return;
+    refreshing = true;
+    try {
+      const expandedNames = new Set(schemas.filter(s => s.expanded).map(s => s.name));
+      const schemaRes = await schemaList();
+      if (!schemaRes.ok) return;
+      schemas = schemaRes.data.map((s) => newSchemaNode(s.name, s.isCurrent));
+      for (const node of schemas) {
+        if (expandedNames.has(node.name)) {
+          node.expanded = true;
+          expandIfNeeded(node);
+        }
+      }
+      schemas = [...schemas];
+    } finally {
+      refreshing = false;
+    }
+  }
+
   function onKeydown(e: KeyboardEvent) {
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "i") {
       const tag = (e.target as HTMLElement).tagName;
@@ -403,6 +429,7 @@
       chatOpen={showChat}
       onToggleChat={() => showChat = !showChat}
       onDisconnect={onDisconnect}
+      onSwitchConnection={onSwitchConnection}
     />
     <div class="body">
       <div class="panel-wrap" style="width: {schemaWidth}px; min-width: 160px; max-width: 480px;">
@@ -412,6 +439,8 @@
           onToggle={onToggle}
           onSelect={onSelect}
           onRetry={onRetryKind}
+          onRefresh={refreshSchemas}
+          {refreshing}
         />
       </div>
       <div

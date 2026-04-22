@@ -1,6 +1,5 @@
 <script lang="ts">
   import { sqlEditor } from "$lib/stores/sql-editor.svelte";
-  import { ask } from "@tauri-apps/plugin-dialog";
   import VeeskerMark from "$lib/VeeskerMark.svelte";
 
   type Props = {
@@ -12,8 +11,9 @@
     chatOpen?: boolean;
     onToggleChat?: () => void;
     onDisconnect: () => void;
+    onSwitchConnection: () => void;
   };
-  let { connectionName, userLabel, schema, serverVersion, hasPendingTx = false, chatOpen = false, onToggleChat, onDisconnect }: Props = $props();
+  let { connectionName, userLabel, schema, serverVersion, hasPendingTx = false, chatOpen = false, onToggleChat, onDisconnect, onSwitchConnection }: Props = $props();
 
   // Shorten version: "Oracle AI Database 26ai Free Release 23.26.1.0.0 – ..." → "23.26.1.0.0"
   const shortVersion = $derived(() => {
@@ -78,10 +78,22 @@
       SQL
     </button>
     <button
+      class="action-btn switch-btn"
+      aria-label="Switch connection"
+      title="Switch connection"
+      onclick={onSwitchConnection}
+    >
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+        <path d="M2 4h8M8 2l2 2-2 2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M10 8H2M4 6l-2 2 2 2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Switch
+    </button>
+    <button
       class="action-btn disconnect-btn"
       aria-label="Disconnect"
       title="Disconnect"
-      onclick={async () => { if (await ask("Disconnect from the database?", { title: "Disconnect", kind: "warning" })) onDisconnect(); }}
+      onclick={onDisconnect}
     >
       <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
         <path d="M5 2H2a.5.5 0 00-.5.5v7A.5.5 0 002 10h3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
@@ -234,6 +246,10 @@
     color: #fff;
   }
   .sql-btn.active:hover { background: #c94b28; }
+  .switch-btn:hover {
+    background: rgba(255,255,255,0.12);
+    color: rgba(255,255,255,0.9);
+  }
   .disconnect-btn:hover {
     background: rgba(179, 62, 31, 0.25);
     border-color: rgba(179, 62, 31, 0.5);
