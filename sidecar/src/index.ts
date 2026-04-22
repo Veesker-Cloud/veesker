@@ -16,6 +16,7 @@ import {
   connectionCommit,
   connectionRollback,
   tableRelated,
+  tableCountRows,
 } from "./oracle";
 
 const handlers: HandlerMap = {
@@ -32,6 +33,7 @@ const handlers: HandlerMap = {
   "objects.list.plsql": (params) => objectsListPlsql(params as any),
   "object.dataflow": (params) => objectDataflow(params as any),
   "table.related": (params) => tableRelated(params as any),
+  "table.count_rows": (params) => tableCountRows(params as any),
   "connection.commit": () => connectionCommit(),
   "connection.rollback": () => connectionRollback(),
   ping: async () => ({ pong: true }),

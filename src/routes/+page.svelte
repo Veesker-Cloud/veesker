@@ -58,9 +58,6 @@
   />
 </svelte:head>
 
-<div class="watermark" aria-hidden="true">
-  <img src="/veesker-sheep.png" alt="" width="300" height="300" />
-</div>
 <main>
   <header>
     <div class="brand">
@@ -199,15 +196,6 @@
     -webkit-font-smoothing: antialiased;
   }
 
-  .watermark {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    pointer-events: none;
-    user-select: none;
-    opacity: 0.07;
-  }
 
   main {
     max-width: 680px;
