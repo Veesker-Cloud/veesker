@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "bun test",
-    "build": "bun build src/index.ts --compile --minify --outfile ../src-tauri/binaries/veesker-sidecar"
+    "build": "bun build src/index.ts --compile --minify --outfile ../src-tauri/binaries/veesker-sidecar-x86_64-apple-darwin"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",
