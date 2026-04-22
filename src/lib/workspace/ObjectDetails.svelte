@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { TableDetails, TableRelated, ObjectKind, Loadable, DataFlowResult } from "$lib/workspace";
+  import { tableCountRows } from "$lib/workspace";
   import { sqlEditor } from "$lib/stores/sql-editor.svelte";
   import DataFlow from "./DataFlow.svelte";
 
@@ -34,6 +35,21 @@
     onViewDdl,
   }: Props = $props();
 
+  let liveCount = $state<number | null>(null);
+  let liveCountLoading = $state(false);
+  let columnSearch = $state("");
+
+  async function countRows() {
+    if (!selected) return;
+    liveCountLoading = true;
+    const res = await tableCountRows(selected.owner, selected.name);
+    liveCountLoading = false;
+    if (res.ok) liveCount = res.data.count;
+  }
+
+  // Reset live count + column search when object changes
+  $effect(() => { void selected; liveCount = null; liveCountLoading = false; columnSearch = ""; });
+
   type Tab = "overview" | "columns" | "indexes" | "related" | "dataflow";
   let activeTab = $state<Tab>("columns");
 
@@ -59,10 +75,10 @@
         { id: "columns", label: "Columns" },
         { id: "indexes", label: "Indexes" },
         { id: "related", label: "Related", count: relCount },
-        { id: "dataflow", label: "Data Flow" },
+        { id: "dataflow", label: "Graph" },
       ];
     }
-    return [{ id: "dataflow", label: "Data Flow" }];
+    return [{ id: "dataflow", label: "Graph" }];
   });
 
   function previewData() {
@@ -85,6 +101,13 @@
   function kindColor(k: string) { return KIND_COLOR[k?.toUpperCase()] ?? "#888"; }
   function kindLabel(k: string) { return KIND_LABEL[k?.toUpperCase()] ?? k?.slice(0,4).toUpperCase() ?? "?"; }
 
+  function daysAgo(iso: string): string {
+    const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+    if (diff === 0) return "today";
+    if (diff === 1) return "1d ago";
+    return `${diff}d ago`;
+  }
+
   // Data type color hints
   function typeColor(dt: string): string {
     const u = dt?.toUpperCase() ?? "";
@@ -99,10 +122,7 @@
 <section class="details">
   {#if !selected}
     <div class="empty">
-      <svg width="48" height="48" viewBox="0 0 48 48" fill="none" aria-hidden="true">
-        <circle cx="24" cy="24" r="22" stroke="currentColor" stroke-width="1.5" opacity="0.15"/>
-        <path d="M16 24h16M24 16v16" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.2"/>
-      </svg>
+      <img src="/veesker-sheep.png" class="empty-watermark" alt="" aria-hidden="true" />
       <p>Select an object from the tree</p>
     </div>
   {:else}
@@ -117,20 +137,42 @@
         </h2>
       </div>
       <div class="obj-meta-row">
-        {#if details.kind === "ok" && details.value.rowCount !== null}
+        {#if liveCount !== null}
           <span class="stat-chip">
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
               <rect x="1" y="3" width="8" height="1.2" rx="0.4" fill="currentColor" opacity="0.7"/>
               <rect x="1" y="5.2" width="8" height="1.2" rx="0.4" fill="currentColor" opacity="0.5"/>
               <rect x="1" y="7.4" width="5" height="1.2" rx="0.4" fill="currentColor" opacity="0.3"/>
             </svg>
-            {details.value.rowCount.toLocaleString()} rows
+            {liveCount.toLocaleString()} rows
           </span>
-        {:else if details.kind === "ok" && details.value.rowCount === null}
-          <span class="stat-chip muted-chip">~ rows unknown</span>
+        {:else if details.kind === "ok" && details.value.rowCount !== null}
+          <span class="stat-chip">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+              <rect x="1" y="3" width="8" height="1.2" rx="0.4" fill="currentColor" opacity="0.7"/>
+              <rect x="1" y="5.2" width="8" height="1.2" rx="0.4" fill="currentColor" opacity="0.5"/>
+              <rect x="1" y="7.4" width="5" height="1.2" rx="0.4" fill="currentColor" opacity="0.3"/>
+            </svg>
+            ~{details.value.rowCount.toLocaleString()} rows
+          </span>
         {:else if details.kind === "loading"}
           <span class="stat-chip muted-chip">loading…</span>
         {/if}
+
+        {#if selected.kind === "TABLE" && details.kind === "ok"}
+          {#if liveCountLoading}
+            <span class="stat-chip muted-chip count-loading"><span class="spinner-xs"></span> counting…</span>
+          {:else}
+            <button class="preview-btn" onclick={countRows}>Count</button>
+          {/if}
+        {/if}
+
+        {#if details.kind === "ok" && details.value.lastAnalyzed}
+          <span class="stat-chip muted-chip" title="Statistics last analyzed: {details.value.lastAnalyzed}">
+            stats: {daysAgo(details.value.lastAnalyzed)}
+          </span>
+        {/if}
+
         {#if (selected.kind === "TABLE" || selected.kind === "VIEW") && details.kind === "ok"}
           <button class="preview-btn" onclick={previewData}>
             Preview data
@@ -198,6 +240,7 @@
 
     <!-- Tab content -->
     <div class="tab-content">
+      <img src="/veesker-sheep.png" class="tab-watermark" alt="" aria-hidden="true" />
       {#if activeTab === "columns" && (selected.kind === "TABLE" || selected.kind === "VIEW")}
         {#if details.kind === "loading"}
           <div class="loading-row">
@@ -205,6 +248,28 @@
           </div>
         {:else if details.kind === "ok"}
           {@const d = details.value}
+          {#if d.columns.length > 8}
+            <div class="col-search-wrap">
+              <svg class="col-search-icon" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                <circle cx="5" cy="5" r="3.5" stroke="currentColor" stroke-width="1.2"/>
+                <path d="M8 8l2.5 2.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+              </svg>
+              <input
+                type="search"
+                placeholder="Filter columns…"
+                bind:value={columnSearch}
+                class="col-search"
+              />
+              {#if columnSearch}
+                <span class="col-search-count">
+                  {d.columns.filter(c => c.name.toLowerCase().includes(columnSearch.toLowerCase())).length} / {d.columns.length}
+                </span>
+              {/if}
+            </div>
+          {/if}
+          {@const filtered = columnSearch
+            ? d.columns.filter(c => c.name.toLowerCase().includes(columnSearch.toLowerCase()))
+            : d.columns}
           <div class="col-table-wrap">
             <table class="col-table">
               <thead>
@@ -218,7 +283,7 @@
                 </tr>
               </thead>
               <tbody>
-                {#each d.columns as c, i (c.name)}
+                {#each filtered as c, i (c.name)}
                   <tr class:pk-row={c.isPk}>
                     <td class="col-num">{i + 1}</td>
                     <td class="col-name">
@@ -526,6 +591,14 @@
     font-size: 13px;
   }
   .empty p { margin: 0; }
+  .empty-watermark {
+    width: 140px;
+    height: 140px;
+    object-fit: contain;
+    opacity: 0.12;
+    pointer-events: none;
+    user-select: none;
+  }
 
   /* ── Object header ────────────────────────────────────────── */
   .obj-header {
@@ -664,6 +737,20 @@
     flex: 1 1 auto;
     overflow-y: auto;
     padding: 0;
+    position: relative;
+  }
+  .tab-watermark {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 200px;
+    height: 200px;
+    object-fit: contain;
+    opacity: 0.05;
+    pointer-events: none;
+    user-select: none;
+    z-index: 0;
   }
 
   /* ── Loading ─────────────────────────────────────────────── */
@@ -985,4 +1072,51 @@
     transition: color 0.1s;
   }
   .nav-link:hover { color: #2980b9; }
+
+  /* ── Column search ────────────────────────────────────────── */
+  .col-search-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid rgba(26,22,18,0.06);
+    background: rgba(26,22,18,0.01);
+  }
+  .col-search-icon {
+    color: rgba(26,22,18,0.3);
+    flex-shrink: 0;
+  }
+  .col-search {
+    flex: 1;
+    border: none;
+    background: transparent;
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 12px;
+    color: #1a1612;
+    outline: none;
+    min-width: 0;
+  }
+  .col-search::placeholder { color: rgba(26,22,18,0.3); }
+  .col-search-count {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    color: rgba(26,22,18,0.35);
+    white-space: nowrap;
+  }
+
+  /* ── Inline count loading ─────────────────────────────────── */
+  .count-loading {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .spinner-xs {
+    width: 9px; height: 9px;
+    border: 1.5px solid rgba(26,22,18,0.12);
+    border-top-color: #b33e1f;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+    display: inline-block;
+  }
 </style>
