@@ -35,3 +35,21 @@ export async function openFile(): Promise<{ path: string; content: string } | nu
   const content = await readTextFile(path as string);
   return { path: path as string, content };
 }
+
+/**
+ * Show a Save dialog and write text content to the chosen path.
+ * Returns the chosen path or null if cancelled.
+ */
+export async function saveBlob(
+  defaultName: string,
+  content: string,
+  ext: "csv" | "json"
+): Promise<string | null> {
+  const path = await save({
+    defaultPath: `${defaultName}.${ext}`,
+    filters: [{ name: ext.toUpperCase(), extensions: [ext] }],
+  });
+  if (!path) return null;
+  await writeTextFile(path, content);
+  return path;
+}
