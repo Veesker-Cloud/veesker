@@ -170,6 +170,17 @@
       e.preventDefault();
       sqlEditor.closeTab(sqlEditor.activeId);
     }
+    // Cmd+. (or Ctrl+.) cancels an in-flight query.
+    if (
+      (e.metaKey || e.ctrlKey) &&
+      e.key === "." &&
+      sqlEditor.drawerOpen &&
+      sqlEditor.active !== null &&
+      sqlEditor.active.runningRequestId !== null
+    ) {
+      e.preventDefault();
+      void sqlEditor.cancelActive();
+    }
   }
 
   onMount(() => {

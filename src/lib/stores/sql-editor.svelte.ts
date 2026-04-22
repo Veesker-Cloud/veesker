@@ -1,5 +1,5 @@
 // src/lib/stores/sql-editor.svelte.ts
-import { queryExecute, type QueryResult } from "$lib/sql-query";
+import { queryExecute, queryCancel, type QueryResult } from "$lib/sql-query";
 
 export type SqlTab = {
   id: string;
@@ -8,6 +8,7 @@ export type SqlTab = {
   result: QueryResult | null;
   running: boolean;
   error: { code: number; message: string } | null;
+  runningRequestId: string | null;
 };
 
 let _tabs = $state<SqlTab[]>([]);
@@ -67,6 +68,7 @@ function makeTab(title: string, sql: string): SqlTab {
     result: null,
     running: false,
     error: null,
+    runningRequestId: null,
   };
 }
 
@@ -163,10 +165,12 @@ export const sqlEditor = {
     if (tab === null) return;
     const sql = stripTrailingSemicolon(tab.sql);
     if (sql === "") return;
+    const requestId = crypto.randomUUID();
     tab.running = true;
+    tab.runningRequestId = requestId;
     tab.error = null;
     try {
-      const res = await queryExecute(sql);
+      const res = await queryExecute(sql, requestId);
       if (res.ok) {
         tab.result = res.data;
         tab.error = null;
@@ -176,7 +180,16 @@ export const sqlEditor = {
       }
     } finally {
       tab.running = false;
+      tab.runningRequestId = null;
     }
+  },
+
+  async cancelActive(): Promise<void> {
+    const tab = this.active;
+    if (tab === null || tab.runningRequestId === null) return;
+    await queryCancel(tab.runningRequestId);
+    // The original runActive promise will reject with code -2;
+    // its finally block will clear running / runningRequestId.
   },
 
   reset(): void {

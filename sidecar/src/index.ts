@@ -8,6 +8,7 @@ import {
   objectsList,
   tableDescribe,
   queryExecute,
+  queryCancel,
 } from "./oracle";
 
 const handlers: HandlerMap = {
@@ -18,6 +19,7 @@ const handlers: HandlerMap = {
   "objects.list": (params) => objectsList(params as any),
   "table.describe": (params) => tableDescribe(params as any),
   "query.execute": (params) => queryExecute(params as any),
+  "query.cancel": (params) => queryCancel(params as any),
   ping: async () => ({ pong: true }),
 };
 
