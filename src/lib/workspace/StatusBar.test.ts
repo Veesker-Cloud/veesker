@@ -11,6 +11,7 @@ const baseProps = {
   schema: "SYSTEM",
   serverVersion: "Oracle 23.26",
   onDisconnect: () => {},
+  onSwitchConnection: () => {},
 };
 
 describe("StatusBar SQL toggle", () => {

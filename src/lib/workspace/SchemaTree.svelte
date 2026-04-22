@@ -16,8 +16,10 @@
     onToggle: (owner: string) => void;
     onSelect: (owner: string, name: string, kind: ObjectKind) => void;
     onRetry: (owner: string, kind: ObjectKind) => void;
+    onRefresh?: () => void;
+    refreshing?: boolean;
   };
-  let { schemas, selected, onToggle, onSelect, onRetry }: Props = $props();
+  let { schemas, selected, onToggle, onSelect, onRetry, onRefresh, refreshing = false }: Props = $props();
 
   let search = $state("");
 
@@ -91,7 +93,7 @@
 </script>
 
 <nav class="tree">
-  <!-- Search -->
+  <!-- Search + Refresh -->
   <div class="search-wrap">
     <svg class="search-icon" width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
       <circle cx="5.5" cy="5.5" r="3.5" stroke="currentColor" stroke-width="1.3"/>
@@ -106,6 +108,21 @@
     />
     {#if search}
       <button class="search-clear" onclick={() => search = ""} aria-label="Clear filter">×</button>
+    {/if}
+    {#if onRefresh}
+      <button
+        class="refresh-btn"
+        class:spinning={refreshing}
+        onclick={onRefresh}
+        aria-label="Refresh schema tree"
+        title="Refresh schemas"
+        disabled={refreshing}
+      >
+        <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
+          <path d="M9 2A4.5 4.5 0 1 0 10 5.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          <polyline points="8,0 10,2 8,4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
     {/if}
   </div>
 
@@ -213,6 +230,7 @@
     padding: 0.6rem 0.6rem 0.4rem;
     display: flex;
     align-items: center;
+    gap: 0.3rem;
   }
   .search-icon {
     position: absolute;
@@ -251,6 +269,22 @@
     padding: 0;
   }
   .search-clear:hover { color: rgba(255,255,255,0.7); }
+  .refresh-btn {
+    background: transparent;
+    border: none;
+    color: rgba(255,255,255,0.35);
+    cursor: pointer;
+    padding: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 3px;
+    flex-shrink: 0;
+    transition: color 0.12s, background 0.12s;
+  }
+  .refresh-btn:hover { color: rgba(255,255,255,0.75); background: rgba(255,255,255,0.07); }
+  .refresh-btn:disabled { opacity: 0.4; cursor: default; }
+  .refresh-btn.spinning svg { animation: spin 0.8s linear infinite; }
 
   /* ── Schema row ───────────────────────────────────────────── */
   .schema { margin-bottom: 0.15rem; }
