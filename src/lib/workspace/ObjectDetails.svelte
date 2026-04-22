@@ -47,11 +47,14 @@
     if (res.ok) liveCount = res.data.count;
   }
 
-  // Reset live count + column search when object changes
-  $effect(() => { void selected; liveCount = null; liveCountLoading = false; columnSearch = ""; });
+  // Reset live count + column search + empty-section toggles when object changes
+  $effect(() => { void selected; liveCount = null; liveCountLoading = false; columnSearch = ""; relShowEmpty = new Set(); });
 
   type Tab = "overview" | "columns" | "indexes" | "related" | "dataflow";
   let activeTab = $state<Tab>("columns");
+
+  // Related tab: which empty sections are expanded
+  let relShowEmpty = $state<Set<string>>(new Set());
 
   // Reset tab when object changes
   $effect(() => {
@@ -362,6 +365,7 @@
           {@const r = related.value}
 
           <!-- Triggers -->
+          {#if r.triggers.length > 0 || relShowEmpty.has("triggers")}
           <div class="rel-section">
             <div class="rel-header">
               <svg class="rel-icon" width="13" height="13" viewBox="0 0 13 13" fill="none">
@@ -374,14 +378,15 @@
               <div class="rel-empty">None</div>
             {:else}
               <table class="rel-table">
-                <thead><tr><th>Name</th><th>Type</th><th>Event</th><th>For Each</th><th>Status</th></tr></thead>
+                <thead><tr><th>Name</th><th>Type</th><th>Event</th><th>Status</th></tr></thead>
                 <tbody>
                   {#each r.triggers as t (t.name)}
                     <tr>
-                      <td class="mono">{t.name}</td>
+                      <td>
+                        <button class="nav-link" onclick={() => onNavigate?.(selected!.owner, "TRIGGER", t.name)}>{t.name}</button>
+                      </td>
                       <td><span class="badge-neutral">{t.triggerType}</span></td>
-                      <td class="mono">{t.event}</td>
-                      <td>{t.forEach}</td>
+                      <td class="mono rel-event">{t.event}</td>
                       <td>
                         <span class="badge-status" class:enabled={t.status === "ENABLED"}>{t.status}</span>
                       </td>
@@ -391,8 +396,10 @@
               </table>
             {/if}
           </div>
+          {/if}
 
           <!-- Outgoing FKs -->
+          {#if r.fksOut.length > 0 || relShowEmpty.has("fksOut")}
           <div class="rel-section">
             <div class="rel-header">
               <svg class="rel-icon" width="13" height="13" viewBox="0 0 13 13" fill="none">
@@ -405,24 +412,31 @@
             {#if r.fksOut.length === 0}
               <div class="rel-empty">None</div>
             {:else}
-              <table class="rel-table">
-                <thead><tr><th>Constraint</th><th>Columns</th><th>→ Table</th><th>→ Columns</th><th>On Delete</th></tr></thead>
-                <tbody>
-                  {#each r.fksOut as fk (fk.constraintName)}
-                    <tr>
-                      <td class="mono">{fk.constraintName}</td>
-                      <td class="mono">{fk.columns}</td>
-                      <td><button class="nav-link" onclick={() => onNavigate?.(fk.refOwner, "TABLE", fk.refTable)}>{fk.refOwner !== selected!.owner ? `${fk.refOwner}.` : ""}{fk.refTable}</button></td>
-                      <td class="mono">{fk.refColumns}</td>
-                      <td><span class="badge-neutral">{fk.deleteRule}</span></td>
-                    </tr>
-                  {/each}
-                </tbody>
-              </table>
+              {#each r.fksOut as fk (fk.constraintName)}
+                <div class="fk-row">
+                  <div class="fk-row-main">
+                    <span class="fk-cols mono">{fk.columns}</span>
+                    <svg class="fk-arrow" width="14" height="10" viewBox="0 0 14 10" fill="none">
+                      <path d="M1 5h10M8 2l3 3-3 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <button class="nav-link fk-table" onclick={() => onNavigate?.(fk.refOwner, "TABLE", fk.refTable)}>
+                      {fk.refOwner !== selected!.owner ? `${fk.refOwner}.` : ""}{fk.refTable}
+                    </button>
+                    <span class="fk-dot" aria-hidden="true">·</span>
+                    <span class="fk-cols mono">{fk.refColumns}</span>
+                  </div>
+                  <div class="fk-row-meta">
+                    <span class="fk-constraint-name mono">{fk.constraintName}</span>
+                    <span class="badge-neutral">{fk.deleteRule}</span>
+                  </div>
+                </div>
+              {/each}
             {/if}
           </div>
+          {/if}
 
           <!-- Incoming FKs -->
+          {#if r.fksIn.length > 0 || relShowEmpty.has("fksIn")}
           <div class="rel-section">
             <div class="rel-header">
               <svg class="rel-icon" width="13" height="13" viewBox="0 0 13 13" fill="none">
@@ -435,23 +449,29 @@
             {#if r.fksIn.length === 0}
               <div class="rel-empty">None</div>
             {:else}
-              <table class="rel-table">
-                <thead><tr><th>Table</th><th>Constraint</th><th>Columns</th><th>On Delete</th></tr></thead>
-                <tbody>
-                  {#each r.fksIn as fk (fk.constraintName)}
-                    <tr>
-                      <td><button class="nav-link" onclick={() => onNavigate?.(fk.fkOwner, "TABLE", fk.fkTable)}>{fk.fkOwner !== selected!.owner ? `${fk.fkOwner}.` : ""}{fk.fkTable}</button></td>
-                      <td class="mono">{fk.constraintName}</td>
-                      <td class="mono">{fk.columns}</td>
-                      <td><span class="badge-neutral">{fk.deleteRule}</span></td>
-                    </tr>
-                  {/each}
-                </tbody>
-              </table>
+              {#each r.fksIn as fk (fk.constraintName)}
+                <div class="fk-row">
+                  <div class="fk-row-main">
+                    <button class="nav-link fk-table" onclick={() => onNavigate?.(fk.fkOwner, "TABLE", fk.fkTable)}>
+                      {fk.fkOwner !== selected!.owner ? `${fk.fkOwner}.` : ""}{fk.fkTable}
+                    </button>
+                    <svg class="fk-arrow fk-arrow-in" width="14" height="10" viewBox="0 0 14 10" fill="none">
+                      <path d="M13 5H3M6 2L3 5l3 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <span class="fk-cols mono">{fk.columns}</span>
+                  </div>
+                  <div class="fk-row-meta">
+                    <span class="fk-constraint-name mono">{fk.constraintName}</span>
+                    <span class="badge-neutral">{fk.deleteRule}</span>
+                  </div>
+                </div>
+              {/each}
             {/if}
           </div>
+          {/if}
 
           <!-- Dependent objects -->
+          {#if r.dependents.length > 0 || relShowEmpty.has("dependents")}
           <div class="rel-section">
             <div class="rel-header">
               <svg class="rel-icon" width="13" height="13" viewBox="0 0 13 13" fill="none">
@@ -473,11 +493,12 @@
               }, {})}
               {#each Object.entries(byType) as [type, items]}
                 <div class="dep-group">
-                  <span class="dep-type-label">{type}</span>
+                  <span class="dep-type-label" style="color:{kindColor(type)}">{type}</span>
                   <div class="dep-chips">
                     {#each items as d (d.owner + "." + d.name)}
                       <button
                         class="dep-chip"
+                        style="--dc:{kindColor(d.type)}"
                         onclick={() => onNavigate?.(d.owner, d.type, d.name)}
                         title="Open {d.owner}.{d.name}"
                       >{d.owner !== selected!.owner ? `${d.owner}.` : ""}{d.name}</button>
@@ -487,8 +508,10 @@
               {/each}
             {/if}
           </div>
+          {/if}
 
           <!-- Constraints -->
+          {#if r.constraints.length > 0 || relShowEmpty.has("constraints")}
           <div class="rel-section">
             <div class="rel-header">
               <svg class="rel-icon" width="13" height="13" viewBox="0 0 13 13" fill="none">
@@ -524,8 +547,10 @@
               </table>
             {/if}
           </div>
+          {/if}
 
           <!-- Grants -->
+          {#if r.grants.length > 0 || relShowEmpty.has("grants")}
           <div class="rel-section">
             <div class="rel-header">
               <svg class="rel-icon" width="13" height="13" viewBox="0 0 13 13" fill="none">
@@ -553,6 +578,27 @@
               </table>
             {/if}
           </div>
+          {/if}
+
+          <!-- Show empty sections toggle -->
+          {@const emptySections = [
+            { key: "triggers", label: "Triggers", count: r.triggers.length },
+            { key: "fksOut", label: "References", count: r.fksOut.length },
+            { key: "fksIn", label: "Referenced By", count: r.fksIn.length },
+            { key: "dependents", label: "Used by", count: r.dependents.length },
+            { key: "constraints", label: "Constraints", count: r.constraints.length },
+            { key: "grants", label: "Grants", count: r.grants.length },
+          ].filter(s => s.count === 0 && !relShowEmpty.has(s.key))}
+          {#if emptySections.length > 0}
+            <div class="rel-empty-toggle">
+              {#each emptySections as s}
+                <button
+                  class="rel-empty-btn"
+                  onclick={() => { relShowEmpty = new Set([...relShowEmpty, s.key]); }}
+                >+ {s.label}</button>
+              {/each}
+            </div>
+          {/if}
         {/if}
 
       {:else if activeTab === "dataflow"}
@@ -1046,9 +1092,9 @@
   .dep-chip {
     font-family: "JetBrains Mono", "SF Mono", monospace;
     font-size: 10.5px;
-    color: #4a9eda;
-    background: rgba(74,158,218,0.07);
-    border: 1px solid rgba(74,158,218,0.15);
+    color: var(--dc, #4a9eda);
+    background: color-mix(in srgb, var(--dc, #4a9eda) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--dc, #4a9eda) 20%, transparent);
     border-radius: 4px;
     padding: 2px 8px;
     white-space: nowrap;
@@ -1056,9 +1102,85 @@
     transition: background 0.1s, border-color 0.1s;
   }
   .dep-chip:hover {
-    background: rgba(74,158,218,0.15);
-    border-color: rgba(74,158,218,0.35);
+    background: color-mix(in srgb, var(--dc, #4a9eda) 16%, transparent);
+    border-color: color-mix(in srgb, var(--dc, #4a9eda) 35%, transparent);
   }
+
+  /* ── FK row layout ────────────────────────────────────────── */
+  .fk-row {
+    padding: 0.45rem 1.25rem;
+    border-bottom: 1px solid rgba(26,22,18,0.04);
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+  .fk-row:last-child { border-bottom: none; }
+  .fk-row:hover { background: rgba(26,22,18,0.02); }
+  .fk-row-main {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+  }
+  .fk-row-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding-left: 0.05rem;
+  }
+  .fk-arrow {
+    color: rgba(26,22,18,0.3);
+    flex-shrink: 0;
+  }
+  .fk-cols {
+    color: rgba(26,22,18,0.65);
+    font-size: 11px;
+  }
+  .fk-table {
+    font-size: 12px;
+  }
+  .fk-dot {
+    color: rgba(26,22,18,0.25);
+    font-size: 12px;
+  }
+  .fk-constraint-name {
+    color: rgba(26,22,18,0.35);
+    font-size: 10px;
+  }
+  .rel-event {
+    font-size: 11px;
+    color: rgba(26,22,18,0.6);
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ── Empty sections toggle ────────────────────────────────── */
+  .rel-empty-toggle {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    padding: 0.75rem 1.25rem;
+    border-top: 1px solid rgba(26,22,18,0.05);
+  }
+  .rel-empty-btn {
+    background: transparent;
+    border: 1px dashed rgba(26,22,18,0.15);
+    color: rgba(26,22,18,0.4);
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 10.5px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.1s;
+  }
+  .rel-empty-btn:hover {
+    border-color: rgba(26,22,18,0.3);
+    color: rgba(26,22,18,0.65);
+    background: rgba(26,22,18,0.03);
+  }
+
   .nav-link {
     font-family: "JetBrains Mono", "SF Mono", monospace;
     font-size: 11.5px;
