@@ -5,7 +5,6 @@
   import ExecutionLog from "./ExecutionLog.svelte";
   import QueryHistory from "./QueryHistory.svelte";
   import CompileErrors from "./CompileErrors.svelte";
-  import { message } from "@tauri-apps/plugin-dialog";
 
   // ── Refs ────────────────────────────────────────────────────────────────────
   let drawerEl: HTMLDivElement | undefined = $state();
@@ -219,7 +218,7 @@
           class="txn-btn commit-btn"
           title="Commit transaction"
           aria-label="Commit"
-          onclick={() => void sqlEditor.commit().catch(e => void message(String(e), { title: "Commit failed", kind: "error" }))}
+          onclick={() => void sqlEditor.commit().catch(e => { window.alert("Commit failed: " + String(e)); })}
         >
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
             <circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.2"/>
@@ -231,7 +230,7 @@
           class="txn-btn rollback-btn"
           title="Rollback transaction"
           aria-label="Rollback"
-          onclick={() => void sqlEditor.rollback().catch(e => void message(String(e), { title: "Rollback failed", kind: "error" }))}
+          onclick={() => void sqlEditor.rollback().catch(e => { window.alert("Rollback failed: " + String(e)); })}
         >
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
             <path d="M9.5 2.5 A4.5 4.5 0 1 0 11 6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>

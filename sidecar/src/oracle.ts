@@ -1060,7 +1060,9 @@ export async function vectorSimilaritySearch(p: {
   limit: number;
 }): Promise<VectorSearchResult> {
   return withActiveSession(async (conn) => {
-    const vecStr = `[${p.vector.join(",")}]`;
+    // Oracle TO_VECTOR() rejects JavaScript scientific notation (e.g. 1.2e-7).
+    // Format each float as fixed decimal with enough precision.
+    const vecStr = `[${p.vector.map(n => n.toFixed(8)).join(",")}]`;
     const metric = ["COSINE", "EUCLIDEAN", "DOT"].includes(p.distanceMetric)
       ? p.distanceMetric
       : "COSINE";
