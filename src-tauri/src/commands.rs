@@ -295,3 +295,31 @@ pub async fn table_describe(
         message: format!("decode table.describe: {e}"),
     })
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueryColumn {
+    pub name: String,
+    pub data_type: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueryResult {
+    pub columns: Vec<QueryColumn>,
+    pub rows: Vec<Vec<serde_json::Value>>,
+    pub row_count: i64,
+    pub elapsed_ms: u64,
+}
+
+#[tauri::command]
+pub async fn query_execute(
+    app: AppHandle,
+    sql: String,
+) -> Result<QueryResult, ConnectionTestErr> {
+    let res = call_sidecar(&app, "query.execute", json!({ "sql": sql })).await?;
+    serde_json::from_value(res).map_err(|e| ConnectionTestErr {
+        code: -32099,
+        message: format!("decode query.execute: {e}"),
+    })
+}
