@@ -14,6 +14,7 @@ export type Column = {
   isPk: boolean;
   dataDefault: string | null;
   comments: string | null;
+  isVector?: boolean;
 };
 export type IndexDef = { name: string; isUnique: boolean; columns: string[] };
 export type TableDetails = {
@@ -138,6 +139,27 @@ export async function connectionRollback(): Promise<Result<void>> {
     return { ok: false, error: err as WorkspaceError };
   }
 }
+
+// ── Vector Search ────────────────────────────────────────────────────────────
+
+export type VectorColumnRef = { tableName: string; columnName: string };
+
+export const vectorTablesInSchema = (owner: string) =>
+  call<{ columns: VectorColumnRef[] }>("vector_tables_in_schema", { owner });
+
+export type VectorIndex = {
+  indexName: string;
+  targetColumn: string;
+  indexType: string;
+  distanceMetric: string;
+  accuracy: number | null;
+  parameters: string | null;
+};
+
+export const vectorIndexList = (owner: string, tableName: string) =>
+  call<{ indexes: VectorIndex[] }>("vector_index_list", { owner, tableName });
+
+// ── AI Chat ───────────────────────────────────────────────────────────────────
 
 export type AiMessage = { role: "user" | "assistant"; content: string };
 export type AiContext = {

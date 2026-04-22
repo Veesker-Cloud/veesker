@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { TableDetails, TableRelated, ObjectKind, Loadable, DataFlowResult } from "$lib/workspace";
-  import { tableCountRows } from "$lib/workspace";
+  import type { TableDetails, TableRelated, ObjectKind, Loadable, DataFlowResult, VectorIndex } from "$lib/workspace";
+  import { tableCountRows, vectorIndexList } from "$lib/workspace";
   import { sqlEditor } from "$lib/stores/sql-editor.svelte";
   import DataFlow from "./DataFlow.svelte";
 
@@ -56,8 +56,23 @@
   // Reset live count + column search + empty-section toggles when object changes
   $effect(() => { void selected; liveCount = null; liveCountLoading = false; columnSearch = ""; relShowEmpty = new Set(); });
 
-  type Tab = "overview" | "columns" | "indexes" | "related" | "dataflow";
+  type Tab = "overview" | "columns" | "indexes" | "related" | "dataflow" | "vectors";
   let activeTab = $state<Tab>("columns");
+
+  // Vector indexes (loaded lazily when Vectors tab is selected)
+  let vectorIndexes = $state<Loadable<VectorIndex[]>>({ kind: "idle" });
+
+  $effect(() => {
+    void selected;
+    vectorIndexes = { kind: "idle" };
+  });
+
+  async function loadVectorIndexes() {
+    if (!selected || vectorIndexes.kind === "loading" || vectorIndexes.kind === "ok") return;
+    vectorIndexes = { kind: "loading" };
+    const res = await vectorIndexList(selected.owner, selected.name);
+    vectorIndexes = res.ok ? { kind: "ok", value: res.data.indexes } : { kind: "err", message: res.error.message };
+  }
 
   // Related tab: which empty sections are expanded
   let relShowEmpty = $state<Set<string>>(new Set());
@@ -80,11 +95,13 @@
         ? rel.triggers.length + rel.fksOut.length + rel.fksIn.length +
           rel.dependents.length + rel.constraints.length + rel.grants.length
         : undefined;
+      const hasVectorCols = details.kind === "ok" && details.value.columns.some(c => c.isVector);
       return [
         { id: "columns", label: "Columns" },
         { id: "indexes", label: "Indexes" },
         { id: "related", label: "Related", count: relCount },
         { id: "dataflow", label: "Graph" },
+        ...(hasVectorCols ? [{ id: "vectors" as Tab, label: "Vectors" }] : []),
       ];
     }
     return [{ id: "dataflow", label: "Graph" }];
@@ -318,6 +335,9 @@
                     </td>
                     <td class="col-type">
                       <span class="type-badge" style="color:{typeColor(c.dataType)};border-color:{typeColor(c.dataType)}20;background:{typeColor(c.dataType)}10">{c.dataType}</span>
+                      {#if c.isVector}
+                        <span class="vector-badge" title="Oracle VECTOR column">⬡ VECTOR</span>
+                      {/if}
                     </td>
                     <td class="col-null">
                       {#if c.nullable}
@@ -627,6 +647,53 @@
         {:else}
           <div class="empty-section">No data flow information available.</div>
         {/if}
+
+      {:else if activeTab === "vectors"}
+        {#if vectorIndexes.kind === "idle"}
+          {@const _ = loadVectorIndexes()}
+          <div class="loading-row"><span class="spinner"></span> Loading vector indexes…</div>
+        {:else if vectorIndexes.kind === "loading"}
+          <div class="loading-row"><span class="spinner"></span> Loading vector indexes…</div>
+        {:else if vectorIndexes.kind === "err"}
+          <div class="banner banner-err"><span>{vectorIndexes.message}</span></div>
+        {:else if vectorIndexes.kind === "ok"}
+          <div class="vector-section">
+            <div class="vector-columns-hint">
+              {#each (details.kind === "ok" ? details.value.columns.filter(c => c.isVector) : []) as vc}
+                <span class="vector-col-chip">⬡ {vc.name}</span>
+              {/each}
+            </div>
+            {#if vectorIndexes.value.length === 0}
+              <div class="empty-section">
+                No VECTOR indexes found on this table.<br>
+                <small>Create one with <code>CREATE VECTOR INDEX … ON {selected.name} ({details.kind === "ok" ? (details.value.columns.find(c => c.isVector)?.name ?? "col") : "col"}) ORGANIZATION INMEMORY NEIGHBOR GRAPH DISTANCE COSINE;</code></small>
+              </div>
+            {:else}
+              <table class="col-table">
+                <thead>
+                  <tr>
+                    <th>Index</th>
+                    <th>Column</th>
+                    <th>Type</th>
+                    <th>Distance</th>
+                    <th>Accuracy</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {#each vectorIndexes.value as vi}
+                    <tr>
+                      <td class="col-name mono">{vi.indexName}</td>
+                      <td><span class="vector-badge">⬡ {vi.targetColumn}</span></td>
+                      <td><span class="type-badge" style="color:#a78bfa;border-color:#a78bfa20;background:#a78bfa10">{vi.indexType}</span></td>
+                      <td class="mono">{vi.distanceMetric}</td>
+                      <td class="mono">{vi.accuracy != null ? `${vi.accuracy}%` : "—"}</td>
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            {/if}
+          </div>
+        {/if}
       {/if}
     </div>
   {/if}
@@ -933,6 +1000,47 @@
     background: rgba(74,158,218,0.08);
     border-radius: 3px;
     padding: 1px 5px;
+  }
+  .vector-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 9.5px;
+    font-weight: 600;
+    color: #a78bfa;
+    background: rgba(167,139,250,0.1);
+    border: 1px solid rgba(167,139,250,0.25);
+    border-radius: 3px;
+    padding: 1px 5px;
+    margin-left: 4px;
+    white-space: nowrap;
+  }
+  .vector-section {
+    padding: 0.75rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .vector-columns-hint {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+  .vector-col-chip {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    color: #a78bfa;
+    background: rgba(167,139,250,0.1);
+    border: 1px solid rgba(167,139,250,0.2);
+    border-radius: 4px;
+    padding: 2px 8px;
+  }
+  .vector-section small code {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    background: rgba(26,22,18,0.06);
+    padding: 2px 4px;
+    border-radius: 3px;
   }
   .col-default, .mono {
     font-family: "JetBrains Mono", "SF Mono", monospace;

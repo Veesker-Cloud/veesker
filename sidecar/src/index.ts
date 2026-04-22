@@ -19,6 +19,8 @@ import {
   tableCountRows,
   objectsSearch,
   schemaKindCounts,
+  vectorTablesInSchema,
+  vectorIndexList,
 } from "./oracle";
 import { aiChat } from "./ai";
 
@@ -41,6 +43,8 @@ const handlers: HandlerMap = {
   "connection.rollback": () => connectionRollback(),
   "objects.search": (params) => objectsSearch(params as any),
   "schema.kind_counts": (params) => schemaKindCounts(params as any),
+  "vector.tables_in_schema": (params) => vectorTablesInSchema(params as any),
+  "vector.index_list": (params) => vectorIndexList(params as any),
   "ai.chat": (params) => aiChat(params as any),
   ping: async () => ({ pong: true }),
 };

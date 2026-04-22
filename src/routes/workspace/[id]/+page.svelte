@@ -20,6 +20,7 @@
     tableDescribe,
     tableRelated,
     schemaKindCounts,
+    vectorTablesInSchema,
     SESSION_LOST,
     type WorkspaceInfo,
     type ObjectKind,
@@ -48,9 +49,9 @@
   let dataflowError = $state<string | null>(null);
   let related = $state<Loadable<TableRelated>>({ kind: "idle" });
 
-  // ── Panel resize ────────────────────────────────────────────────────────────
-  let schemaWidth = $state(256);
-  let chatWidth   = $state(340);
+  // ── Panel resize (persisted) ─────────────────────────────────────────────────
+  let schemaWidth = $state(Number(localStorage.getItem("veesker_schema_w") ?? 256));
+  let chatWidth   = $state(Number(localStorage.getItem("veesker_chat_w") ?? 340));
 
   function makeHorizResizer(
     getStart: () => number,
@@ -81,8 +82,8 @@
     };
   }
 
-  const schemaResizer = makeHorizResizer(() => schemaWidth, (w) => (schemaWidth = w), 160, 480, 1);
-  const chatResizer   = makeHorizResizer(() => chatWidth,   (w) => (chatWidth = w),   240, 620, -1);
+  const schemaResizer = makeHorizResizer(() => schemaWidth, (w) => { schemaWidth = w; localStorage.setItem("veesker_schema_w", String(w)); }, 160, 480, 1);
+  const chatResizer   = makeHorizResizer(() => chatWidth,   (w) => { chatWidth = w;   localStorage.setItem("veesker_chat_w",   String(w)); }, 240, 620, -1);
 
   function userLabel(m: ConnectionMeta): string {
     if (m.authType === "basic") {
@@ -146,6 +147,14 @@
       void schemaKindCounts(node.name).then((res) => {
         if (res.ok) {
           node.kindCounts = res.data.counts;
+          schemas = [...schemas];
+        }
+      });
+    }
+    if (!node.vectorTables) {
+      void vectorTablesInSchema(node.name).then((res) => {
+        if (res.ok) {
+          node.vectorTables = new Set(res.data.columns.map((c) => c.tableName));
           schemas = [...schemas];
         }
       });
