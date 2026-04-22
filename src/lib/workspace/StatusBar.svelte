@@ -56,7 +56,7 @@
       class="action-btn disconnect-btn"
       aria-label="Disconnect"
       title="Disconnect"
-      onclick={onDisconnect}
+      onclick={() => { if (confirm("Disconnect from the database?")) onDisconnect(); }}
     >
       <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
         <path d="M5 2H2a.5.5 0 00-.5.5v7A.5.5 0 002 10h3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
