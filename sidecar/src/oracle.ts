@@ -931,6 +931,7 @@ export async function tableRelated(p: {
                ON acc.owner = ac.owner AND acc.constraint_name = ac.constraint_name
             WHERE ac.owner = :owner AND ac.table_name = :name
               AND ac.constraint_type IN ('C', 'U')
+              AND ac.constraint_name NOT LIKE 'SYS\_C%' ESCAPE '\'
             GROUP BY ac.constraint_name, ac.constraint_type, ac.search_condition_vc, ac.status
             ORDER BY ac.constraint_type, ac.constraint_name`,
           b, opts
