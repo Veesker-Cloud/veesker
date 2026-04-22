@@ -16,10 +16,12 @@
     objectDdlGet,
     objectDataflowGet,
     tableDescribe,
+    tableRelated,
     SESSION_LOST,
     type WorkspaceInfo,
     type ObjectKind,
     type TableDetails,
+    type TableRelated,
     type Loadable,
     type DataFlowResult,
   } from "$lib/workspace";
@@ -38,6 +40,7 @@
   let dataflow = $state<DataFlowResult | null>(null);
   let dataflowLoading = $state(false);
   let dataflowError = $state<string | null>(null);
+  let related = $state<Loadable<TableRelated>>({ kind: "idle" });
 
   function userLabel(m: ConnectionMeta): string {
     if (m.authType === "basic") {
@@ -128,13 +131,20 @@
 
   async function loadDetails(owner: string, name: string, kind: ObjectKind): Promise<void> {
     details = { kind: "loading" };
-    const res = await tableDescribe(owner, name);
+    related = { kind: "loading" };
+    const [res, relRes] = await Promise.all([
+      tableDescribe(owner, name),
+      tableRelated(owner, name),
+    ]);
     if (res.ok) {
       details = { kind: "ok", value: res.data };
     } else {
       if (res.error.code === SESSION_LOST) sessionLost = true;
       details = { kind: "err", message: res.error.message };
     }
+    related = relRes.ok
+      ? { kind: "ok", value: relRes.data }
+      : { kind: "err", message: relRes.error.message };
     void loadDataflow(owner, kind, name);
   }
 
@@ -144,6 +154,7 @@
     dataflow = null;
     dataflowLoading = false;
     dataflowError = null;
+    related = { kind: "idle" };
     if (PLSQL_KINDS.includes(kind)) {
       details = { kind: "idle" };
       void (async () => {
@@ -316,6 +327,7 @@
       <ObjectDetails
         {selected}
         {details}
+        {related}
         onRetry={onRetryDetails}
         onReconnect={onReconnect}
         sessionLost={sessionLost}

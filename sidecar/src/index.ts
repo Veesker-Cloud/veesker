@@ -15,6 +15,7 @@ import {
   objectDataflow,
   connectionCommit,
   connectionRollback,
+  tableRelated,
 } from "./oracle";
 
 const handlers: HandlerMap = {
@@ -30,6 +31,7 @@ const handlers: HandlerMap = {
   "object.ddl": (params) => objectDdl(params as any),
   "objects.list.plsql": (params) => objectsListPlsql(params as any),
   "object.dataflow": (params) => objectDataflow(params as any),
+  "table.related": (params) => tableRelated(params as any),
   "connection.commit": () => connectionCommit(),
   "connection.rollback": () => connectionRollback(),
   ping: async () => ({ pong: true }),

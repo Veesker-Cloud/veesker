@@ -1,11 +1,12 @@
 <script lang="ts">
-  import type { TableDetails, ObjectKind, Loadable, DataFlowResult } from "$lib/workspace";
+  import type { TableDetails, TableRelated, ObjectKind, Loadable, DataFlowResult } from "$lib/workspace";
   import { sqlEditor } from "$lib/stores/sql-editor.svelte";
   import DataFlow from "./DataFlow.svelte";
 
   type Props = {
     selected: { owner: string; name: string; kind: ObjectKind } | null;
     details: Loadable<TableDetails>;
+    related?: Loadable<TableRelated>;
     onRetry: () => void;
     onReconnect?: () => void;
     sessionLost?: boolean;
@@ -18,6 +19,7 @@
   let {
     selected,
     details,
+    related = { kind: "idle" },
     onRetry,
     onReconnect,
     sessionLost = false,
@@ -28,7 +30,7 @@
     onNavigateDataflow,
   }: Props = $props();
 
-  type Tab = "overview" | "columns" | "indexes" | "dataflow";
+  type Tab = "overview" | "columns" | "indexes" | "related" | "dataflow";
   let activeTab = $state<Tab>("columns");
 
   // Reset tab when object changes
@@ -41,12 +43,18 @@
     }
   });
 
-  const tabs = $derived((): Array<{ id: Tab; label: string }> => {
+  const tabs = $derived((): Array<{ id: Tab; label: string; count?: number }> => {
     if (!selected) return [];
     if (selected.kind === "TABLE" || selected.kind === "VIEW") {
+      const rel = related.kind === "ok" ? related.value : null;
+      const relCount = rel
+        ? rel.triggers.length + rel.fksOut.length + rel.fksIn.length +
+          rel.dependents.length + rel.constraints.length + rel.grants.length
+        : undefined;
       return [
         { id: "columns", label: "Columns" },
         { id: "indexes", label: "Indexes" },
+        { id: "related", label: "Related", count: relCount },
         { id: "dataflow", label: "Data Flow" },
       ];
     }
@@ -140,7 +148,12 @@
             role="tab"
             aria-selected={activeTab === t.id}
             onclick={() => activeTab = t.id}
-          >{t.label}</button>
+          >
+            {t.label}
+            {#if t.count !== undefined && t.count > 0}
+              <span class="tab-count">{t.count}</span>
+            {/if}
+          </button>
         {/each}
       </div>
     {/if}
@@ -260,6 +273,206 @@
               </table>
             </div>
           {/if}
+        {/if}
+
+      {:else if activeTab === "related"}
+        {#if related.kind === "loading"}
+          <div class="loading-row"><span class="spinner"></span> Loading related objects…</div>
+        {:else if related.kind === "err"}
+          <div class="banner banner-err"><span>{related.message}</span></div>
+        {:else if related.kind === "ok"}
+          {@const r = related.value}
+
+          <!-- Triggers -->
+          <div class="rel-section">
+            <div class="rel-header">
+              <svg class="rel-icon" width="13" height="13" viewBox="0 0 13 13" fill="none">
+                <path d="M7 1L1 7.5h5L4 12l8-7H7V1z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+              </svg>
+              <span>Triggers</span>
+              <span class="rel-count">{r.triggers.length}</span>
+            </div>
+            {#if r.triggers.length === 0}
+              <div class="rel-empty">None</div>
+            {:else}
+              <table class="rel-table">
+                <thead><tr><th>Name</th><th>Type</th><th>Event</th><th>For Each</th><th>Status</th></tr></thead>
+                <tbody>
+                  {#each r.triggers as t (t.name)}
+                    <tr>
+                      <td class="mono">{t.name}</td>
+                      <td><span class="badge-neutral">{t.triggerType}</span></td>
+                      <td class="mono">{t.event}</td>
+                      <td>{t.forEach}</td>
+                      <td>
+                        <span class="badge-status" class:enabled={t.status === "ENABLED"}>{t.status}</span>
+                      </td>
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            {/if}
+          </div>
+
+          <!-- Outgoing FKs -->
+          <div class="rel-section">
+            <div class="rel-header">
+              <svg class="rel-icon" width="13" height="13" viewBox="0 0 13 13" fill="none">
+                <path d="M2 6.5h9M7.5 3l4 3.5-4 3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span>References</span>
+              <span class="rel-count">{r.fksOut.length}</span>
+              <span class="rel-sub">FK out — tables this object points to</span>
+            </div>
+            {#if r.fksOut.length === 0}
+              <div class="rel-empty">None</div>
+            {:else}
+              <table class="rel-table">
+                <thead><tr><th>Constraint</th><th>Columns</th><th>→ Table</th><th>→ Columns</th><th>On Delete</th></tr></thead>
+                <tbody>
+                  {#each r.fksOut as fk (fk.constraintName)}
+                    <tr>
+                      <td class="mono">{fk.constraintName}</td>
+                      <td class="mono">{fk.columns}</td>
+                      <td class="mono bold">{fk.refOwner !== selected!.owner ? `${fk.refOwner}.` : ""}{fk.refTable}</td>
+                      <td class="mono">{fk.refColumns}</td>
+                      <td><span class="badge-neutral">{fk.deleteRule}</span></td>
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            {/if}
+          </div>
+
+          <!-- Incoming FKs -->
+          <div class="rel-section">
+            <div class="rel-header">
+              <svg class="rel-icon" width="13" height="13" viewBox="0 0 13 13" fill="none">
+                <path d="M11 6.5H2M5.5 3L1.5 6.5 5.5 10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span>Referenced By</span>
+              <span class="rel-count">{r.fksIn.length}</span>
+              <span class="rel-sub">FK in — tables that point to this object</span>
+            </div>
+            {#if r.fksIn.length === 0}
+              <div class="rel-empty">None</div>
+            {:else}
+              <table class="rel-table">
+                <thead><tr><th>Table</th><th>Constraint</th><th>Columns</th><th>On Delete</th></tr></thead>
+                <tbody>
+                  {#each r.fksIn as fk (fk.constraintName)}
+                    <tr>
+                      <td class="mono bold">{fk.fkOwner !== selected!.owner ? `${fk.fkOwner}.` : ""}{fk.fkTable}</td>
+                      <td class="mono">{fk.constraintName}</td>
+                      <td class="mono">{fk.columns}</td>
+                      <td><span class="badge-neutral">{fk.deleteRule}</span></td>
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            {/if}
+          </div>
+
+          <!-- Dependent objects -->
+          <div class="rel-section">
+            <div class="rel-header">
+              <svg class="rel-icon" width="13" height="13" viewBox="0 0 13 13" fill="none">
+                <circle cx="2.5" cy="6.5" r="1.5" stroke="currentColor" stroke-width="1.2"/>
+                <circle cx="10.5" cy="2.5" r="1.5" stroke="currentColor" stroke-width="1.2"/>
+                <circle cx="10.5" cy="10.5" r="1.5" stroke="currentColor" stroke-width="1.2"/>
+                <line x1="4" y1="6" x2="9" y2="3" stroke="currentColor" stroke-width="1.1"/>
+                <line x1="4" y1="7" x2="9" y2="10" stroke="currentColor" stroke-width="1.1"/>
+              </svg>
+              <span>Used by</span>
+              <span class="rel-count">{r.dependents.length}</span>
+              <span class="rel-sub">Views, procedures, packages that depend on this object</span>
+            </div>
+            {#if r.dependents.length === 0}
+              <div class="rel-empty">None</div>
+            {:else}
+              {@const byType = r.dependents.reduce<Record<string, typeof r.dependents>>((acc, d) => {
+                (acc[d.type] ??= []).push(d); return acc;
+              }, {})}
+              {#each Object.entries(byType) as [type, items]}
+                <div class="dep-group">
+                  <span class="dep-type-label">{type}</span>
+                  <div class="dep-chips">
+                    {#each items as d (d.owner + "." + d.name)}
+                      <span class="dep-chip">
+                        {d.owner !== selected!.owner ? `${d.owner}.` : ""}{d.name}
+                      </span>
+                    {/each}
+                  </div>
+                </div>
+              {/each}
+            {/if}
+          </div>
+
+          <!-- Constraints -->
+          <div class="rel-section">
+            <div class="rel-header">
+              <svg class="rel-icon" width="13" height="13" viewBox="0 0 13 13" fill="none">
+                <rect x="1.5" y="4.5" width="10" height="6" rx="1.5" stroke="currentColor" stroke-width="1.2"/>
+                <path d="M4.5 4.5V3a2 2 0 014 0v1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+              </svg>
+              <span>Constraints</span>
+              <span class="rel-count">{r.constraints.length}</span>
+              <span class="rel-sub">Check and unique (PK shown in Columns tab)</span>
+            </div>
+            {#if r.constraints.length === 0}
+              <div class="rel-empty">None</div>
+            {:else}
+              <table class="rel-table">
+                <thead><tr><th>Name</th><th>Type</th><th>Columns</th><th>Condition</th><th>Status</th></tr></thead>
+                <tbody>
+                  {#each r.constraints as c (c.name)}
+                    <tr>
+                      <td class="mono">{c.name}</td>
+                      <td>
+                        {#if c.type === "U"}
+                          <span class="unique-badge">UNIQUE</span>
+                        {:else}
+                          <span class="badge-neutral">CHECK</span>
+                        {/if}
+                      </td>
+                      <td class="mono">{c.columns}</td>
+                      <td class="mono cond-cell">{c.condition}</td>
+                      <td><span class="badge-status" class:enabled={c.status === "ENABLED"}>{c.status}</span></td>
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            {/if}
+          </div>
+
+          <!-- Grants -->
+          <div class="rel-section">
+            <div class="rel-header">
+              <svg class="rel-icon" width="13" height="13" viewBox="0 0 13 13" fill="none">
+                <circle cx="6.5" cy="4" r="2.5" stroke="currentColor" stroke-width="1.2"/>
+                <path d="M1.5 11c0-2.5 2.2-4.5 5-4.5s5 2 5 4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+              </svg>
+              <span>Grants</span>
+              <span class="rel-count">{r.grants.length}</span>
+            </div>
+            {#if r.grants.length === 0}
+              <div class="rel-empty">None</div>
+            {:else}
+              <table class="rel-table">
+                <thead><tr><th>Grantee</th><th>Privilege</th><th>Grantor</th><th>With Grant</th></tr></thead>
+                <tbody>
+                  {#each r.grants as g (`${g.grantee}:${g.privilege}`)}
+                    <tr>
+                      <td class="mono bold">{g.grantee}</td>
+                      <td><span class="badge-priv">{g.privilege}</span></td>
+                      <td class="mono">{g.grantor}</td>
+                      <td>{g.grantable === "YES" ? "✓" : ""}</td>
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            {/if}
+          </div>
         {/if}
 
       {:else if activeTab === "dataflow"}
@@ -563,5 +776,179 @@
     font-size: 9.5px;
     color: rgba(26,22,18,0.4);
     letter-spacing: 0.04em;
+  }
+
+  /* ── Tab count badge ──────────────────────────────────────── */
+  .tab-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 8px;
+    background: rgba(26,22,18,0.08);
+    color: rgba(26,22,18,0.5);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 9px;
+    font-weight: 600;
+    margin-left: 4px;
+  }
+  .tab.active .tab-count {
+    background: rgba(179,62,31,0.12);
+    color: #b33e1f;
+  }
+
+  /* ── Related tab ──────────────────────────────────────────── */
+  .rel-section {
+    border-bottom: 1px solid rgba(26,22,18,0.06);
+  }
+  .rel-section:last-child { border-bottom: none; }
+  .rel-header {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.6rem 1.25rem;
+    background: rgba(26,22,18,0.02);
+    border-bottom: 1px solid rgba(26,22,18,0.05);
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(26,22,18,0.7);
+    letter-spacing: 0.03em;
+    cursor: default;
+  }
+  .rel-icon {
+    color: rgba(26,22,18,0.35);
+    flex-shrink: 0;
+  }
+  .rel-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 8px;
+    background: rgba(26,22,18,0.07);
+    color: rgba(26,22,18,0.55);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 9px;
+    font-weight: 600;
+  }
+  .rel-sub {
+    color: rgba(26,22,18,0.35);
+    font-size: 10px;
+    font-weight: 400;
+    letter-spacing: 0;
+    margin-left: 0.15rem;
+  }
+  .rel-empty {
+    padding: 0.5rem 1.25rem;
+    font-size: 11px;
+    color: rgba(26,22,18,0.3);
+    font-style: italic;
+  }
+  .rel-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11.5px;
+  }
+  .rel-table th {
+    text-align: left;
+    font-family: "Space Grotesk", sans-serif;
+    font-weight: 600;
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: rgba(26,22,18,0.35);
+    padding: 0.3rem 1.25rem;
+    white-space: nowrap;
+    border-bottom: 1px solid rgba(26,22,18,0.05);
+  }
+  .rel-table td {
+    padding: 0.3rem 1.25rem;
+    border-bottom: 1px solid rgba(26,22,18,0.04);
+    vertical-align: middle;
+  }
+  .rel-table tr:last-child td { border-bottom: none; }
+  .rel-table tr:hover td { background: rgba(26,22,18,0.02); }
+  .bold { font-weight: 600; color: #1a1612; }
+  .cond-cell { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: rgba(26,22,18,0.55); }
+
+  .badge-neutral {
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    color: rgba(26,22,18,0.5);
+    background: rgba(26,22,18,0.06);
+    border: 1px solid rgba(26,22,18,0.1);
+    border-radius: 3px;
+    padding: 1px 5px;
+    white-space: nowrap;
+  }
+  .badge-status {
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    color: rgba(26,22,18,0.35);
+    background: rgba(26,22,18,0.05);
+    border: 1px solid rgba(26,22,18,0.08);
+    border-radius: 3px;
+    padding: 1px 5px;
+  }
+  .badge-status.enabled {
+    color: #27ae60;
+    background: rgba(39,174,96,0.08);
+    border-color: rgba(39,174,96,0.2);
+  }
+  .badge-priv {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 9.5px;
+    font-weight: 500;
+    color: #4a9eda;
+    background: rgba(74,158,218,0.08);
+    border: 1px solid rgba(74,158,218,0.18);
+    border-radius: 3px;
+    padding: 1px 5px;
+    white-space: nowrap;
+  }
+
+  /* ── Dependents chip layout ───────────────────────────────── */
+  .dep-group {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.4rem 1.25rem;
+    border-bottom: 1px solid rgba(26,22,18,0.04);
+  }
+  .dep-group:last-child { border-bottom: none; }
+  .dep-type-label {
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: rgba(26,22,18,0.35);
+    min-width: 90px;
+    padding-top: 2px;
+    flex-shrink: 0;
+  }
+  .dep-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+  }
+  .dep-chip {
+    font-family: "JetBrains Mono", "SF Mono", monospace;
+    font-size: 10.5px;
+    color: #4a9eda;
+    background: rgba(74,158,218,0.07);
+    border: 1px solid rgba(74,158,218,0.15);
+    border-radius: 4px;
+    padding: 1px 7px;
+    white-space: nowrap;
   }
 </style>

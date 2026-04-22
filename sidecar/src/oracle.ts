@@ -758,6 +758,235 @@ export async function objectDataflow(p: {
   });
 }
 
+// ── Table Related ────────────────────────────────────────────────────────────
+
+export type TriggerRef = {
+  name: string;
+  triggerType: string; // BEFORE/AFTER/INSTEAD OF
+  event: string;       // INSERT OR UPDATE OR DELETE
+  status: string;      // ENABLED/DISABLED
+  forEach: string;     // ROW / STATEMENT
+};
+
+export type FkOutgoing = {
+  constraintName: string;
+  columns: string;
+  refOwner: string;
+  refTable: string;
+  refColumns: string;
+  deleteRule: string;
+};
+
+export type FkIncoming = {
+  fkOwner: string;
+  fkTable: string;
+  constraintName: string;
+  columns: string;
+  deleteRule: string;
+};
+
+export type Dependent = {
+  owner: string;
+  name: string;
+  type: string;
+};
+
+export type CheckConstraint = {
+  name: string;
+  columns: string;
+  condition: string;
+  type: string; // C=check, U=unique
+  status: string;
+};
+
+export type TableGrant = {
+  grantor: string;
+  grantee: string;
+  privilege: string;
+  grantable: string;
+};
+
+export type TableRelated = {
+  triggers: TriggerRef[];
+  fksOut: FkOutgoing[];
+  fksIn: FkIncoming[];
+  dependents: Dependent[];
+  constraints: CheckConstraint[];
+  grants: TableGrant[];
+};
+
+export async function tableRelated(p: {
+  owner: string;
+  name: string;
+}): Promise<TableRelated> {
+  return withActiveSession(async (conn) => {
+    const opts = { outFormat: oracledb.OUT_FORMAT_OBJECT };
+
+    const trgRes = await conn.execute<{
+      TRIGGER_NAME: string;
+      TRIGGER_TYPE: string;
+      TRIGGERING_EVENT: string;
+      STATUS: string;
+      ACTION_TYPE: string;
+    }>(
+      `SELECT trigger_name, trigger_type, triggering_event, status, action_type
+         FROM all_triggers
+        WHERE owner = :owner AND table_name = :name
+        ORDER BY trigger_name`,
+      { owner: p.owner, name: p.name },
+      opts
+    );
+    const triggers: TriggerRef[] = (trgRes.rows ?? []).map((r) => ({
+      name: r.TRIGGER_NAME,
+      triggerType: r.TRIGGER_TYPE,
+      event: r.TRIGGERING_EVENT,
+      status: r.STATUS,
+      forEach: r.ACTION_TYPE,
+    }));
+
+    const fkOutRes = await conn.execute<{
+      CONSTRAINT_NAME: string;
+      COLUMNS: string;
+      REF_OWNER: string;
+      REF_TABLE: string;
+      REF_COLUMNS: string;
+      DELETE_RULE: string;
+    }>(
+      `SELECT ac.constraint_name,
+              LISTAGG(acc.column_name, ', ') WITHIN GROUP (ORDER BY acc.position) AS columns,
+              arc.owner AS ref_owner, arc.table_name AS ref_table,
+              LISTAGG(arcc.column_name, ', ') WITHIN GROUP (ORDER BY arcc.position) AS ref_columns,
+              ac.delete_rule
+         FROM all_constraints ac
+         JOIN all_cons_columns acc
+           ON acc.owner = ac.owner AND acc.constraint_name = ac.constraint_name
+         JOIN all_constraints arc
+           ON arc.constraint_name = ac.r_constraint_name AND arc.owner = ac.r_owner
+         JOIN all_cons_columns arcc
+           ON arcc.owner = arc.owner AND arcc.constraint_name = arc.constraint_name
+          AND arcc.position = acc.position
+        WHERE ac.owner = :owner AND ac.table_name = :name AND ac.constraint_type = 'R'
+        GROUP BY ac.constraint_name, arc.owner, arc.table_name, ac.delete_rule
+        ORDER BY ac.constraint_name`,
+      { owner: p.owner, name: p.name },
+      opts
+    );
+    const fksOut: FkOutgoing[] = (fkOutRes.rows ?? []).map((r) => ({
+      constraintName: r.CONSTRAINT_NAME,
+      columns: r.COLUMNS,
+      refOwner: r.REF_OWNER,
+      refTable: r.REF_TABLE,
+      refColumns: r.REF_COLUMNS,
+      deleteRule: r.DELETE_RULE,
+    }));
+
+    const fkInRes = await conn.execute<{
+      FK_OWNER: string;
+      FK_TABLE: string;
+      CONSTRAINT_NAME: string;
+      COLUMNS: string;
+      DELETE_RULE: string;
+    }>(
+      `SELECT ac.owner AS fk_owner, ac.table_name AS fk_table, ac.constraint_name,
+              LISTAGG(acc.column_name, ', ') WITHIN GROUP (ORDER BY acc.position) AS columns,
+              ac.delete_rule
+         FROM all_constraints ac
+         JOIN all_cons_columns acc
+           ON acc.owner = ac.owner AND acc.constraint_name = ac.constraint_name
+        WHERE ac.constraint_type = 'R'
+          AND ac.r_owner = :owner
+          AND ac.r_constraint_name IN (
+            SELECT constraint_name FROM all_constraints
+             WHERE owner = :owner AND table_name = :name AND constraint_type = 'P'
+          )
+        GROUP BY ac.owner, ac.table_name, ac.constraint_name, ac.delete_rule
+        ORDER BY ac.table_name, ac.constraint_name`,
+      { owner: p.owner, name: p.name },
+      opts
+    );
+    const fksIn: FkIncoming[] = (fkInRes.rows ?? []).map((r) => ({
+      fkOwner: r.FK_OWNER,
+      fkTable: r.FK_TABLE,
+      constraintName: r.CONSTRAINT_NAME,
+      columns: r.COLUMNS,
+      deleteRule: r.DELETE_RULE,
+    }));
+
+    const depRes = await conn.execute<{
+      OWNER: string;
+      NAME: string;
+      TYPE: string;
+    }>(
+      `SELECT DISTINCT d.owner, d.name, d.type
+         FROM all_dependencies d
+        WHERE d.referenced_owner = :owner
+          AND d.referenced_name = :name
+          AND d.referenced_type = 'TABLE'
+          AND d.type IN ('VIEW','PROCEDURE','FUNCTION','PACKAGE','PACKAGE BODY','TRIGGER','MATERIALIZED VIEW','TYPE')
+          AND NOT (d.owner = :owner AND d.name = :name)
+        ORDER BY d.type, d.name`,
+      { owner: p.owner, name: p.name },
+      opts
+    );
+    const dependents: Dependent[] = (depRes.rows ?? []).map((r) => ({
+      owner: r.OWNER,
+      name: r.NAME,
+      type: r.TYPE,
+    }));
+
+    const cstRes = await conn.execute<{
+      CONSTRAINT_NAME: string;
+      CONSTRAINT_TYPE: string;
+      COLUMNS: string;
+      SEARCH_CONDITION: string | null;
+      STATUS: string;
+    }>(
+      `SELECT ac.constraint_name, ac.constraint_type,
+              NVL(LISTAGG(acc.column_name, ', ') WITHIN GROUP (ORDER BY acc.position), '') AS columns,
+              CAST(ac.search_condition AS VARCHAR2(500)) AS search_condition,
+              ac.status
+         FROM all_constraints ac
+         LEFT JOIN all_cons_columns acc
+           ON acc.owner = ac.owner AND acc.constraint_name = ac.constraint_name
+        WHERE ac.owner = :owner AND ac.table_name = :name
+          AND ac.constraint_type IN ('C', 'U')
+        GROUP BY ac.constraint_name, ac.constraint_type, ac.search_condition, ac.status
+        ORDER BY ac.constraint_type, ac.constraint_name`,
+      { owner: p.owner, name: p.name },
+      opts
+    );
+    const constraints: CheckConstraint[] = (cstRes.rows ?? []).map((r) => ({
+      name: r.CONSTRAINT_NAME,
+      type: r.CONSTRAINT_TYPE,
+      columns: r.COLUMNS,
+      condition: r.SEARCH_CONDITION ?? "",
+      status: r.STATUS,
+    }));
+
+    const grantRes = await conn.execute<{
+      GRANTOR: string;
+      GRANTEE: string;
+      PRIVILEGE: string;
+      GRANTABLE: string;
+    }>(
+      `SELECT grantor, grantee, privilege, grantable
+         FROM all_tab_privs
+        WHERE table_owner = :owner AND table_name = :name
+        ORDER BY grantee, privilege`,
+      { owner: p.owner, name: p.name },
+      opts
+    );
+    const grants: TableGrant[] = (grantRes.rows ?? []).map((r) => ({
+      grantor: r.GRANTOR,
+      grantee: r.GRANTEE,
+      privilege: r.PRIVILEGE,
+      grantable: r.GRANTABLE,
+    }));
+
+    return { triggers, fksOut, fksIn, dependents, constraints, grants };
+  });
+}
+
 export async function connectionCommit(): Promise<{ committed: true }> {
   return withActiveSession(async (conn) => {
     await conn.commit();
