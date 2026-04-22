@@ -59,7 +59,7 @@
 </svelte:head>
 
 <div class="watermark" aria-hidden="true">
-  <img src="/veesker-logo.png" alt="" width="340" height="340" />
+  <img src="/veesker-sheep.png" alt="" width="300" height="300" />
 </div>
 <main>
   <header>
@@ -201,12 +201,12 @@
 
   .watermark {
     position: fixed;
-    bottom: 6%;
-    right: 8%;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     pointer-events: none;
     user-select: none;
-    opacity: 0.055;
-    filter: grayscale(1);
+    opacity: 0.07;
   }
 
   main {
