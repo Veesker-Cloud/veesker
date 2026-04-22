@@ -1,6 +1,7 @@
 // src/lib/stores/sql-editor.svelte.ts
 import { queryExecute, queryExecuteMulti, queryCancel, type QueryResult } from "$lib/sql-query";
 import { splitSql } from "$lib/sql-splitter";
+import { historySave } from "$lib/query-history";
 
 export type TabResult = {
   id: string;                         // crypto.randomUUID for selection stability
@@ -39,6 +40,7 @@ let _tabs = $state<SqlTab[]>([]);
 let _activeId = $state<string | null>(null);
 let _drawerOpen = $state(false);
 let _queryCounter = $state(0);
+let _connectionId: string | null = null;
 
 // ── Drawer height ────────────────────────────────────────────────────────────
 
@@ -135,6 +137,21 @@ function chooseActiveResultId(results: TabResult[]): string | null {
   return results[results.length - 1].id;
 }
 
+/** Fire-and-forget: persist a completed statement to query history. */
+function pushHistory(sql: string, r: TabResult): void {
+  if (_connectionId === null) return;
+  if (r.status === "cancelled") return;
+  void historySave({
+    connectionId: _connectionId,
+    sql,
+    success: r.status === "ok",
+    rowCount: r.status === "ok" && r.result !== null ? r.result.rowCount : null,
+    elapsedMs: r.elapsedMs,
+    errorCode: r.status === "error" && r.error !== null ? r.error.code : null,
+    errorMessage: r.status === "error" && r.error !== null ? r.error.message : null,
+  }).catch((e) => console.warn("history save failed:", e));
+}
+
 export const sqlEditor = {
   get tabs() { return _tabs; },
   get activeId() { return _activeId; },
@@ -142,6 +159,8 @@ export const sqlEditor = {
   get active(): SqlTab | null {
     return _activeId === null ? null : findTab(_activeId);
   },
+  get connectionId() { return _connectionId; },
+  setConnectionId(id: string | null): void { _connectionId = id; },
 
   // ── Drawer height ──────────────────────────────────────────────────────────
   get drawerHeight() { return _drawerHeight; },
@@ -258,6 +277,7 @@ export const sqlEditor = {
       };
       tab.results = [tabResult];
       tab.activeResultId = resultId;
+      pushHistory(sql, tabResult);
     } finally {
       tab.running = false;
       tab.runningRequestId = null;
@@ -351,6 +371,9 @@ export const sqlEditor = {
 
       tab.results = tabResults;
       tab.activeResultId = chooseActiveResultId(tabResults);
+      for (const tr of tabResults) {
+        pushHistory(tr.sqlPreview, tr);
+      }
     } finally {
       tab.running = false;
       tab.runningRequestId = null;
@@ -383,6 +406,7 @@ export const sqlEditor = {
       };
       tab.results = [tabResult];
       tab.activeResultId = resultId;
+      pushHistory(sql, tabResult);
     } finally {
       tab.running = false;
       tab.runningRequestId = null;
@@ -457,6 +481,7 @@ export const sqlEditor = {
       };
       tab.results = [tabResult];
       tab.activeResultId = resultId;
+      pushHistory(sqlToRun, tabResult);
     } finally {
       tab.running = false;
       tab.runningRequestId = null;
@@ -477,5 +502,6 @@ export const sqlEditor = {
     _drawerOpen = false;
     _queryCounter = 0;
     _logCollapsed = false;
+    _connectionId = null;
   },
 };

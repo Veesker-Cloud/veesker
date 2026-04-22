@@ -111,6 +111,7 @@ pub async fn connection_test(
 use crate::persistence::connections::{
     ConnectionError, ConnectionFull, ConnectionInput, ConnectionMeta, ConnectionService, WalletInfo,
 };
+use crate::persistence::history::{HistoryEntry, HistorySaveInput};
 
 #[tauri::command]
 pub async fn connection_list(app: AppHandle) -> Result<Vec<ConnectionMeta>, ConnectionError> {
@@ -331,4 +332,34 @@ pub async fn query_cancel(
         cancelled,
         request_id: returned_id,
     })
+}
+
+#[tauri::command]
+pub async fn history_list(
+    app: AppHandle,
+    connection_id: String,
+    limit: i64,
+    offset: i64,
+    search: Option<String>,
+) -> Result<Vec<HistoryEntry>, ConnectionError> {
+    let svc = app.state::<ConnectionService>();
+    svc.history_list(&connection_id, limit, offset, search.as_deref())
+}
+
+#[tauri::command]
+pub async fn history_save(
+    app: AppHandle,
+    input: HistorySaveInput,
+) -> Result<i64, ConnectionError> {
+    let svc = app.state::<ConnectionService>();
+    svc.history_save(input)
+}
+
+#[tauri::command]
+pub async fn history_clear(
+    app: AppHandle,
+    connection_id: String,
+) -> Result<usize, ConnectionError> {
+    let svc = app.state::<ConnectionService>();
+    svc.history_clear(&connection_id)
 }

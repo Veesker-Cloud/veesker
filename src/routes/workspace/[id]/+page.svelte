@@ -122,6 +122,7 @@
       return;
     }
     meta = metaRes.data.meta;
+    sqlEditor.setConnectionId(meta.id);
 
     const openRes = await workspaceOpen(id);
     if (!openRes.ok) {
