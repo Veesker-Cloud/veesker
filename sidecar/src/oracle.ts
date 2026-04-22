@@ -423,9 +423,10 @@ export type MultiQueryResult = { multi: true; results: ServerStatementResult[] }
 // Passing outFormat/maxRows also signals "this is a query" and can cause the driver to strip
 // the trailing `;` from PL/SQL anonymous blocks, producing ORA-06550. Avoid both problems
 // by using empty options for any PL/SQL statement.
+// Allow leading -- line comments before PL/SQL keywords (splitter may include them).
 const PLSQL_EXEC_RE =
-  /^\s*(?:BEGIN|DECLARE|CREATE\s+(?:OR\s+REPLACE\s+)?(?:EDITIONABLE\s+|NONEDITIONABLE\s+)?(?:FUNCTION|PROCEDURE|TRIGGER|PACKAGE(?:\s+BODY)?|TYPE(?:\s+BODY)?))\b/i;
-const PLSQL_ANON_RE = /^\s*(?:BEGIN|DECLARE)\b/i;
+  /^(?:[ \t]*--[^\n]*\n)*[ \t]*(?:BEGIN|DECLARE|CREATE\s+(?:OR\s+REPLACE\s+)?(?:EDITIONABLE\s+|NONEDITIONABLE\s+)?(?:FUNCTION|PROCEDURE|TRIGGER|PACKAGE(?:\s+BODY)?|TYPE(?:\s+BODY)?))\b/i;
+const PLSQL_ANON_RE = /^(?:[ \t]*--[^\n]*\n)*[ \t]*(?:BEGIN|DECLARE)\b/i;
 
 /** Run a single statement against the active session; returns QueryResult. */
 async function executeSingleStatement(
