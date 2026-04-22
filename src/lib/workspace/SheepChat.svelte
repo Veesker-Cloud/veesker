@@ -411,6 +411,7 @@
   }
   .bubble {
     max-width: 88%;
+    min-width: 0;
     padding: 0.55rem 0.75rem;
     border-radius: 10px;
     line-height: 1.55;
@@ -485,11 +486,13 @@
     border-radius: 6px;
     padding: 0.6rem 0.75rem;
     overflow-x: auto;
-    margin: 0.4rem 0;
+    margin: 0.4rem -0.1rem;
     font-family: "JetBrains Mono", "SF Mono", monospace;
     font-size: 11px;
     line-height: 1.5;
     white-space: pre;
+    max-width: 100%;
+    box-sizing: border-box;
   }
   :global(.ai-bubble .md-code) {
     background: rgba(0,0,0,0.4);
