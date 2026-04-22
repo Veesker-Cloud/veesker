@@ -337,6 +337,11 @@
         dataflowError={dataflowError}
         onNavigateDataflow={(owner, objectType, name) => onSelect(owner, name, objectType as ObjectKind)}
         onNavigate={(owner, kind, name) => onSelect(owner, name, kind as ObjectKind)}
+        onViewDdl={async (owner, kind, name) => {
+          const res = await objectDdlGet(owner, kind as any, name);
+          if (res.ok) sqlEditor.openWithDdl(`${owner}.${name}`, res.data);
+          else if (res.error.code === SESSION_LOST) sessionLost = true;
+        }}
       />
     </div>
     <SqlDrawer />

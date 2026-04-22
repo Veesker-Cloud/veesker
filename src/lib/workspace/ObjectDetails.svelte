@@ -16,6 +16,7 @@
     dataflowError?: string | null;
     onNavigateDataflow?: (owner: string, objectType: string, name: string) => void;
     onNavigate?: (owner: string, kind: string, name: string) => void;
+    onViewDdl?: (owner: string, kind: string, name: string) => void;
   };
   let {
     selected,
@@ -30,6 +31,7 @@
     dataflowError = null,
     onNavigateDataflow,
     onNavigate,
+    onViewDdl,
   }: Props = $props();
 
   type Tab = "overview" | "columns" | "indexes" | "related" | "dataflow";
@@ -134,6 +136,13 @@
             Preview data
             <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
               <path d="M2 9L9 2M9 2H4.5M9 2v4.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <button class="preview-btn" onclick={() => onViewDdl?.(selected!.owner, selected!.kind, selected!.name)}>
+            View DDL
+            <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
+              <polyline points="2 3.5 5 6.5 2 9.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+              <line x1="6" y1="9.5" x2="10" y2="9.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
             </svg>
           </button>
         {/if}
