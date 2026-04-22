@@ -186,6 +186,7 @@ export type TableDetails = {
   columns: ColumnDef[];
   indexes: IndexDef[];
   rowCount: number | null;
+  lastAnalyzed: string | null;
 };
 
 function formatDataType(
@@ -318,14 +319,17 @@ export async function tableDescribe(p: {
       columns: r.COLUMNS.split(","),
     }));
 
-    const cntRes = await conn.execute<{ NUM_ROWS: number | null }>(
-      `SELECT num_rows AS NUM_ROWS FROM all_tables WHERE owner = :owner AND table_name = :name`,
+    const cntRes = await conn.execute<{ NUM_ROWS: number | null; LAST_ANALYZED: Date | null }>(
+      `SELECT num_rows AS NUM_ROWS, last_analyzed AS LAST_ANALYZED
+         FROM all_tables WHERE owner = :owner AND table_name = :name`,
       { owner: p.owner, name: p.name },
       { outFormat: oracledb.OUT_FORMAT_OBJECT }
     );
     const rowCount = cntRes.rows?.[0]?.NUM_ROWS ?? null;
+    const lastAnalyzedRaw = cntRes.rows?.[0]?.LAST_ANALYZED ?? null;
+    const lastAnalyzed = lastAnalyzedRaw ? lastAnalyzedRaw.toISOString() : null;
 
-    return { columns, indexes, rowCount };
+    return { columns, indexes, rowCount, lastAnalyzed };
   });
 }
 
@@ -960,6 +964,20 @@ export async function tableRelated(p: {
     ]);
 
     return { triggers, fksOut, fksIn, dependents, constraints, grants };
+  });
+}
+
+export async function tableCountRows(p: {
+  owner: string;
+  name: string;
+}): Promise<{ count: number }> {
+  return withActiveSession(async (conn) => {
+    const res = await conn.execute<[number]>(
+      `SELECT COUNT(*) FROM "${p.owner}"."${p.name}"`,
+      [],
+      { outFormat: oracledb.OUT_FORMAT_ARRAY }
+    );
+    return { count: res.rows?.[0]?.[0] ?? 0 };
   });
 }
 

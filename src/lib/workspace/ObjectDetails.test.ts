@@ -14,7 +14,7 @@ beforeEach(() => sqlEditor.reset());
 
 const okDetails = {
   kind: "ok" as const,
-  value: { columns: [], indexes: [], rowCount: 100 },
+  value: { columns: [], indexes: [], rowCount: 100, lastAnalyzed: null },
 };
 
 describe("ObjectDetails Preview data button", () => {

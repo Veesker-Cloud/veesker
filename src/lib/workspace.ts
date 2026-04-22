@@ -20,6 +20,7 @@ export type TableDetails = {
   columns: Column[];
   indexes: IndexDef[];
   rowCount: number | null;
+  lastAnalyzed: string | null;
 };
 
 export type TriggerRef     = { name: string; triggerType: string; event: string; status: string; forEach: string };
@@ -70,6 +71,8 @@ export const tableDescribe  = (owner: string, name: string) =>
   call<TableDetails>("table_describe", { owner, name });
 export const tableRelated   = (owner: string, name: string) =>
   call<TableRelated>("table_related", { owner, name });
+export const tableCountRows = (owner: string, name: string) =>
+  call<{ count: number }>("table_count_rows", { owner, name });
 
 export const NO_ACTIVE_SESSION = -32010;
 export const SESSION_LOST      = -32011;
