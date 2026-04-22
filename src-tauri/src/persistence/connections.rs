@@ -6,7 +6,7 @@ use rusqlite::Connection as SqliteConnection;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::{secrets, store, tnsnames, wallet};
+use super::{history, secrets, store, tnsnames, wallet};
 use store::{AuthType, ConnectionRow, StoreError};
 
 #[derive(Debug, Clone, Serialize)]
@@ -188,6 +188,10 @@ impl ConnectionService {
         let conn = SqliteConnection::open(db_path)
             .map_err(|e| ConnectionError::internal(format!("open {db_path:?}: {e}")))?;
         store::init_db(&conn)?;
+        history::init_db_history(&conn).map_err(|e| match e {
+            history::HistoryError::Sqlite(s) => ConnectionError::from(StoreError::from(s)),
+            history::HistoryError::InvalidArg(m) => ConnectionError::internal(m),
+        })?;
         Ok(Self {
             conn: Mutex::new(conn),
             wallets_root,
@@ -542,6 +546,36 @@ impl ConnectionService {
             }
         }
         Ok(())
+    }
+
+    pub fn history_save(&self, input: history::HistorySaveInput) -> Result<i64, ConnectionError> {
+        let conn = self.lock()?;
+        history::insert(&conn, &input).map_err(|e| match e {
+            history::HistoryError::Sqlite(s) => ConnectionError::from(StoreError::from(s)),
+            history::HistoryError::InvalidArg(m) => ConnectionError::invalid(m),
+        })
+    }
+
+    pub fn history_list(
+        &self,
+        connection_id: &str,
+        limit: i64,
+        offset: i64,
+        search: Option<&str>,
+    ) -> Result<Vec<history::HistoryEntry>, ConnectionError> {
+        let conn = self.lock()?;
+        history::list(&conn, connection_id, limit, offset, search).map_err(|e| match e {
+            history::HistoryError::Sqlite(s) => ConnectionError::from(StoreError::from(s)),
+            history::HistoryError::InvalidArg(m) => ConnectionError::invalid(m),
+        })
+    }
+
+    pub fn history_clear(&self, connection_id: &str) -> Result<usize, ConnectionError> {
+        let conn = self.lock()?;
+        history::clear(&conn, connection_id).map_err(|e| match e {
+            history::HistoryError::Sqlite(s) => ConnectionError::from(StoreError::from(s)),
+            history::HistoryError::InvalidArg(m) => ConnectionError::invalid(m),
+        })
     }
 
     pub fn inspect_wallet(&self, zip_path: &str) -> Result<WalletInfo, ConnectionError> {

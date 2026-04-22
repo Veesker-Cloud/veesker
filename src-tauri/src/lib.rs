@@ -38,6 +38,9 @@ pub fn run() {
             commands::table_describe,
             commands::query_execute,
             commands::query_cancel,
+            commands::history_list,
+            commands::history_save,
+            commands::history_clear,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
