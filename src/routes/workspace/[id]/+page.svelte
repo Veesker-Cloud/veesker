@@ -48,6 +48,42 @@
   let dataflowError = $state<string | null>(null);
   let related = $state<Loadable<TableRelated>>({ kind: "idle" });
 
+  // ── Panel resize ────────────────────────────────────────────────────────────
+  let schemaWidth = $state(256);
+  let chatWidth   = $state(340);
+
+  function makeHorizResizer(
+    getStart: () => number,
+    onUpdate: (w: number) => void,
+    min: number,
+    max: number,
+    dir: 1 | -1 = 1
+  ) {
+    let startX = 0;
+    let startW = 0;
+    return {
+      onpointerdown(e: PointerEvent) {
+        const el = e.currentTarget as HTMLDivElement;
+        el.setPointerCapture(e.pointerId);
+        startX = e.clientX;
+        startW = getStart();
+      },
+      onpointermove(e: PointerEvent) {
+        const el = e.currentTarget as HTMLDivElement;
+        if (!el.hasPointerCapture(e.pointerId)) return;
+        const w = Math.max(min, Math.min(max, startW + dir * (e.clientX - startX)));
+        onUpdate(w);
+      },
+      onpointerup(e: PointerEvent) {
+        const el = e.currentTarget as HTMLDivElement;
+        if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
+      },
+    };
+  }
+
+  const schemaResizer = makeHorizResizer(() => schemaWidth, (w) => (schemaWidth = w), 160, 480, 1);
+  const chatResizer   = makeHorizResizer(() => chatWidth,   (w) => (chatWidth = w),   240, 620, -1);
+
   function userLabel(m: ConnectionMeta): string {
     if (m.authType === "basic") {
       return `${m.username} @ ${m.host}:${m.port}/${m.serviceName}`;
@@ -360,13 +396,25 @@
       onDisconnect={onDisconnect}
     />
     <div class="body">
-      <SchemaTree
-        {schemas}
-        {selected}
-        onToggle={onToggle}
-        onSelect={onSelect}
-        onRetry={onRetryKind}
-      />
+      <div class="panel-wrap" style="width: {schemaWidth}px; min-width: 160px; max-width: 480px;">
+        <SchemaTree
+          {schemas}
+          {selected}
+          onToggle={onToggle}
+          onSelect={onSelect}
+          onRetry={onRetryKind}
+        />
+      </div>
+      <div
+        class="resize-handle"
+        role="separator"
+        aria-orientation="vertical"
+        tabindex="-1"
+        onpointerdown={schemaResizer.onpointerdown}
+        onpointermove={schemaResizer.onpointermove}
+        onpointerup={schemaResizer.onpointerup}
+        onpointercancel={schemaResizer.onpointerup}
+      ></div>
       <ObjectDetails
         {selected}
         {details}
@@ -390,16 +438,28 @@
         }}
       />
       {#if showChat}
-        <SheepChat
-          context={{
-            currentSchema: info.currentSchema,
-            selectedOwner: selected?.owner,
-            selectedName: selected?.name,
-            selectedKind: selected?.kind,
-            activeSql: sqlEditor.active?.sql ?? undefined,
-          }}
-          onClose={() => showChat = false}
-        />
+        <div
+          class="resize-handle"
+          role="separator"
+          aria-orientation="vertical"
+          tabindex="-1"
+          onpointerdown={chatResizer.onpointerdown}
+          onpointermove={chatResizer.onpointermove}
+          onpointerup={chatResizer.onpointerup}
+          onpointercancel={chatResizer.onpointerup}
+        ></div>
+        <div class="panel-wrap" style="width: {chatWidth}px; min-width: 240px; max-width: 620px;">
+          <SheepChat
+            context={{
+              currentSchema: info.currentSchema,
+              selectedOwner: selected?.owner,
+              selectedName: selected?.name,
+              selectedKind: selected?.kind,
+              activeSql: sqlEditor.active?.sql ?? undefined,
+            }}
+            onClose={() => showChat = false}
+          />
+        </div>
       {/if}
     </div>
     <SqlDrawer />
@@ -431,6 +491,28 @@
     flex: 1;
     min-height: 0;
     background: #faf7f2;
+    overflow: hidden;
+  }
+  .panel-wrap {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .resize-handle {
+    width: 4px;
+    flex-shrink: 0;
+    cursor: col-resize;
+    background: transparent;
+    position: relative;
+    z-index: 10;
+    transition: background 0.15s;
+    user-select: none;
+  }
+  .resize-handle:hover,
+  .resize-handle:active {
+    background: rgba(179, 62, 31, 0.5);
   }
   .fatal {
     max-width: 480px;

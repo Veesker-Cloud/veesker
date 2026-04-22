@@ -189,8 +189,8 @@
 
 <style>
   .tree {
-    width: 256px;
-    min-width: 200px;
+    width: 100%;
+    min-width: 0;
     background: #18140f;
     border-right: 1px solid rgba(255,255,255,0.06);
     overflow-y: auto;

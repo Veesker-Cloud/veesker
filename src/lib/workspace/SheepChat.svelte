@@ -212,15 +212,14 @@
 
 <style>
   .sheep-panel {
-    width: 340px;
-    min-width: 280px;
+    width: 100%;
+    min-width: 0;
     background: #1c1710;
     border-left: 1px solid rgba(255,255,255,0.07);
     display: flex;
     flex-direction: column;
     font-family: "Inter", -apple-system, system-ui, sans-serif;
     font-size: 12.5px;
-    flex-shrink: 0;
     overflow: hidden;
   }
 
