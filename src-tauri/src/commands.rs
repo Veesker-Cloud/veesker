@@ -508,6 +508,42 @@ pub struct DataFlowResult {
     pub triggers: Vec<DataFlowTriggerInfo>,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchResultRow {
+    pub owner: String,
+    pub name: String,
+    pub object_type: String,
+}
+
+#[tauri::command]
+pub async fn objects_search(
+    app: AppHandle,
+    query: String,
+) -> Result<Vec<SearchResultRow>, ConnectionTestErr> {
+    let res = call_sidecar(&app, "objects.search", json!({ "query": query })).await?;
+    let arr = res.get("objects").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+    Ok(arr
+        .into_iter()
+        .filter_map(|v| {
+            Some(SearchResultRow {
+                owner: v.get("owner")?.as_str()?.to_string(),
+                name: v.get("name")?.as_str()?.to_string(),
+                object_type: v.get("type")?.as_str()?.to_string(),
+            })
+        })
+        .collect())
+}
+
+#[tauri::command]
+pub async fn schema_kind_counts(
+    app: AppHandle,
+    owner: String,
+) -> Result<Value, ConnectionTestErr> {
+    let res = call_sidecar(&app, "schema.kind_counts", json!({ "owner": owner })).await?;
+    Ok(res)
+}
+
 #[tauri::command]
 pub async fn connection_commit(app: AppHandle) -> Result<(), ConnectionTestErr> {
     call_sidecar(&app, "connection.commit", json!({})).await?;

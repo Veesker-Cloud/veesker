@@ -50,6 +50,8 @@ pub fn run() {
             commands::object_ddl_get,
             commands::object_dataflow_get,
             commands::objects_list_plsql,
+            commands::objects_search,
+            commands::schema_kind_counts,
             commands::connection_commit,
             commands::connection_rollback,
         ])

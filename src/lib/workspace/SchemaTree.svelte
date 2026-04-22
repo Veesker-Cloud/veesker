@@ -6,6 +6,7 @@
     isCurrent: boolean;
     expanded: boolean;
     kinds: Partial<Record<ObjectKind, Loadable<Array<{ name: string; status?: string }>>>>;
+    kindCounts?: Partial<Record<string, number>>;
   };
 
   type Props = {
@@ -144,6 +145,8 @@
                     <span class="kind-count">{kindCount(loadable, filtered)}</span>
                   {:else if loadable.kind === "loading"}
                     <span class="kind-spinner" aria-label="loading"></span>
+                  {:else if s.kindCounts?.[kind] !== undefined}
+                    <span class="kind-count pre-count">{s.kindCounts[kind]}</span>
                   {/if}
                 </summary>
                 <div class="kind-body">
@@ -313,6 +316,7 @@
     font-family: "Inter", sans-serif;
     letter-spacing: 0;
   }
+  .pre-count { opacity: 0.55; }
   .kind-spinner {
     width: 8px; height: 8px;
     border: 1.5px solid rgba(255,255,255,0.1);

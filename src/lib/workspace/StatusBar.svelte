@@ -8,9 +8,10 @@
     userLabel: string;
     schema: string;
     serverVersion: string;
+    hasPendingTx?: boolean;
     onDisconnect: () => void;
   };
-  let { connectionName, userLabel, schema, serverVersion, onDisconnect }: Props = $props();
+  let { connectionName, userLabel, schema, serverVersion, hasPendingTx = false, onDisconnect }: Props = $props();
 
   // Shorten version: "Oracle AI Database 26ai Free Release 23.26.1.0.0 – ..." → "23.26.1.0.0"
   const shortVersion = $derived(() => {
@@ -26,6 +27,14 @@
     <span class="bar-divider" aria-hidden="true"></span>
     <span class="conn-dot" aria-label="Connected"></span>
     <span class="conn-name">{connectionName}</span>
+    {#if hasPendingTx}
+      <span class="tx-badge" title="Uncommitted transaction pending — remember to COMMIT or ROLLBACK">
+        <svg width="8" height="8" viewBox="0 0 8 8" fill="none" aria-hidden="true">
+          <circle cx="4" cy="4" r="3.5" fill="#e8c547"/>
+        </svg>
+        TX
+      </span>
+    {/if}
     <span class="divider" aria-hidden="true"></span>
     <svg class="icon" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
       <ellipse cx="6" cy="4" rx="4.5" ry="1.8" stroke="currentColor" stroke-width="1.1"/>
@@ -120,6 +129,26 @@
     font-size: 12.5px;
     color: #f6f1e8;
     white-space: nowrap;
+  }
+  .tx-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: #e8c547;
+    background: rgba(232,197,71,0.12);
+    border: 1px solid rgba(232,197,71,0.3);
+    border-radius: 4px;
+    padding: 1px 6px;
+    flex-shrink: 0;
+    animation: tx-pulse 2s ease-in-out infinite;
+  }
+  @keyframes tx-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.65; }
   }
   .divider {
     width: 1px;

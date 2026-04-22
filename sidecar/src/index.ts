@@ -17,6 +17,8 @@ import {
   connectionRollback,
   tableRelated,
   tableCountRows,
+  objectsSearch,
+  schemaKindCounts,
 } from "./oracle";
 
 const handlers: HandlerMap = {
@@ -36,6 +38,8 @@ const handlers: HandlerMap = {
   "table.count_rows": (params) => tableCountRows(params as any),
   "connection.commit": () => connectionCommit(),
   "connection.rollback": () => connectionRollback(),
+  "objects.search": (params) => objectsSearch(params as any),
+  "schema.kind_counts": (params) => schemaKindCounts(params as any),
   ping: async () => ({ pong: true }),
 };
 

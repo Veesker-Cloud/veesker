@@ -74,6 +74,14 @@ export const tableRelated   = (owner: string, name: string) =>
 export const tableCountRows = (owner: string, name: string) =>
   call<{ count: number }>("table_count_rows", { owner, name });
 
+export type SearchResult = { owner: string; name: string; objectType: string };
+
+export const objectsSearch = (query: string) =>
+  call<SearchResult[]>("objects_search", { query });
+
+export const schemaKindCounts = (owner: string) =>
+  call<{ counts: Record<string, number> }>("schema_kind_counts", { owner });
+
 export const NO_ACTIVE_SESSION = -32010;
 export const SESSION_LOST      = -32011;
 export const OBJECT_NOT_FOUND  = -32012;

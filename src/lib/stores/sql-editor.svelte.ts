@@ -70,6 +70,7 @@ let _activeId = $state<string | null>(null);
 let _drawerOpen = $state(false);
 let _queryCounter = $state(0);
 let _connectionId: string | null = null;
+let _pendingTx = $state(false);
 
 // ── Drawer height ────────────────────────────────────────────────────────────
 
@@ -203,6 +204,8 @@ export const sqlEditor = {
   },
   get connectionId() { return _connectionId; },
   setConnectionId(id: string | null): void { _connectionId = id; },
+  get pendingTx() { return _pendingTx; },
+  clearPendingTx(): void { _pendingTx = false; },
 
   // ── Drawer height ──────────────────────────────────────────────────────────
   get drawerHeight() { return _drawerHeight; },
@@ -276,8 +279,11 @@ export const sqlEditor = {
     _drawerOpen = true;
   },
 
-  async openPreview(owner: string, name: string): Promise<void> {
-    const sql = `SELECT * FROM "${owner}"."${name}" FETCH FIRST 100 ROWS ONLY`;
+  async openPreview(owner: string, name: string, pkCols?: string[]): Promise<void> {
+    const orderBy = pkCols && pkCols.length > 0
+      ? ` ORDER BY ${pkCols.map(c => `"${c}"`).join(", ")}`
+      : "";
+    const sql = `SELECT * FROM "${owner}"."${name}"${orderBy} FETCH FIRST 200 ROWS ONLY`;
     const tab = makeTab(`${owner}.${name}`, sql);
     _tabs.push(tab);
     _activeId = tab.id;
@@ -343,6 +349,9 @@ export const sqlEditor = {
       tab.results = [tabResult];
       tab.activeResultId = resultId;
       pushHistory(sql, tabResult);
+      if (tabResult.status === "ok" && tabResult.result !== null && tabResult.result.columns.length === 0 && tabResult.result.rowCount > 0) {
+        _pendingTx = true;
+      }
     } finally {
       tab.running = false;
       tab.runningRequestId = null;
@@ -685,11 +694,13 @@ export const sqlEditor = {
   async commit(): Promise<void> {
     const res = await connectionCommit();
     if (!res.ok) throw new Error(res.error.message ?? "Commit failed");
+    _pendingTx = false;
   },
 
   async rollback(): Promise<void> {
     const res = await connectionRollback();
     if (!res.ok) throw new Error(res.error.message ?? "Rollback failed");
+    _pendingTx = false;
   },
 
   reset(): void {
@@ -699,5 +710,6 @@ export const sqlEditor = {
     _queryCounter = 0;
     _logCollapsed = false;
     _connectionId = null;
+    _pendingTx = false;
   },
 };

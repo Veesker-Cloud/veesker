@@ -6,6 +6,7 @@
   import SchemaTree, { type SchemaNode } from "$lib/workspace/SchemaTree.svelte";
   import ObjectDetails from "$lib/workspace/ObjectDetails.svelte";
   import SqlDrawer from "$lib/workspace/SqlDrawer.svelte";
+  import CommandPalette from "$lib/workspace/CommandPalette.svelte";
   import { sqlEditor } from "$lib/stores/sql-editor.svelte";
   import {
     workspaceOpen,
@@ -17,6 +18,7 @@
     objectDataflowGet,
     tableDescribe,
     tableRelated,
+    schemaKindCounts,
     SESSION_LOST,
     type WorkspaceInfo,
     type ObjectKind,
@@ -36,6 +38,7 @@
   let details  = $state<Loadable<TableDetails>>({ kind: "idle" });
   let fatal    = $state<string | null>(null);
   let sessionLost = $state(false);
+  let showPalette = $state(false);
   let detailError = $state<string | null>(null);
   let dataflow = $state<DataFlowResult | null>(null);
   let dataflowLoading = $state(false);
@@ -100,6 +103,14 @@
         .filter((k) => node.kinds[k]?.kind === "idle")
         .map((k) => loadKind(node, k))
     );
+    if (!node.kindCounts) {
+      void schemaKindCounts(node.name).then((res) => {
+        if (res.ok) {
+          node.kindCounts = res.data.counts;
+          schemas = [...schemas];
+        }
+      });
+    }
   }
 
   function onToggle(owner: string): void {
@@ -230,6 +241,13 @@
   }
 
   function onKeydown(e: KeyboardEvent) {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      e.preventDefault();
+      showPalette = true;
+      return;
+    }
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "o") {
       const tag = (e.target as HTMLElement).tagName;
       if (tag === "INPUT" || tag === "TEXTAREA") return;
@@ -314,6 +332,7 @@
       userLabel={userLabel(meta)}
       schema={info.currentSchema}
       serverVersion={info.serverVersion}
+      hasPendingTx={sqlEditor.pendingTx}
       onDisconnect={onDisconnect}
     />
     <div class="body">
@@ -346,6 +365,12 @@
     </div>
     <SqlDrawer />
   </div>
+  {#if showPalette}
+    <CommandPalette
+      onSelect={(owner, name, kind) => { showPalette = false; onSelect(owner, name, kind); }}
+      onClose={() => showPalette = false}
+    />
+  {/if}
 {/if}
 
 <style>
