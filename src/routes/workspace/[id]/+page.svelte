@@ -35,6 +35,7 @@
   let info     = $state<WorkspaceInfo | null>(null);
   let schemas  = $state<SchemaNode[]>([]);
   let selected = $state<{ owner: string; name: string; kind: ObjectKind } | null>(null);
+  let navHistory = $state<Array<{ owner: string; name: string; kind: ObjectKind }>>([]);
   let details  = $state<Loadable<TableDetails>>({ kind: "idle" });
   let fatal    = $state<string | null>(null);
   let sessionLost = $state(false);
@@ -159,7 +160,7 @@
     void loadDataflow(owner, kind, name);
   }
 
-  function onSelect(owner: string, name: string, kind: ObjectKind): void {
+  function selectObject(owner: string, name: string, kind: ObjectKind): void {
     selected = { owner, name, kind };
     detailError = null;
     dataflow = null;
@@ -189,6 +190,18 @@
       return;
     }
     void loadDetails(owner, name, kind);
+  }
+
+  function onSelect(owner: string, name: string, kind: ObjectKind): void {
+    if (selected) navHistory = [...navHistory, { owner: selected.owner, name: selected.name, kind: selected.kind }];
+    selectObject(owner, name, kind);
+  }
+
+  function onBack(): void {
+    if (navHistory.length === 0) return;
+    const prev = navHistory[navHistory.length - 1];
+    navHistory = navHistory.slice(0, -1);
+    selectObject(prev.owner, prev.name, prev.kind);
   }
 
   function onRetryDetails(): void {
@@ -354,6 +367,9 @@
         dataflow={dataflow}
         dataflowLoading={dataflowLoading}
         dataflowError={dataflowError}
+        canGoBack={navHistory.length > 0}
+        backLabel={navHistory.length > 0 ? navHistory[navHistory.length - 1].name : undefined}
+        onBack={onBack}
         onNavigateDataflow={(owner, objectType, name) => onSelect(owner, name, objectType as ObjectKind)}
         onNavigate={(owner, kind, name) => onSelect(owner, name, kind as ObjectKind)}
         onViewDdl={async (owner, kind, name) => {

@@ -15,6 +15,9 @@
     dataflow?: DataFlowResult | null;
     dataflowLoading?: boolean;
     dataflowError?: string | null;
+    canGoBack?: boolean;
+    backLabel?: string;
+    onBack?: () => void;
     onNavigateDataflow?: (owner: string, objectType: string, name: string) => void;
     onNavigate?: (owner: string, kind: string, name: string) => void;
     onViewDdl?: (owner: string, kind: string, name: string) => void;
@@ -30,6 +33,9 @@
     dataflow = null,
     dataflowLoading = false,
     dataflowError = null,
+    canGoBack = false,
+    backLabel,
+    onBack,
     onNavigateDataflow,
     onNavigate,
     onViewDdl,
@@ -133,6 +139,16 @@
   {:else}
     <!-- Object header -->
     <div class="obj-header">
+      {#if canGoBack}
+        <div class="back-row">
+          <button class="back-btn" onclick={onBack} title="Go back">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+              <path d="M8 2L4 6l4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            {backLabel ?? "Back"}
+          </button>
+        </div>
+      {/if}
       <div class="obj-title-row">
         <span class="kind-chip" style="--kc:{kindColor(selected.kind)}">{kindLabel(selected.kind)}</span>
         <h2 class="obj-title">
@@ -647,6 +663,25 @@
     pointer-events: none;
     user-select: none;
   }
+
+  /* ── Back button ──────────────────────────────────────────── */
+  .back-row {
+    margin-bottom: 0.35rem;
+  }
+  .back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    background: transparent;
+    border: none;
+    padding: 0;
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 11px;
+    color: rgba(26,22,18,0.4);
+    cursor: pointer;
+    transition: color 0.12s;
+  }
+  .back-btn:hover { color: #b33e1f; }
 
   /* ── Object header ────────────────────────────────────────── */
   .obj-header {
