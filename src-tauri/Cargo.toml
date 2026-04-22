@@ -9,6 +9,13 @@ edition = "2021"
 name = "veesker_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+# Force the binary file to be "Veesker" (Title Case) so macOS Dock shows
+# the proper app name in `tauri dev` mode (no .app bundle is built in dev,
+# so the Dock falls back to the executable filename).
+[[bin]]
+name = "Veesker"
+path = "src/main.rs"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
