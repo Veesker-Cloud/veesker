@@ -11,8 +11,8 @@ export type QueryResult = {
 
 // Server-side discriminated union for multi-statement results.
 export type ServerStatementResult =
-  | { status: "ok"; statementIndex: number; sql: string; elapsedMs: number; columns: QueryColumn[]; rows: unknown[][]; rowCount: number }
-  | { status: "error"; statementIndex: number; sql: string; elapsedMs: number; error: { code: number; message: string } }
+  | { status: "ok"; statementIndex: number; sql: string; elapsedMs: number; columns: QueryColumn[]; rows: unknown[][]; rowCount: number; output: string[] | null }
+  | { status: "error"; statementIndex: number; sql: string; elapsedMs: number; error: { code: number; message: string }; output: string[] | null }
   | { status: "cancelled"; statementIndex: number; sql: string; elapsedMs: number };
 
 export type MultiQueryResult = { multi: true; results: ServerStatementResult[] };

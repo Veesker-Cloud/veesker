@@ -160,9 +160,9 @@ describe("sqlEditor.runActiveAll", () => {
       data: {
         multi: true,
         results: [
-          { status: "ok", statementIndex: 0, sql: "SELECT 1 FROM dual", elapsedMs: 1, columns: [{ name: "X", dataType: "NUMBER" }], rows: [[1]], rowCount: 1 },
-          { status: "ok", statementIndex: 1, sql: "SELECT 2 FROM dual", elapsedMs: 2, columns: [{ name: "Y", dataType: "NUMBER" }], rows: [[2]], rowCount: 1 },
-          { status: "ok", statementIndex: 2, sql: "SELECT 3 FROM dual", elapsedMs: 3, columns: [{ name: "Z", dataType: "NUMBER" }], rows: [[3]], rowCount: 1 },
+          { status: "ok", statementIndex: 0, sql: "SELECT 1 FROM dual", elapsedMs: 1, columns: [{ name: "X", dataType: "NUMBER" }], rows: [[1]], rowCount: 1, output: null },
+          { status: "ok", statementIndex: 1, sql: "SELECT 2 FROM dual", elapsedMs: 2, columns: [{ name: "Y", dataType: "NUMBER" }], rows: [[2]], rowCount: 1, output: null },
+          { status: "ok", statementIndex: 2, sql: "SELECT 3 FROM dual", elapsedMs: 3, columns: [{ name: "Z", dataType: "NUMBER" }], rows: [[3]], rowCount: 1, output: null },
         ],
       },
     });
@@ -182,8 +182,8 @@ describe("sqlEditor.runActiveAll", () => {
       data: {
         multi: true,
         results: [
-          { status: "ok", statementIndex: 0, sql: "INSERT INTO t VALUES(1)", elapsedMs: 1, columns: [], rows: [], rowCount: 1 },
-          { status: "ok", statementIndex: 1, sql: "SELECT * FROM t", elapsedMs: 2, columns: [{ name: "X", dataType: "NUMBER" }], rows: [[1]], rowCount: 1 },
+          { status: "ok", statementIndex: 0, sql: "INSERT INTO t VALUES(1)", elapsedMs: 1, columns: [], rows: [], rowCount: 1, output: null },
+          { status: "ok", statementIndex: 1, sql: "SELECT * FROM t", elapsedMs: 2, columns: [{ name: "X", dataType: "NUMBER" }], rows: [[1]], rowCount: 1, output: null },
         ],
       },
     });
@@ -203,8 +203,8 @@ describe("sqlEditor.runActiveAll", () => {
       data: {
         multi: true,
         results: [
-          { status: "ok", statementIndex: 0, sql: "SELECT 1 FROM dual", elapsedMs: 1, columns: [{ name: "X", dataType: "NUMBER" }], rows: [[1]], rowCount: 1 },
-          { status: "error", statementIndex: 1, sql: "SELECT * FROM nope", elapsedMs: 0, error: { code: -32013, message: "ORA-00942" } },
+          { status: "ok", statementIndex: 0, sql: "SELECT 1 FROM dual", elapsedMs: 1, columns: [{ name: "X", dataType: "NUMBER" }], rows: [[1]], rowCount: 1, output: null },
+          { status: "error", statementIndex: 1, sql: "SELECT * FROM nope", elapsedMs: 0, error: { code: -32013, message: "ORA-00942" }, output: null },
         ],
       },
     });

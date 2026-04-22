@@ -22,8 +22,21 @@
     return `✓ ${r.result.rowCount} affected · ${r.elapsedMs}ms`;
   }
 
-  function statusIcon(s: TabResult["status"]): string {
-    return s === "running" ? "⟳" : s === "ok" ? "✓" : s === "error" ? "✗" : "⏸";
+  function statusIcon(r: TabResult): string {
+    if (r.status === "running") return "⟳";
+    if (r.status === "ok" && r.dbmsOutput && r.dbmsOutput.length > 0) return "⊞";
+    if (r.status === "ok") return "✓";
+    if (r.status === "error") return "✗";
+    return "⏸";
+  }
+
+  let collapseState = $state(new Map<string, boolean>());
+  function isCollapsed(id: string): boolean {
+    return collapseState.get(id) ?? true;
+  }
+  function toggleCollapse(id: string): void {
+    collapseState.set(id, !isCollapsed(id));
+    collapseState = new Map(collapseState);
   }
 
   function selectRow(rid: string) {
@@ -77,11 +90,26 @@
             onclick={() => selectRow(r.id)}
             onkeydown={(e) => onRowKey(e, i)}
           >
-            <span class="icon" class:spin={r.status === "running"}>{statusIcon(r.status)}</span>
+            <span class="icon" class:spin={r.status === "running"}>{statusIcon(r)}</span>
             <span class="label">Statement {r.statementIndex + 1}</span>
             <span class="preview">{truncate(r.sqlPreview, 60)}</span>
             <span class="summary">{summary(r)}</span>
           </div>
+          {#if r.dbmsOutput && r.dbmsOutput.length > 0}
+            {@const collapsed = isCollapsed(r.id)}
+            {@const visible = collapsed ? r.dbmsOutput.slice(0, 5) : r.dbmsOutput}
+            {@const extra = r.dbmsOutput.length - 5}
+            <div class="dbms-output">
+              {#each visible as line}
+                <div class="dbms-line">{line}</div>
+              {/each}
+              {#if r.dbmsOutput.length > 5}
+                <button class="dbms-toggle" onclick={() => toggleCollapse(r.id)}>
+                  {collapsed ? `show ${extra} more` : "show less"}
+                </button>
+              {/if}
+            </div>
+          {/if}
         {/each}
       </div>
     {/if}
@@ -183,4 +211,7 @@
     white-space: nowrap;
   }
   .row.err .summary { color: #b33e1f; }
+  .dbms-output { padding: 2px 0 4px 24px; display: flex; flex-direction: column; gap: 1px; }
+  .dbms-line { font-family: monospace; font-size: 11px; color: #3a3028; white-space: pre-wrap; }
+  .dbms-toggle { background: none; border: none; color: #8a6e4c; font-size: 11px; cursor: pointer; padding: 0; text-align: left; }
 </style>
