@@ -4,10 +4,20 @@
   import ResultGrid from "./ResultGrid.svelte";
   import ExecutionLog from "./ExecutionLog.svelte";
   import QueryHistory from "./QueryHistory.svelte";
+  import CompileErrors from "./CompileErrors.svelte";
 
   // ── Refs ────────────────────────────────────────────────────────────────────
   let drawerEl: HTMLDivElement | undefined = $state();
   let tabbarEl: HTMLDivElement | undefined = $state();
+  let editorRef: SqlEditor | null = $state(null);
+
+  // ── Active result ────────────────────────────────────────────────────────────
+  const active = $derived(sqlEditor.active);
+  let activeTabResult = $derived(
+    active ? active.results.find((r) => r.id === active.activeResultId) ?? null : null
+  );
+
+  const COMPILABLE_RE = /^\s*CREATE\s+(OR\s+REPLACE\s+)?(PROCEDURE|FUNCTION|TRIGGER|PACKAGE(\s+BODY)?|TYPE(\s+BODY)?)\s/i;
 
   // ── Top drag handle (resizes drawer height) ──────────────────────────────
   let topDragStartY = 0;
@@ -136,6 +146,75 @@
         {/each}
         <button class="plus" aria-label="New query" onclick={() => sqlEditor.openBlank()}>+</button>
       </div>
+      <div class="file-actions">
+        <button
+          class="file-btn"
+          title="New query (⌘N)"
+          aria-label="New query"
+          onclick={() => sqlEditor.openBlank()}
+        >
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+            <path d="M2 1.5h5.5L11 5v6.5H2V1.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+            <path d="M7 1.5V5.5h4" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+            <line x1="4.5" y1="6.5" x2="8.5" y2="6.5" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
+            <line x1="4.5" y1="8.5" x2="7" y2="8.5" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
+          </svg>
+          New
+        </button>
+        <button
+          class="file-btn"
+          title="Open file (⌘O)"
+          aria-label="Open file"
+          onclick={() => void sqlEditor.openFromFile()}
+        >
+          <svg width="14" height="13" viewBox="0 0 14 13" fill="none" aria-hidden="true">
+            <path d="M1 4.5h4.5l1 1.5H13V11H1V4.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+            <path d="M1 4.5V2.5h3.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Open
+        </button>
+        <button
+          class="file-btn"
+          title="Save (⌘S)"
+          aria-label="Save"
+          onclick={() => void sqlEditor.saveActive()}
+        >
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+            <rect x="1.5" y="1.5" width="10" height="10" rx="1" stroke="currentColor" stroke-width="1.2"/>
+            <rect x="4" y="1.5" width="5" height="3.5" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/>
+            <rect x="3" y="7" width="7" height="3.5" rx="0.5" stroke="currentColor" stroke-width="1"/>
+            <line x1="7" y1="2" x2="7" y2="4.5" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
+          </svg>
+          Save
+        </button>
+        <button
+          class="file-btn"
+          title="Save as… (⌘⇧S)"
+          aria-label="Save as"
+          onclick={() => void sqlEditor.saveAsActive()}
+        >
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+            <rect x="1.5" y="1.5" width="10" height="10" rx="1" stroke="currentColor" stroke-width="1.2"/>
+            <rect x="4" y="1.5" width="5" height="3.5" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/>
+            <rect x="3" y="7" width="7" height="3.5" rx="0.5" stroke="currentColor" stroke-width="1"/>
+            <path d="M9.5 10l1.5-1.5-1.5-1.5" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Save As
+        </button>
+        {#if active && COMPILABLE_RE.test(active.sql)}
+          <button
+            class="file-btn compile-btn"
+            title="Compile (run and check for errors)"
+            aria-label="Compile"
+            onclick={() => void sqlEditor.runActiveAll()}
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
+              <polygon points="2,1 11,6 2,11"/>
+            </svg>
+            Compile
+          </button>
+        {/if}
+      </div>
       <button
         class="collapse"
         aria-label="Collapse drawer"
@@ -156,7 +235,9 @@
           <div class="editor-pane" style="flex: 0 0 {sqlEditor.editorRatio * 100}%">
             {#if tab}
               <SqlEditor
+                bind:this={editorRef}
                 value={tab.sql}
+                compileErrors={activeTabResult?.compileErrors ?? null}
                 onChange={(s) => sqlEditor.updateSql(tab.id, s)}
                 onRunCursor={(selection, cursorPos, docText) => {
                   if (selection !== null) {
@@ -171,6 +252,13 @@
               />
             {/if}
           </div>
+
+          {#if activeTabResult?.compileErrors?.length}
+            <CompileErrors
+              errors={activeTabResult.compileErrors}
+              onGoto={(line) => editorRef?.gotoLine(line)}
+            />
+          {/if}
 
           <!-- Middle resize handle -->
           <div
@@ -297,6 +385,30 @@
     border-radius: 3px;
   }
   .tab-close:hover { opacity: 1; background: rgba(0,0,0,0.1); }
+  .file-actions {
+    display: flex;
+    align-items: stretch;
+    border-left: 1px solid rgba(26, 22, 18, 0.08);
+    border-right: 1px solid rgba(26, 22, 18, 0.08);
+  }
+  .file-btn {
+    background: transparent;
+    border: none;
+    border-right: 1px solid rgba(26, 22, 18, 0.06);
+    padding: 0 0.6rem;
+    color: rgba(26, 22, 18, 0.65);
+    cursor: pointer;
+    font-size: 11px;
+    font-family: "Space Grotesk", sans-serif;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+  .file-btn:hover { background: rgba(26, 22, 18, 0.06); color: #1a1612; }
+  .file-btn svg { flex-shrink: 0; }
+  .compile-btn { color: #7a2a14; }
+  .compile-btn:hover { background: rgba(179, 62, 31, 0.08); color: #b33e1f; }
   .plus, .collapse, .history-toggle {
     background: transparent;
     border: none;
