@@ -15,6 +15,7 @@
     dataflowLoading?: boolean;
     dataflowError?: string | null;
     onNavigateDataflow?: (owner: string, objectType: string, name: string) => void;
+    onNavigate?: (owner: string, kind: string, name: string) => void;
   };
   let {
     selected,
@@ -28,6 +29,7 @@
     dataflowLoading = false,
     dataflowError = null,
     onNavigateDataflow,
+    onNavigate,
   }: Props = $props();
 
   type Tab = "overview" | "columns" | "indexes" | "related" | "dataflow";
@@ -334,7 +336,7 @@
                     <tr>
                       <td class="mono">{fk.constraintName}</td>
                       <td class="mono">{fk.columns}</td>
-                      <td class="mono bold">{fk.refOwner !== selected!.owner ? `${fk.refOwner}.` : ""}{fk.refTable}</td>
+                      <td><button class="nav-link" onclick={() => onNavigate?.(fk.refOwner, "TABLE", fk.refTable)}>{fk.refOwner !== selected!.owner ? `${fk.refOwner}.` : ""}{fk.refTable}</button></td>
                       <td class="mono">{fk.refColumns}</td>
                       <td><span class="badge-neutral">{fk.deleteRule}</span></td>
                     </tr>
@@ -362,7 +364,7 @@
                 <tbody>
                   {#each r.fksIn as fk (fk.constraintName)}
                     <tr>
-                      <td class="mono bold">{fk.fkOwner !== selected!.owner ? `${fk.fkOwner}.` : ""}{fk.fkTable}</td>
+                      <td><button class="nav-link" onclick={() => onNavigate?.(fk.fkOwner, "TABLE", fk.fkTable)}>{fk.fkOwner !== selected!.owner ? `${fk.fkOwner}.` : ""}{fk.fkTable}</button></td>
                       <td class="mono">{fk.constraintName}</td>
                       <td class="mono">{fk.columns}</td>
                       <td><span class="badge-neutral">{fk.deleteRule}</span></td>
@@ -398,9 +400,11 @@
                   <span class="dep-type-label">{type}</span>
                   <div class="dep-chips">
                     {#each items as d (d.owner + "." + d.name)}
-                      <span class="dep-chip">
-                        {d.owner !== selected!.owner ? `${d.owner}.` : ""}{d.name}
-                      </span>
+                      <button
+                        class="dep-chip"
+                        onclick={() => onNavigate?.(d.owner, d.type, d.name)}
+                        title="Open {d.owner}.{d.name}"
+                      >{d.owner !== selected!.owner ? `${d.owner}.` : ""}{d.name}</button>
                     {/each}
                   </div>
                 </div>
@@ -948,7 +952,28 @@
     background: rgba(74,158,218,0.07);
     border: 1px solid rgba(74,158,218,0.15);
     border-radius: 4px;
-    padding: 1px 7px;
+    padding: 2px 8px;
     white-space: nowrap;
+    cursor: pointer;
+    transition: background 0.1s, border-color 0.1s;
   }
+  .dep-chip:hover {
+    background: rgba(74,158,218,0.15);
+    border-color: rgba(74,158,218,0.35);
+  }
+  .nav-link {
+    font-family: "JetBrains Mono", "SF Mono", monospace;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #4a9eda;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-color: rgba(74,158,218,0.35);
+    text-underline-offset: 2px;
+    transition: color 0.1s;
+  }
+  .nav-link:hover { color: #2980b9; }
 </style>

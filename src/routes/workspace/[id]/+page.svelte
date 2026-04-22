@@ -336,6 +336,7 @@
         dataflowLoading={dataflowLoading}
         dataflowError={dataflowError}
         onNavigateDataflow={(owner, objectType, name) => onSelect(owner, name, objectType as ObjectKind)}
+        onNavigate={(owner, kind, name) => onSelect(owner, name, kind as ObjectKind)}
       />
     </div>
     <SqlDrawer />
