@@ -58,6 +58,9 @@
   />
 </svelte:head>
 
+<div class="watermark" aria-hidden="true">
+  <img src="/veesker-logo.png" alt="" width="340" height="340" />
+</div>
 <main>
   <header>
     <div class="brand">
@@ -194,6 +197,16 @@
     color: #1a1612;
     font-family: "Inter", -apple-system, system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
+  }
+
+  .watermark {
+    position: fixed;
+    bottom: 6%;
+    right: 8%;
+    pointer-events: none;
+    user-select: none;
+    opacity: 0.055;
+    filter: grayscale(1);
   }
 
   main {
