@@ -298,6 +298,21 @@ pub async fn table_describe(
 }
 
 #[tauri::command]
+pub async fn table_related(
+    app: AppHandle,
+    owner: String,
+    name: String,
+) -> Result<Value, ConnectionTestErr> {
+    let res = call_sidecar(
+        &app,
+        "table.related",
+        json!({ "owner": owner, "name": name }),
+    )
+    .await?;
+    Ok(res)
+}
+
+#[tauri::command]
 pub async fn query_execute(
     app: AppHandle,
     sql: String,

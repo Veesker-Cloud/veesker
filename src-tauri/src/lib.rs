@@ -39,6 +39,7 @@ pub fn run() {
             commands::schema_list,
             commands::objects_list,
             commands::table_describe,
+            commands::table_related,
             commands::query_execute,
             commands::query_cancel,
             commands::history_list,

@@ -22,6 +22,21 @@ export type TableDetails = {
   rowCount: number | null;
 };
 
+export type TriggerRef     = { name: string; triggerType: string; event: string; status: string; forEach: string };
+export type FkOutgoing     = { constraintName: string; columns: string; refOwner: string; refTable: string; refColumns: string; deleteRule: string };
+export type FkIncoming     = { fkOwner: string; fkTable: string; constraintName: string; columns: string; deleteRule: string };
+export type Dependent      = { owner: string; name: string; type: string };
+export type CheckConstraint= { name: string; columns: string; condition: string; type: string; status: string };
+export type TableGrant     = { grantor: string; grantee: string; privilege: string; grantable: string };
+export type TableRelated   = {
+  triggers:    TriggerRef[];
+  fksOut:      FkOutgoing[];
+  fksIn:       FkIncoming[];
+  dependents:  Dependent[];
+  constraints: CheckConstraint[];
+  grants:      TableGrant[];
+};
+
 export type WorkspaceError = { code: number; message: string };
 
 export type Result<T> =
@@ -53,6 +68,8 @@ export const objectsList    = (owner: string, kind: ObjectKind) =>
   call<ObjectRef[]>("objects_list", { owner, kind });
 export const tableDescribe  = (owner: string, name: string) =>
   call<TableDetails>("table_describe", { owner, name });
+export const tableRelated   = (owner: string, name: string) =>
+  call<TableRelated>("table_related", { owner, name });
 
 export const NO_ACTIVE_SESSION = -32010;
 export const SESSION_LOST      = -32011;
