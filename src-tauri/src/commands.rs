@@ -363,3 +363,90 @@ pub async fn history_clear(
     let svc = app.state::<ConnectionService>();
     svc.history_clear(&connection_id)
 }
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObjectRefWithStatus {
+    pub name: String,
+    pub status: String,
+}
+
+#[tauri::command]
+pub async fn objects_list_plsql(
+    app: AppHandle,
+    owner: String,
+    kind: String,
+) -> Result<Vec<ObjectRefWithStatus>, ConnectionTestErr> {
+    let res = call_sidecar(
+        &app,
+        "objects.list.plsql",
+        json!({ "owner": owner, "kind": kind }),
+    )
+    .await?;
+    let arr = res.get("objects").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+    let objects = arr
+        .into_iter()
+        .filter_map(|v| {
+            Some(ObjectRefWithStatus {
+                name: v.get("name")?.as_str()?.to_string(),
+                status: v.get("status")?.as_str()?.to_string(),
+            })
+        })
+        .collect();
+    Ok(objects)
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompileErrorRow {
+    pub line: i64,
+    pub position: i64,
+    pub text: String,
+}
+
+#[tauri::command]
+pub async fn compile_errors_get(
+    app: AppHandle,
+    object_type: String,
+    object_name: String,
+) -> Result<Vec<CompileErrorRow>, ConnectionTestErr> {
+    let res = call_sidecar(
+        &app,
+        "compile.errors",
+        json!({ "objectType": object_type, "objectName": object_name }),
+    )
+    .await?;
+    let arr = res.get("errors").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+    let errors = arr
+        .into_iter()
+        .filter_map(|v| {
+            Some(CompileErrorRow {
+                line: v.get("line")?.as_i64()?,
+                position: v.get("position")?.as_i64()?,
+                text: v.get("text")?.as_str()?.to_string(),
+            })
+        })
+        .collect();
+    Ok(errors)
+}
+
+#[tauri::command]
+pub async fn object_ddl_get(
+    app: AppHandle,
+    owner: String,
+    object_type: String,
+    object_name: String,
+) -> Result<String, ConnectionTestErr> {
+    let res = call_sidecar(
+        &app,
+        "object.ddl",
+        json!({ "owner": owner, "objectType": object_type, "objectName": object_name }),
+    )
+    .await?;
+    let ddl = res
+        .get("ddl")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    Ok(ddl)
+}
