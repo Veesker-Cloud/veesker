@@ -333,7 +333,7 @@
 <style>
   :global(body) {
     margin: 0;
-    background: #f6f1e8;
+    background: #18140f;
     color: #1a1612;
     font-family: "Inter", -apple-system, system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
@@ -348,6 +348,7 @@
     display: flex;
     flex: 1;
     min-height: 0;
+    background: #faf7f2;
   }
   .fatal {
     max-width: 480px;

@@ -315,21 +315,22 @@
   .strip {
     height: 28px;
     width: 100%;
-    background: #f6f1e8;
+    background: #1e1a16;
     border: none;
-    border-top: 1px solid rgba(26, 22, 18, 0.1);
-    color: rgba(26, 22, 18, 0.7);
+    border-top: 1px solid rgba(255,255,255,0.06);
+    color: rgba(255,255,255,0.4);
     font-family: "Space Grotesk", sans-serif;
     font-size: 11px;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.08em;
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 0 1rem;
     cursor: pointer;
+    transition: background 0.1s, color 0.1s;
   }
-  .strip:hover { background: #f0e8da; }
+  .strip:hover { background: #252018; color: rgba(255,255,255,0.7); }
 
   /* ── Top resize handle ─────────────────────────────────────────────────── */
   .top-handle {
@@ -351,16 +352,17 @@
   .drawer {
     min-height: 120px;
     background: #fff;
-    border-top: 2px solid #b33e1f;
+    border-top: 1px solid rgba(179, 62, 31, 0.5);
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    box-shadow: 0 -2px 12px rgba(0,0,0,0.08);
   }
   .tabbar {
     display: flex;
     align-items: stretch;
-    background: #f6f1e8;
-    border-bottom: 1px solid rgba(26, 22, 18, 0.1);
+    background: #1e1a16;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
   }
   .tabs {
     display: flex;
@@ -371,56 +373,55 @@
     display: flex;
     align-items: center;
     gap: 0.4rem;
-    padding: 0.4rem 0.7rem;
-    border-right: 1px solid rgba(26, 22, 18, 0.08);
+    padding: 0.4rem 0.85rem;
+    border-right: 1px solid rgba(255,255,255,0.05);
     background: transparent;
     cursor: pointer;
     font-size: 11.5px;
     font-family: "Space Grotesk", sans-serif;
-    color: rgba(26, 22, 18, 0.7);
+    color: rgba(255,255,255,0.45);
     user-select: none;
+    transition: background 0.1s, color 0.1s;
   }
-  .tab:hover { background: rgba(26, 22, 18, 0.04); }
+  .tab:hover { background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.75); }
   .tab.active {
-    background: #b33e1f;
+    background: rgba(255,255,255,0.08);
     color: #f6f1e8;
+    border-bottom: 2px solid #b33e1f;
+    margin-bottom: -1px;
   }
   .tab-spinner {
     width: 8px; height: 8px;
-    border: 1.5px solid rgba(26, 22, 18, 0.2);
-    border-top-color: #b33e1f;
+    border: 1.5px solid rgba(255,255,255,0.15);
+    border-top-color: rgba(255,255,255,0.6);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
-  }
-  .tab.active .tab-spinner {
-    border-color: rgba(246, 241, 232, 0.3);
-    border-top-color: #f6f1e8;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
   .tab-close {
     background: transparent;
     border: none;
     color: inherit;
-    opacity: 0.6;
+    opacity: 0.5;
     cursor: pointer;
     font-size: 14px;
     line-height: 1;
-    padding: 0 0.15rem;
+    padding: 0 0.1rem;
     border-radius: 3px;
   }
-  .tab-close:hover { opacity: 1; background: rgba(0,0,0,0.1); }
+  .tab-close:hover { opacity: 1; background: rgba(255,255,255,0.1); }
   .file-actions {
     display: flex;
     align-items: stretch;
-    border-left: 1px solid rgba(26, 22, 18, 0.08);
-    border-right: 1px solid rgba(26, 22, 18, 0.08);
+    border-left: 1px solid rgba(255,255,255,0.06);
+    border-right: 1px solid rgba(255,255,255,0.06);
   }
   .file-btn {
     background: transparent;
     border: none;
-    border-right: 1px solid rgba(26, 22, 18, 0.06);
+    border-right: 1px solid rgba(255,255,255,0.04);
     padding: 0 0.6rem;
-    color: rgba(26, 22, 18, 0.65);
+    color: rgba(255,255,255,0.45);
     cursor: pointer;
     font-size: 11px;
     font-family: "Space Grotesk", sans-serif;
@@ -428,21 +429,22 @@
     display: flex;
     align-items: center;
     gap: 0.3rem;
+    transition: background 0.1s, color 0.1s;
   }
-  .file-btn:hover { background: rgba(26, 22, 18, 0.06); color: #1a1612; }
+  .file-btn:hover { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.85); }
   .file-btn svg { flex-shrink: 0; }
-  .compile-btn { color: #7a2a14; }
-  .compile-btn:hover { background: rgba(179, 62, 31, 0.08); color: #b33e1f; }
+  .compile-btn { color: #f5a08a; }
+  .compile-btn:hover { background: rgba(179, 62, 31, 0.2); color: #f5a08a; }
   .txn-actions {
     display: flex;
     align-items: stretch;
-    border-left: 1px solid rgba(26, 22, 18, 0.08);
-    border-right: 1px solid rgba(26, 22, 18, 0.08);
+    border-left: 1px solid rgba(255,255,255,0.06);
+    border-right: 1px solid rgba(255,255,255,0.06);
   }
   .txn-btn {
     background: transparent;
     border: none;
-    border-right: 1px solid rgba(26, 22, 18, 0.06);
+    border-right: 1px solid rgba(255,255,255,0.04);
     padding: 0 0.6rem;
     cursor: pointer;
     font-size: 11px;
@@ -451,25 +453,30 @@
     display: flex;
     align-items: center;
     gap: 0.3rem;
+    transition: background 0.1s, color 0.1s;
   }
-  .commit-btn { color: #1a6b2e; }
-  .commit-btn:hover { background: rgba(26, 107, 46, 0.08); color: #14522a; }
-  .rollback-btn { color: #7a2a14; }
-  .rollback-btn:hover { background: rgba(122, 42, 20, 0.08); color: #5c1e0f; }
+  .commit-btn { color: #7ec96a; }
+  .commit-btn:hover { background: rgba(126,201,106,0.12); color: #7ec96a; }
+  .rollback-btn { color: #f5a08a; }
+  .rollback-btn:hover { background: rgba(245,160,138,0.12); color: #f5a08a; }
   .plus, .collapse, .history-toggle {
     background: transparent;
     border: none;
     padding: 0 0.7rem;
-    color: rgba(26, 22, 18, 0.6);
+    color: rgba(255,255,255,0.35);
     cursor: pointer;
     font-size: 14px;
     font-family: "Space Grotesk", sans-serif;
+    transition: background 0.1s, color 0.1s;
   }
-  .plus:hover, .collapse:hover, .history-toggle:hover { background: rgba(26, 22, 18, 0.06); color: #1a1612; }
+  .plus:hover, .collapse:hover, .history-toggle:hover {
+    background: rgba(255,255,255,0.06);
+    color: rgba(255,255,255,0.8);
+  }
   .history-toggle {
     font-size: 10px;
     padding: 0 0.6rem;
-    border-right: 1px solid rgba(26, 22, 18, 0.08);
+    border-right: 1px solid rgba(255,255,255,0.05);
   }
 
   /* ── 3-pane body layout ─────────────────────────────────────────────────── */

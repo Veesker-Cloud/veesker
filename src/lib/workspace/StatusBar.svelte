@@ -9,86 +9,167 @@
     onDisconnect: () => void;
   };
   let { connectionName, userLabel, schema, serverVersion, onDisconnect }: Props = $props();
+
+  // Shorten version: "Oracle AI Database 26ai Free Release 23.26.1.0.0 – ..." → "23.26.1.0.0"
+  const shortVersion = $derived(() => {
+    const m = serverVersion.match(/(\d+\.\d+[\d.]*)/);
+    return m ? m[1] : serverVersion.split(" ").slice(0, 3).join(" ");
+  });
 </script>
 
 <div class="bar">
-  <span class="dot" aria-hidden="true"></span>
-  <strong>{connectionName}</strong>
-  <span class="sep">·</span>
-  <span class="meta">{userLabel}/{schema}</span>
-  <span class="sep">·</span>
-  <span class="meta">{serverVersion}</span>
-  <button
-    class="sql-toggle"
-    class:active={sqlEditor.drawerOpen}
-    aria-label="Toggle SQL drawer"
-    title="Toggle SQL drawer (⌘J)"
-    onclick={() => sqlEditor.toggleDrawer()}
-  >
-    SQL
-  </button>
-  <button class="disconnect" onclick={onDisconnect}>Disconnect</button>
+  <!-- Left: connection identity -->
+  <div class="bar-left">
+    <span class="conn-dot" aria-label="Connected"></span>
+    <span class="conn-name">{connectionName}</span>
+    <span class="divider" aria-hidden="true"></span>
+    <svg class="icon" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+      <ellipse cx="6" cy="4" rx="4.5" ry="1.8" stroke="currentColor" stroke-width="1.1"/>
+      <path d="M1.5 4v4c0 1 2 1.8 4.5 1.8S10.5 9 10.5 8V4" stroke="currentColor" stroke-width="1.1"/>
+    </svg>
+    <span class="meta">{schema}</span>
+    <span class="divider" aria-hidden="true"></span>
+    <svg class="icon" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+      <circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.1"/>
+      <line x1="6" y1="3" x2="6" y2="6.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+      <circle cx="6" cy="8" r="0.6" fill="currentColor"/>
+    </svg>
+    <span class="meta version" title={serverVersion}>{shortVersion()}</span>
+  </div>
+
+  <!-- Right: actions -->
+  <div class="bar-right">
+    <button
+      class="action-btn sql-btn"
+      class:active={sqlEditor.drawerOpen}
+      aria-label="Toggle SQL drawer (⌘J)"
+      title="Toggle SQL drawer (⌘J)"
+      onclick={() => sqlEditor.toggleDrawer()}
+    >
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+        <path d="M1.5 3.5l3 2.5-3 2.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <line x1="6" y1="8.5" x2="10.5" y2="8.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+      </svg>
+      SQL
+    </button>
+    <button
+      class="action-btn disconnect-btn"
+      aria-label="Disconnect"
+      title="Disconnect"
+      onclick={onDisconnect}
+    >
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+        <path d="M5 2H2a.5.5 0 00-.5.5v7A.5.5 0 002 10h3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+        <path d="M8 4l2.5 2L8 8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+        <line x1="4.5" y1="6" x2="10.5" y2="6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+      </svg>
+      Disconnect
+    </button>
+  </div>
 </div>
 
 <style>
   .bar {
-    background: #1a1612;
-    color: #f6f1e8;
-    padding: 0.5rem 1rem;
+    background: #100e0b;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    color: rgba(255,255,255,0.75);
+    padding: 0 0.85rem;
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    font-size: 12px;
-    font-family: "Inter", -apple-system, system-ui, sans-serif;
-    height: 36px;
+    justify-content: space-between;
+    height: 38px;
     box-sizing: border-box;
+    font-family: "Inter", -apple-system, system-ui, sans-serif;
+    font-size: 12px;
+    flex-shrink: 0;
   }
-  .dot {
-    width: 8px;
-    height: 8px;
+
+  /* ── Left cluster ─────────────────────────────────────────── */
+  .bar-left {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    overflow: hidden;
+    min-width: 0;
+  }
+  .conn-dot {
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
     background: #7ec96a;
-    display: inline-block;
+    box-shadow: 0 0 5px rgba(126,201,106,0.5);
+    flex-shrink: 0;
   }
-  strong { font-weight: 600; }
-  .sep { opacity: 0.4; }
+  .conn-name {
+    font-family: "Space Grotesk", sans-serif;
+    font-weight: 600;
+    font-size: 12.5px;
+    color: #f6f1e8;
+    white-space: nowrap;
+  }
+  .divider {
+    width: 1px;
+    height: 14px;
+    background: rgba(255,255,255,0.12);
+    flex-shrink: 0;
+    margin: 0 0.1rem;
+  }
+  .icon {
+    color: rgba(255,255,255,0.35);
+    flex-shrink: 0;
+  }
   .meta {
-    opacity: 0.75;
     font-family: "JetBrains Mono", "SF Mono", monospace;
     font-size: 11px;
+    color: rgba(255,255,255,0.55);
+    white-space: nowrap;
   }
-  .sql-toggle {
-    margin-left: auto;
-    background: transparent;
-    border: 1px solid rgba(246, 241, 232, 0.25);
-    color: #f6f1e8;
+  .version {
+    font-size: 10.5px;
+    color: rgba(255,255,255,0.35);
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: default;
+  }
+
+  /* ── Right cluster ────────────────────────────────────────── */
+  .bar-right {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-shrink: 0;
+  }
+  .action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 5px;
+    color: rgba(255,255,255,0.65);
     font-family: "Space Grotesk", sans-serif;
     font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
+    font-weight: 500;
+    letter-spacing: 0.03em;
     padding: 0.25rem 0.6rem;
-    border-radius: 4px;
     cursor: pointer;
+    transition: background 0.12s, color 0.12s, border-color 0.12s;
   }
-  .sql-toggle:hover { background: rgba(246, 241, 232, 0.08); }
-  .sql-toggle.active {
+  .action-btn:hover {
+    background: rgba(255,255,255,0.12);
+    color: rgba(255,255,255,0.9);
+    border-color: rgba(255,255,255,0.18);
+  }
+  .sql-btn.active {
     background: #b33e1f;
     border-color: #b33e1f;
+    color: #fff;
   }
-  .disconnect {
-    background: transparent;
-    border: 1px solid rgba(246, 241, 232, 0.25);
-    color: #f6f1e8;
-    font-family: "Space Grotesk", sans-serif;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    padding: 0.25rem 0.6rem;
-    border-radius: 4px;
-    cursor: pointer;
-  }
-  .disconnect:hover {
-    background: #b33e1f;
-    border-color: #b33e1f;
+  .sql-btn.active:hover { background: #c94b28; }
+  .disconnect-btn:hover {
+    background: rgba(179, 62, 31, 0.25);
+    border-color: rgba(179, 62, 31, 0.5);
+    color: #f5a08a;
   }
 </style>
