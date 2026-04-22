@@ -15,6 +15,8 @@ function makeResult(partial: Partial<TabResult> = {}): TabResult {
     result: null,
     error: null,
     elapsedMs: 0,
+    dbmsOutput: null,
+    compileErrors: null,
     ...partial,
   };
 }

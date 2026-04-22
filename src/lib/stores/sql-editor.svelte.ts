@@ -4,6 +4,12 @@ import { splitSql } from "$lib/sql-splitter";
 import { historySave, type HistoryEntry } from "$lib/query-history";
 import { saveAs, saveExisting, openFile } from "$lib/sql-files";
 
+export type CompileError = {
+  line: number;
+  position: number;
+  text: string;
+};
+
 export type TabResult = {
   id: string;                         // crypto.randomUUID for selection stability
   statementIndex: number;             // 0-based; for display as "Statement N+1"
@@ -12,6 +18,8 @@ export type TabResult = {
   result: QueryResult | null;
   error: { code: number; message: string } | null;
   elapsedMs: number;                  // 0 while running
+  dbmsOutput: string[] | null;        // null = not captured; [] = enabled but nothing printed
+  compileErrors: CompileError[] | null; // null = not a compilable stmt; [] = clean
 };
 
 export type SqlTab = {
@@ -312,6 +320,8 @@ export const sqlEditor = {
         result: res.ok ? res.data : null,
         error: res.ok ? null : res.error,
         elapsedMs: res.ok ? res.data.elapsedMs : 0,
+        dbmsOutput: null,
+        compileErrors: null,
       };
       tab.results = [tabResult];
       tab.activeResultId = resultId;
@@ -363,6 +373,8 @@ export const sqlEditor = {
             result: null,
             error: res.error ?? { code: -32000, message: errMsg },
             elapsedMs: 0,
+            dbmsOutput: null,
+            compileErrors: null,
           };
           tab.results = [errResult];
           tab.activeResultId = errResult.id;
@@ -382,6 +394,8 @@ export const sqlEditor = {
             result: { columns: sr.columns, rows: sr.rows, rowCount: sr.rowCount, elapsedMs: sr.elapsedMs },
             error: null,
             elapsedMs: sr.elapsedMs,
+            dbmsOutput: sr.output ?? null,
+            compileErrors: null,
           };
         } else if (sr.status === "error") {
           return {
@@ -392,6 +406,8 @@ export const sqlEditor = {
             result: null,
             error: sr.error,
             elapsedMs: sr.elapsedMs,
+            dbmsOutput: sr.output ?? null,
+            compileErrors: null,
           };
         } else {
           // cancelled
@@ -403,6 +419,8 @@ export const sqlEditor = {
             result: null,
             error: null,
             elapsedMs: sr.elapsedMs,
+            dbmsOutput: null,
+            compileErrors: null,
           };
         }
       });
@@ -441,6 +459,8 @@ export const sqlEditor = {
         result: res.ok ? res.data : null,
         error: res.ok ? null : res.error,
         elapsedMs: res.ok ? res.data.elapsedMs : 0,
+        dbmsOutput: null,
+        compileErrors: null,
       };
       tab.results = [tabResult];
       tab.activeResultId = resultId;
@@ -516,6 +536,8 @@ export const sqlEditor = {
         result: res.ok ? res.data : null,
         error: res.ok ? null : res.error,
         elapsedMs: res.ok ? res.data.elapsedMs : 0,
+        dbmsOutput: null,
+        compileErrors: null,
       };
       tab.results = [tabResult];
       tab.activeResultId = resultId;
