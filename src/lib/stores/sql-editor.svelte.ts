@@ -70,8 +70,18 @@ function loadEditorRatio(): number {
   return 0.35;
 }
 
+function loadLogCollapsed(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const raw = localStorage.getItem("veesker.sql.logCollapsed");
+    if (raw !== null) return raw === "true";
+  } catch { /* Safari private mode */ }
+  return false;
+}
+
 let _drawerHeight = $state<number>(loadDrawerHeight());
 let _editorRatio = $state<number>(loadEditorRatio());
+let _logCollapsed = $state<boolean>(loadLogCollapsed());
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -159,6 +169,25 @@ export const sqlEditor = {
     } catch {
       // Safari private mode or restricted environment
     }
+  },
+
+  // ── Log collapsed ──────────────────────────────────────────────────────────
+  get logCollapsed() { return _logCollapsed; },
+  toggleLog(): void {
+    _logCollapsed = !_logCollapsed;
+    try {
+      if (typeof window !== "undefined") {
+        localStorage.setItem("veesker.sql.logCollapsed", String(_logCollapsed));
+      }
+    } catch { /* Safari private mode */ }
+  },
+
+  setActiveResult(tabId: string, resultId: string): void {
+    const tab = findTab(tabId);
+    if (tab === null) return;
+    const exists = tab.results.some((r) => r.id === resultId);
+    if (!exists) return;
+    tab.activeResultId = resultId;
   },
 
   openBlank(): void {
@@ -447,5 +476,6 @@ export const sqlEditor = {
     _activeId = null;
     _drawerOpen = false;
     _queryCounter = 0;
+    _logCollapsed = false;
   },
 };

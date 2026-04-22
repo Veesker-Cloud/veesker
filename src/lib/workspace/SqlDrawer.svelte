@@ -2,6 +2,7 @@
   import { sqlEditor } from "$lib/stores/sql-editor.svelte";
   import SqlEditor from "./SqlEditor.svelte";
   import ResultGrid from "./ResultGrid.svelte";
+  import ExecutionLog from "./ExecutionLog.svelte";
 
   // ── Refs ────────────────────────────────────────────────────────────────────
   let drawerEl: HTMLDivElement | undefined = $state();
@@ -171,7 +172,12 @@
       ></div>
 
       <div class="grid-pane" style="flex: 1 1 auto">
-        <ResultGrid {tab} onCancel={() => void sqlEditor.cancelActive()} />
+        {#if tab}
+          <ExecutionLog {tab} />
+        {/if}
+        <div class="grid-host">
+          <ResultGrid {tab} onCancel={() => void sqlEditor.cancelActive()} />
+        </div>
       </div>
     {/if}
   </div>
@@ -315,5 +321,14 @@
   .grid-pane {
     min-height: 80px;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .grid-host {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
   }
 </style>
