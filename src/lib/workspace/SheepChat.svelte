@@ -37,7 +37,6 @@
   async function send() {
     const text = input.trim();
     if (!text || loading) return;
-    if (!apiKey) { showSettings = true; return; }
 
     input = "";
     error = null;
@@ -128,12 +127,14 @@
       <input
         class="settings-input"
         type="password"
-        placeholder="sk-ant-..."
+        placeholder="sk-ant-… (leave empty to use ANTHROPIC_API_KEY env var)"
         bind:value={apiKey}
         onkeydown={(e) => e.key === "Enter" && saveKey()}
       />
       <div class="settings-row">
-        <span class="settings-hint">Used for Claude Haiku — stored locally in browser</span>
+        <span class="settings-hint">
+          {apiKey ? "Stored in browser localStorage" : "Will use ANTHROPIC_API_KEY from environment"}
+        </span>
         <button class="save-btn" onclick={saveKey}>Save</button>
       </div>
     </div>
@@ -195,7 +196,7 @@
   <div class="input-row">
     <textarea
       class="chat-input"
-      placeholder={apiKey ? "Ask the sheep…" : "Set API key first (⚙)"}
+      placeholder="Ask the sheep…"
       bind:value={input}
       onkeydown={onKeydown}
       rows={1}

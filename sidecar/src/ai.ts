@@ -127,7 +127,9 @@ ${ctxLines.length > 0 ? "\n[Current IDE context]\n" + ctxLines.join("\n") : ""}`
 }
 
 export async function aiChat(params: AiChatParams): Promise<AiChatResult> {
-  const client = new Anthropic({ apiKey: params.apiKey });
+  const key = params.apiKey || process.env.ANTHROPIC_API_KEY;
+  if (!key) throw new Error("No API key — set ANTHROPIC_API_KEY or enter one in the AI settings panel");
+  const client = new Anthropic({ apiKey: key });
 
   const messages: Anthropic.MessageParam[] = params.messages.map((m) => ({
     role: m.role,
