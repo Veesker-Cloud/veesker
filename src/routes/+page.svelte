@@ -48,17 +48,7 @@
 <main>
   <header>
     <div class="brand">
-      <svg width="32" height="32" viewBox="0 0 28 28" aria-hidden="true">
-        <circle cx="4" cy="4" r="2" fill="rgba(179,62,31,0.4)" />
-        <circle cx="14" cy="4" r="2" fill="rgba(179,62,31,0.4)" />
-        <circle cx="24" cy="4" r="2" fill="rgba(179,62,31,0.4)" />
-        <circle cx="4" cy="14" r="2" fill="rgba(179,62,31,0.4)" />
-        <circle cx="14" cy="14" r="2.8" fill="#B33E1F" />
-        <circle cx="24" cy="14" r="2" fill="rgba(179,62,31,0.4)" />
-        <circle cx="4" cy="24" r="2" fill="rgba(179,62,31,0.4)" />
-        <circle cx="14" cy="24" r="2" fill="rgba(179,62,31,0.4)" />
-        <circle cx="24" cy="24" r="2" fill="rgba(179,62,31,0.4)" />
-      </svg>
+      <img class="logo" src="/veesker-logo.png" alt="" width="48" height="48" />
       <h1>veesker</h1>
     </div>
     <p class="tagline">connections</p>
@@ -129,7 +119,13 @@
   .brand {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.85rem;
+  }
+  .logo {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    display: block;
   }
   h1 {
     font-family: "Space Grotesk", sans-serif;
