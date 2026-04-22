@@ -416,6 +416,13 @@ export type ServerStatementResult =
 
 export type MultiQueryResult = { multi: true; results: ServerStatementResult[] };
 
+// oracledb thin mode detects statement type by first keyword (case-sensitive in some versions).
+// Passing outFormat/maxRows also signals "this is a query" and can cause the driver to strip
+// the trailing `;` from PL/SQL anonymous blocks, producing ORA-06550. Avoid both problems
+// by using empty options for any PL/SQL statement.
+const PLSQL_EXEC_RE =
+  /^\s*(?:BEGIN|DECLARE|CREATE\s+(?:OR\s+REPLACE\s+)?(?:FUNCTION|PROCEDURE|TRIGGER|PACKAGE(?:\s+BODY)?|TYPE(?:\s+BODY)?))\b/i;
+
 /** Run a single statement against the active session; returns QueryResult. */
 async function executeSingleStatement(
   conn: oracledb.Connection,
@@ -424,11 +431,13 @@ async function executeSingleStatement(
 ): Promise<QueryResult> {
   const started = Date.now();
   let r: any;
+  const isPlsql = PLSQL_EXEC_RE.test(sql);
   try {
-    r = await conn.execute(sql, [], {
-      maxRows: 100,
-      outFormat: oracledb.OUT_FORMAT_ARRAY,
-    });
+    r = await conn.execute(
+      sql,
+      [],
+      isPlsql ? {} : { maxRows: 100, outFormat: oracledb.OUT_FORMAT_ARRAY }
+    );
   } catch (execErr) {
     if (_running?.requestId === requestId && _running.cancelled && isCancelError(execErr)) {
       throw new RpcCodedError(QUERY_CANCELLED, "Cancelled by user");
