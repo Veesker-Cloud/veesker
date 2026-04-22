@@ -1043,7 +1043,64 @@ export async function schemaKindCounts(p: {
   });
 }
 
-// ── Vector Search (Oracle 23ai+) ────────────────────────────────────────────
+// ── Vector Similarity Search (Oracle 23ai+) ──────────────────────────────────
+
+export type VectorSearchResult = {
+  columns: Array<{ name: string }>;
+  rows: unknown[][];
+  scores: number[];
+};
+
+export async function vectorSimilaritySearch(p: {
+  owner: string;
+  tableName: string;
+  columnName: string;
+  vector: number[];
+  distanceMetric: "COSINE" | "EUCLIDEAN" | "DOT";
+  limit: number;
+}): Promise<VectorSearchResult> {
+  return withActiveSession(async (conn) => {
+    const vecStr = `[${p.vector.join(",")}]`;
+    const metric = ["COSINE", "EUCLIDEAN", "DOT"].includes(p.distanceMetric)
+      ? p.distanceMetric
+      : "COSINE";
+    const limit = Math.min(Math.max(1, p.limit), 100);
+
+    // Fetch column names (excluding the VECTOR column itself)
+    const colRes = await conn.execute<{ COLUMN_NAME: string }>(
+      `SELECT column_name FROM all_tab_columns
+        WHERE owner = :owner AND table_name = :tbl
+          AND data_type != 'VECTOR'
+        ORDER BY column_id`,
+      { owner: p.owner, tbl: p.tableName },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT }
+    );
+    const dataCols = (colRes.rows ?? []).map((r) => r.COLUMN_NAME);
+    const colList = dataCols.length > 0
+      ? dataCols.map((c) => `t."${c}"`).join(", ")
+      : "t.ROWID";
+
+    const sql = `
+      SELECT ${colList},
+             VECTOR_DISTANCE(t."${p.columnName}", TO_VECTOR(:vecStr), ${metric}) AS VD_SCORE
+        FROM "${p.owner}"."${p.tableName}" t
+       ORDER BY VECTOR_DISTANCE(t."${p.columnName}", TO_VECTOR(:vecStr), ${metric})
+       FETCH FIRST ${limit} ROWS ONLY`;
+
+    const res = await conn.execute<unknown[]>(sql, { vecStr }, {
+      outFormat: oracledb.OUT_FORMAT_ARRAY,
+    });
+
+    const metaCols = (res.metaData ?? []).map((m) => ({ name: m.name }));
+    const rows = (res.rows ?? []) as unknown[][];
+    const scoreIdx = metaCols.findIndex((c) => c.name === "VD_SCORE");
+    const scores = rows.map((r) => (scoreIdx >= 0 ? Number(r[scoreIdx]) : 0));
+
+    return { columns: metaCols, rows, scores };
+  });
+}
+
+// ── Vector metadata ───────────────────────────────────────────────────────────
 
 export type VectorColumnRef = { tableName: string; columnName: string };
 

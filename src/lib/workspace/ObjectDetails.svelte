@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { TableDetails, TableRelated, ObjectKind, Loadable, DataFlowResult, VectorIndex } from "$lib/workspace";
-  import { tableCountRows, vectorIndexList } from "$lib/workspace";
+  import type { TableDetails, TableRelated, ObjectKind, Loadable, DataFlowResult, VectorIndex, VectorSearchResult, EmbedConfig, EmbedProvider } from "$lib/workspace";
+  import { tableCountRows, vectorIndexList, vectorSearch } from "$lib/workspace";
   import { sqlEditor } from "$lib/stores/sql-editor.svelte";
   import DataFlow from "./DataFlow.svelte";
 
@@ -62,10 +62,68 @@
   // Vector indexes (loaded lazily when Vectors tab is selected)
   let vectorIndexes = $state<Loadable<VectorIndex[]>>({ kind: "idle" });
 
+  // Vector search state
+  const PROVIDER_DEFAULTS: Record<EmbedProvider, { model: string; baseUrl?: string }> = {
+    ollama:  { model: "nomic-embed-text", baseUrl: "http://localhost:11434" },
+    openai:  { model: "text-embedding-3-small" },
+    voyage:  { model: "voyage-3-lite" },
+    custom:  { model: "" },
+  };
+  const PROVIDER_LABELS: Record<EmbedProvider, string> = {
+    ollama: "Ollama (local)", openai: "OpenAI", voyage: "Voyage AI", custom: "Custom URL",
+  };
+  const DISTANCE_OPTIONS = ["COSINE", "EUCLIDEAN", "DOT"] as const;
+
+  function loadEmbedConfig(): EmbedConfig {
+    try { return JSON.parse(localStorage.getItem("veesker_embed_cfg") ?? "{}"); } catch { return {} as EmbedConfig; }
+  }
+  function saveEmbedConfig(cfg: EmbedConfig) {
+    localStorage.setItem("veesker_embed_cfg", JSON.stringify(cfg));
+  }
+
+  let embedProvider  = $state<EmbedProvider>((loadEmbedConfig().provider) ?? "ollama");
+  let embedModel     = $state(loadEmbedConfig().model || PROVIDER_DEFAULTS["ollama"].model);
+  let embedBaseUrl   = $state(loadEmbedConfig().baseUrl || PROVIDER_DEFAULTS["ollama"].baseUrl || "");
+  let embedApiKey    = $state(loadEmbedConfig().apiKey || "");
+  let embedDistance  = $state<"COSINE" | "EUCLIDEAN" | "DOT">("COSINE");
+  let embedLimit     = $state(10);
+  let vectorColName  = $state("");
+  let searchText     = $state("");
+  let searchResult   = $state<Loadable<VectorSearchResult>>({ kind: "idle" });
+  let showEmbedCfg   = $state(false);
+
   $effect(() => {
     void selected;
     vectorIndexes = { kind: "idle" };
+    searchResult = { kind: "idle" };
+    searchText = "";
+    vectorColName = "";
   });
+
+  $effect(() => {
+    const defaults = PROVIDER_DEFAULTS[embedProvider];
+    embedModel = loadEmbedConfig().provider === embedProvider
+      ? (loadEmbedConfig().model || defaults.model)
+      : defaults.model;
+    if (defaults.baseUrl) embedBaseUrl = loadEmbedConfig().provider === embedProvider
+      ? (loadEmbedConfig().baseUrl || defaults.baseUrl)
+      : defaults.baseUrl;
+  });
+
+  function persistEmbed() {
+    saveEmbedConfig({ provider: embedProvider, model: embedModel, baseUrl: embedBaseUrl, apiKey: embedApiKey });
+  }
+
+  async function runVectorSearch() {
+    if (!selected || !searchText.trim() || !vectorColName) return;
+    searchResult = { kind: "loading" };
+    persistEmbed();
+    const res = await vectorSearch(
+      { provider: embedProvider, model: embedModel, baseUrl: embedBaseUrl || undefined, apiKey: embedApiKey || undefined },
+      selected.owner, selected.name, vectorColName, embedDistance, embedLimit,
+    );
+    searchResult = res.ok ? { kind: "ok", value: res.data } : { kind: "err", message: res.error.message };
+  }
 
   async function loadVectorIndexes() {
     if (!selected || vectorIndexes.kind === "loading" || vectorIndexes.kind === "ok") return;
@@ -649,51 +707,155 @@
         {/if}
 
       {:else if activeTab === "vectors"}
-        {#if vectorIndexes.kind === "idle"}
-          {@const _ = loadVectorIndexes()}
-          <div class="loading-row"><span class="spinner"></span> Loading vector indexes…</div>
-        {:else if vectorIndexes.kind === "loading"}
-          <div class="loading-row"><span class="spinner"></span> Loading vector indexes…</div>
-        {:else if vectorIndexes.kind === "err"}
-          <div class="banner banner-err"><span>{vectorIndexes.message}</span></div>
-        {:else if vectorIndexes.kind === "ok"}
-          <div class="vector-section">
-            <div class="vector-columns-hint">
-              {#each (details.kind === "ok" ? details.value.columns.filter(c => c.isVector) : []) as vc}
-                <span class="vector-col-chip">⬡ {vc.name}</span>
-              {/each}
+        {@const vectorCols = details.kind === "ok" ? details.value.columns.filter(c => c.isVector) : []}
+        {@const _ = vectorColName || (vectorCols[0] && (vectorColName = vectorCols[0].name))}
+        <div class="vec-panel">
+
+          <!-- Provider config bar -->
+          <div class="vec-config-bar">
+            <div class="vec-config-left">
+              <span class="vec-label">Column</span>
+              <select class="vec-select" bind:value={vectorColName}>
+                {#each vectorCols as vc}
+                  <option value={vc.name}>⬡ {vc.name}</option>
+                {/each}
+              </select>
+              <span class="vec-label">Distance</span>
+              <select class="vec-select" bind:value={embedDistance}>
+                {#each DISTANCE_OPTIONS as d}
+                  <option value={d}>{d}</option>
+                {/each}
+              </select>
+              <span class="vec-label">Limit</span>
+              <input class="vec-limit" type="number" min="1" max="100" bind:value={embedLimit} />
             </div>
-            {#if vectorIndexes.value.length === 0}
-              <div class="empty-section">
-                No VECTOR indexes found on this table.<br>
-                <small>Create one with <code>CREATE VECTOR INDEX … ON {selected.name} ({details.kind === "ok" ? (details.value.columns.find(c => c.isVector)?.name ?? "col") : "col"}) ORGANIZATION INMEMORY NEIGHBOR GRAPH DISTANCE COSINE;</code></small>
-              </div>
-            {:else}
-              <table class="col-table">
-                <thead>
-                  <tr>
-                    <th>Index</th>
-                    <th>Column</th>
-                    <th>Type</th>
-                    <th>Distance</th>
-                    <th>Accuracy</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {#each vectorIndexes.value as vi}
-                    <tr>
-                      <td class="col-name mono">{vi.indexName}</td>
-                      <td><span class="vector-badge">⬡ {vi.targetColumn}</span></td>
-                      <td><span class="type-badge" style="color:#a78bfa;border-color:#a78bfa20;background:#a78bfa10">{vi.indexType}</span></td>
-                      <td class="mono">{vi.distanceMetric}</td>
-                      <td class="mono">{vi.accuracy != null ? `${vi.accuracy}%` : "—"}</td>
-                    </tr>
+            <button class="vec-cfg-btn" class:active={showEmbedCfg} onclick={() => showEmbedCfg = !showEmbedCfg} title="Embedding provider settings">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+                <circle cx="6.5" cy="6.5" r="2" stroke="currentColor" stroke-width="1.2"/>
+                <path d="M6.5 1v1.2M6.5 10.8V12M1 6.5h1.2M10.8 6.5H12M2.6 2.6l.85.85M9.55 9.55l.85.85M2.6 10.4l.85-.85M9.55 3.45l.85-.85" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+              </svg>
+              {PROVIDER_LABELS[embedProvider]}
+            </button>
+          </div>
+
+          <!-- Embedding provider config (collapsible) -->
+          {#if showEmbedCfg}
+            <div class="vec-embed-cfg">
+              <div class="vec-cfg-row">
+                <span class="vec-label">Provider</span>
+                <select class="vec-select" bind:value={embedProvider}>
+                  {#each Object.entries(PROVIDER_LABELS) as [val, label]}
+                    <option value={val}>{label}</option>
                   {/each}
-                </tbody>
-              </table>
+                </select>
+                <span class="vec-label">Model</span>
+                <input class="vec-model-input" type="text" bind:value={embedModel} placeholder={PROVIDER_DEFAULTS[embedProvider].model} />
+              </div>
+              {#if embedProvider === "ollama" || embedProvider === "custom"}
+                <div class="vec-cfg-row">
+                  <span class="vec-label">Base URL</span>
+                  <input class="vec-url-input" type="text" bind:value={embedBaseUrl} placeholder={PROVIDER_DEFAULTS[embedProvider].baseUrl ?? "http://…"} />
+                </div>
+              {/if}
+              {#if embedProvider === "openai" || embedProvider === "voyage"}
+                <div class="vec-cfg-row">
+                  <span class="vec-label">API Key</span>
+                  <input class="vec-url-input" type="password" bind:value={embedApiKey} placeholder="sk-…" />
+                </div>
+              {/if}
+            </div>
+          {/if}
+
+          <!-- Search input -->
+          <div class="vec-search-row">
+            <textarea
+              class="vec-search-input"
+              placeholder="Describe what you're looking for…"
+              rows={2}
+              bind:value={searchText}
+              onkeydown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void runVectorSearch(); } }}
+            ></textarea>
+            <button
+              class="vec-search-btn"
+              disabled={searchResult.kind === "loading" || !searchText.trim() || !vectorColName}
+              onclick={() => void runVectorSearch()}
+            >
+              {#if searchResult.kind === "loading"}
+                <span class="vec-spinner"></span>
+              {:else}
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <circle cx="5.5" cy="5.5" r="4" stroke="currentColor" stroke-width="1.4"/>
+                  <line x1="8.5" y1="8.5" x2="12.5" y2="12.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                </svg>
+              {/if}
+              Search
+            </button>
+          </div>
+
+          <!-- Results -->
+          <div class="vec-results">
+            {#if searchResult.kind === "loading"}
+              <div class="loading-row"><span class="spinner"></span> Generating embedding and searching…</div>
+            {:else if searchResult.kind === "err"}
+              <div class="banner banner-err"><span>{searchResult.message}</span></div>
+            {:else if searchResult.kind === "ok"}
+              {@const scoreCol = searchResult.value.columns.findIndex(c => c.name === "VD_SCORE")}
+              {@const dataCols = searchResult.value.columns.filter(c => c.name !== "VD_SCORE")}
+              {#if searchResult.value.rows.length === 0}
+                <div class="empty-section">No similar rows found.</div>
+              {:else}
+                <div class="col-table-wrap">
+                  <table class="col-table">
+                    <thead>
+                      <tr>
+                        <th class="score-th">Score</th>
+                        {#each dataCols as col}<th>{col.name}</th>{/each}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {#each searchResult.value.rows as row, i}
+                        {@const score = scoreCol >= 0 ? Number((row as any[])[scoreCol]) : null}
+                        {@const dataVals = (row as any[]).filter((_, idx) => idx !== scoreCol)}
+                        <tr>
+                          <td>
+                            <span class="score-badge" style="--s:{score != null ? Math.round((1 - score) * 100) : 0}">
+                              {score != null ? (1 - score).toFixed(3) : "—"}
+                            </span>
+                          </td>
+                          {#each dataVals as v}
+                            <td class="mono" title={String(v ?? "")}>{String(v ?? "")}</td>
+                          {/each}
+                        </tr>
+                      {/each}
+                    </tbody>
+                  </table>
+                </div>
+              {/if}
+            {:else}
+              <!-- Idle: show vector indexes info -->
+              {#if vectorIndexes.kind === "idle"}
+                {@const __ = loadVectorIndexes()}
+              {/if}
+              {#if vectorIndexes.kind === "loading"}
+                <div class="loading-row"><span class="spinner"></span> Loading…</div>
+              {:else if vectorIndexes.kind === "ok" && vectorIndexes.value.length > 0}
+                <div class="vec-index-hint">
+                  <span class="vec-label">Vector indexes</span>
+                  {#each vectorIndexes.value as vi}
+                    <span class="vector-col-chip" title="{vi.indexType} · {vi.distanceMetric}">
+                      ⬡ {vi.indexName} on {vi.targetColumn}
+                    </span>
+                  {/each}
+                </div>
+              {:else if vectorIndexes.kind === "ok"}
+                <div class="empty-section" style="font-size:12px">
+                  No VECTOR indexes yet — search still works (full scan).<br>
+                  <small style="opacity:0.6">For performance, create one: <code>CREATE VECTOR INDEX idx ON {selected.name}({vectorColName}) ORGANIZATION INMEMORY NEIGHBOR GRAPH DISTANCE COSINE;</code></small>
+                </div>
+              {/if}
             {/if}
           </div>
-        {/if}
+        </div>
       {/if}
     </div>
   {/if}
@@ -1015,16 +1177,183 @@
     margin-left: 4px;
     white-space: nowrap;
   }
-  .vector-section {
-    padding: 0.75rem 1rem;
+  /* ── Vector Search Panel ─────────────────────────────────────────────── */
+  .vec-panel {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    height: 100%;
+    overflow: hidden;
   }
-  .vector-columns-hint {
+  .vec-config-bar {
     display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid rgba(26,22,18,0.08);
+    background: rgba(26,22,18,0.03);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+  .vec-config-left {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+  }
+  .vec-label {
+    font-size: 10.5px;
+    font-weight: 600;
+    color: rgba(26,22,18,0.45);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+  }
+  .vec-select {
+    font-size: 11.5px;
+    font-family: "Inter", sans-serif;
+    background: #fff;
+    border: 1px solid rgba(26,22,18,0.15);
+    border-radius: 4px;
+    padding: 2px 6px;
+    color: rgba(26,22,18,0.8);
+    cursor: pointer;
+  }
+  .vec-limit {
+    width: 48px;
+    font-size: 11.5px;
+    font-family: "JetBrains Mono", monospace;
+    background: #fff;
+    border: 1px solid rgba(26,22,18,0.15);
+    border-radius: 4px;
+    padding: 2px 6px;
+    color: rgba(26,22,18,0.8);
+    text-align: center;
+  }
+  .vec-cfg-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 11px;
+    font-family: "Space Grotesk", sans-serif;
+    font-weight: 500;
+    color: rgba(26,22,18,0.5);
+    background: rgba(26,22,18,0.05);
+    border: 1px solid rgba(26,22,18,0.12);
+    border-radius: 4px;
+    padding: 3px 8px;
+    cursor: pointer;
+    transition: all 0.1s;
+    white-space: nowrap;
+  }
+  .vec-cfg-btn:hover, .vec-cfg-btn.active {
+    background: rgba(167,139,250,0.1);
+    border-color: rgba(167,139,250,0.3);
+    color: #7c3aed;
+  }
+  .vec-embed-cfg {
+    padding: 0.5rem 0.75rem;
+    background: rgba(167,139,250,0.04);
+    border-bottom: 1px solid rgba(167,139,250,0.12);
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    flex-shrink: 0;
+  }
+  .vec-cfg-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .vec-model-input, .vec-url-input {
+    flex: 1;
+    min-width: 160px;
+    font-size: 11.5px;
+    font-family: "JetBrains Mono", monospace;
+    background: #fff;
+    border: 1px solid rgba(26,22,18,0.15);
+    border-radius: 4px;
+    padding: 3px 8px;
+    color: rgba(26,22,18,0.85);
+    outline: none;
+  }
+  .vec-model-input:focus, .vec-url-input:focus {
+    border-color: rgba(167,139,250,0.5);
+  }
+  .vec-search-row {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid rgba(26,22,18,0.08);
+    flex-shrink: 0;
+    align-items: flex-end;
+  }
+  .vec-search-input {
+    flex: 1;
+    font-family: "Inter", sans-serif;
+    font-size: 12.5px;
+    background: #fff;
+    border: 1px solid rgba(26,22,18,0.15);
+    border-radius: 6px;
+    padding: 0.45rem 0.65rem;
+    resize: none;
+    outline: none;
+    color: rgba(26,22,18,0.85);
+    transition: border-color 0.12s;
+    line-height: 1.45;
+  }
+  .vec-search-input:focus { border-color: rgba(167,139,250,0.5); }
+  .vec-search-input::placeholder { color: rgba(26,22,18,0.3); }
+  .vec-search-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: #7c3aed;
+    border: none;
+    color: #fff;
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 0.45rem 0.9rem;
+    border-radius: 6px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.12s;
+    height: fit-content;
+  }
+  .vec-search-btn:hover:not(:disabled) { background: #6d28d9; }
+  .vec-search-btn:disabled { opacity: 0.45; cursor: default; }
+  .vec-spinner {
+    width: 11px; height: 11px;
+    border: 1.5px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    flex-shrink: 0;
+  }
+  .vec-results {
+    flex: 1;
+    overflow-y: auto;
+  }
+  .score-th { width: 70px; }
+  .score-badge {
+    display: inline-block;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    font-weight: 600;
+    color: #7c3aed;
+    background: rgba(124,58,237,0.08);
+    border: 1px solid rgba(124,58,237,0.2);
+    border-radius: 4px;
+    padding: 1px 6px;
+  }
+  .vec-index-hint {
+    display: flex;
+    align-items: center;
     flex-wrap: wrap;
     gap: 0.4rem;
+    padding: 0.6rem 0.75rem;
   }
   .vector-col-chip {
     font-family: "JetBrains Mono", monospace;
@@ -1035,7 +1364,7 @@
     border-radius: 4px;
     padding: 2px 8px;
   }
-  .vector-section small code {
+  .empty-section small code {
     font-family: "JetBrains Mono", monospace;
     font-size: 10px;
     background: rgba(26,22,18,0.06);

@@ -563,6 +563,15 @@ pub async fn connection_rollback(app: AppHandle) -> Result<(), ConnectionTestErr
 }
 
 #[tauri::command]
+pub async fn vector_search(
+    app: AppHandle,
+    payload: Value,
+) -> Result<Value, ConnectionTestErr> {
+    let res = call_sidecar(&app, "vector.search", payload).await?;
+    Ok(res)
+}
+
+#[tauri::command]
 pub async fn vector_tables_in_schema(
     app: AppHandle,
     owner: String,

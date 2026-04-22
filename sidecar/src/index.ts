@@ -1,7 +1,7 @@
 import { parseRequest, makeError } from "./rpc";
 import { dispatch, type HandlerMap } from "./handlers";
+import { embedText, type EmbedParams } from "./embedding";
 import {
-  connectionTest,
   openSession,
   closeSession,
   schemaList,
@@ -21,6 +21,7 @@ import {
   schemaKindCounts,
   vectorTablesInSchema,
   vectorIndexList,
+  vectorSimilaritySearch,
 } from "./oracle";
 import { aiChat } from "./ai";
 
@@ -45,6 +46,11 @@ const handlers: HandlerMap = {
   "schema.kind_counts": (params) => schemaKindCounts(params as any),
   "vector.tables_in_schema": (params) => vectorTablesInSchema(params as any),
   "vector.index_list": (params) => vectorIndexList(params as any),
+  "vector.search": async (params: any) => {
+    const { embed, owner, tableName, columnName, distanceMetric, limit } = params;
+    const vector = await embedText(embed as EmbedParams);
+    return vectorSimilaritySearch({ owner, tableName, columnName, vector, distanceMetric: distanceMetric ?? "COSINE", limit: limit ?? 10 });
+  },
   "ai.chat": (params) => aiChat(params as any),
   ping: async () => ({ pong: true }),
 };

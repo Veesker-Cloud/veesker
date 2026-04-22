@@ -140,7 +140,15 @@ export async function connectionRollback(): Promise<Result<void>> {
   }
 }
 
-// ── Vector Search ────────────────────────────────────────────────────────────
+// ── Vector Search ─────────────────────────────────────────────────────────────
+
+export type EmbedProvider = "ollama" | "openai" | "voyage" | "custom";
+export type EmbedConfig = {
+  provider: EmbedProvider;
+  model: string;
+  baseUrl?: string;
+  apiKey?: string;
+};
 
 export type VectorColumnRef = { tableName: string; columnName: string };
 
@@ -158,6 +166,30 @@ export type VectorIndex = {
 
 export const vectorIndexList = (owner: string, tableName: string) =>
   call<{ indexes: VectorIndex[] }>("vector_index_list", { owner, tableName });
+
+export type VectorSearchResult = {
+  columns: Array<{ name: string }>;
+  rows: unknown[][];
+  scores: number[];
+};
+
+export async function vectorSearch(
+  embed: EmbedConfig,
+  owner: string,
+  tableName: string,
+  columnName: string,
+  distanceMetric: "COSINE" | "EUCLIDEAN" | "DOT",
+  limit: number,
+): Promise<Result<VectorSearchResult>> {
+  try {
+    const data = await invoke<VectorSearchResult>("vector_search", {
+      payload: { embed, owner, tableName, columnName, distanceMetric, limit },
+    });
+    return { ok: true, data };
+  } catch (err) {
+    return { ok: false, error: err as WorkspaceError };
+  }
+}
 
 // ── AI Chat ───────────────────────────────────────────────────────────────────
 
