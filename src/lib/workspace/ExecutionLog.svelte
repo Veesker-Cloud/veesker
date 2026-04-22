@@ -75,43 +75,47 @@
       {/if}
     </div>
     {#if tab.results.length > 1 && !sqlEditor.logCollapsed}
-      <div class="rows" role="listbox" aria-label="Statement results">
+      <ul class="rows" role="listbox" aria-label="Statement results">
         {#each tab.results as r, i (r.id)}
-          <div
-            class="row"
+          <li
+            class="row-wrapper"
             class:active={tab.activeResultId === r.id}
-            class:err={r.status === "error"}
-            class:cancelled={r.status === "cancelled"}
-            class:ok={r.status === "ok"}
-            class:running={r.status === "running"}
             role="option"
             aria-selected={tab.activeResultId === r.id}
             tabindex="0"
             onclick={() => selectRow(r.id)}
             onkeydown={(e) => onRowKey(e, i)}
           >
-            <span class="icon" class:spin={r.status === "running"}>{statusIcon(r)}</span>
-            <span class="label">Statement {r.statementIndex + 1}</span>
-            <span class="preview">{truncate(r.sqlPreview, 60)}</span>
-            <span class="summary">{summary(r)}</span>
-          </div>
-          {#if r.dbmsOutput && r.dbmsOutput.length > 0}
-            {@const collapsed = isCollapsed(r.id)}
-            {@const visible = collapsed ? r.dbmsOutput.slice(0, 5) : r.dbmsOutput}
-            {@const extra = r.dbmsOutput.length - 5}
-            <div class="dbms-output">
-              {#each visible as line}
-                <div class="dbms-line">{line}</div>
-              {/each}
-              {#if r.dbmsOutput.length > 5}
-                <button class="dbms-toggle" onclick={() => toggleCollapse(r.id)}>
-                  {collapsed ? `show ${extra} more` : "show less"}
-                </button>
-              {/if}
+            <div
+              class="row"
+              class:err={r.status === "error"}
+              class:cancelled={r.status === "cancelled"}
+              class:ok={r.status === "ok"}
+              class:running={r.status === "running"}
+            >
+              <span class="icon" class:spin={r.status === "running"}>{statusIcon(r)}</span>
+              <span class="label">Statement {r.statementIndex + 1}</span>
+              <span class="preview">{truncate(r.sqlPreview, 60)}</span>
+              <span class="summary">{summary(r)}</span>
             </div>
-          {/if}
+            {#if r.dbmsOutput && r.dbmsOutput.length > 0}
+              {@const collapsed = isCollapsed(r.id)}
+              {@const visible = collapsed ? r.dbmsOutput.slice(0, 5) : r.dbmsOutput}
+              {@const extra = r.dbmsOutput.length - 5}
+              <div class="dbms-output">
+                {#each visible as line}
+                  <div class="dbms-line">{line}</div>
+                {/each}
+                {#if r.dbmsOutput.length > 5}
+                  <button class="dbms-toggle" onclick={() => toggleCollapse(r.id)}>
+                    {collapsed ? `show ${extra} more` : "show less"}
+                  </button>
+                {/if}
+              </div>
+            {/if}
+          </li>
         {/each}
-      </div>
+      </ul>
     {/if}
   </div>
 {/if}
@@ -158,6 +162,24 @@
     flex-direction: column;
     max-height: 180px;
     overflow-y: auto;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .row-wrapper {
+    border-left: 2px solid transparent;
+    border-bottom: 1px solid rgba(26, 22, 18, 0.04);
+    cursor: pointer;
+    user-select: none;
+  }
+  .row-wrapper:hover { background: rgba(26, 22, 18, 0.04); }
+  .row-wrapper.active {
+    background: rgba(179, 62, 31, 0.08);
+    border-left-color: #b33e1f;
+  }
+  .row-wrapper:focus-visible {
+    outline: 2px solid #b33e1f;
+    outline-offset: -2px;
   }
   .row {
     display: grid;
@@ -165,19 +187,6 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.3rem 0.6rem;
-    border-left: 2px solid transparent;
-    border-bottom: 1px solid rgba(26, 22, 18, 0.04);
-    cursor: pointer;
-    user-select: none;
-  }
-  .row:hover { background: rgba(26, 22, 18, 0.04); }
-  .row.active {
-    background: rgba(179, 62, 31, 0.08);
-    border-left-color: #b33e1f;
-  }
-  .row:focus-visible {
-    outline: 2px solid #b33e1f;
-    outline-offset: -2px;
   }
   .icon {
     font-size: 12px;
