@@ -46,15 +46,36 @@
     return selected?.owner === owner && selected?.name === name && selected?.kind === kind;
   }
 
+  const q = $derived(search.trim().toLowerCase());
+
   function filteredObjects(items: Array<{ name: string; status?: string }>): Array<{ name: string; status?: string }> {
-    if (!search.trim()) return items;
-    const q = search.toLowerCase();
+    if (!q) return items;
     return items.filter(o => o.name.toLowerCase().includes(q));
   }
 
-  function kindCount(loadable: Loadable<Array<{ name: string }>>): number | null {
-    if (loadable.kind === "ok") return loadable.value.length;
-    return null;
+  // When search is active: show schema if its name matches OR any loaded objects match
+  function schemaVisible(s: SchemaNode): boolean {
+    if (!q) return true;
+    if (s.name.toLowerCase().includes(q)) return true;
+    for (const kind of KIND_ORDER) {
+      const loadable = s.kinds[kind];
+      if (loadable?.kind === "ok" && loadable.value.some(o => o.name.toLowerCase().includes(q))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // When searching, force-show kind sections that have matches (even if count is 0 after filter)
+  function kindVisible(loadable: Loadable<Array<{ name: string }>>, kind: ObjectKind): boolean {
+    if (!q) return true;
+    if (loadable.kind !== "ok") return true;
+    return loadable.value.some(o => o.name.toLowerCase().includes(q));
+  }
+
+  function kindCount(loadable: Loadable<Array<{ name: string }>>, filtered: Array<{ name: string }>): number | null {
+    if (loadable.kind !== "ok") return null;
+    return q ? filtered.length : loadable.value.length;
   }
 </script>
 
@@ -78,6 +99,7 @@
   </div>
 
   {#each schemas as s (s.name)}
+    {#if schemaVisible(s)}
     <div class="schema">
       <button
         class="schema-row"
@@ -85,7 +107,7 @@
         onclick={() => onToggle(s.name)}
         title={s.name}
       >
-        <span class="chev" aria-hidden="true">{s.expanded ? "▾" : "▸"}</span>
+        <span class="chev" aria-hidden="true">{s.expanded || q ? "▾" : "▸"}</span>
         <svg class="schema-icon" width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
           <ellipse cx="6.5" cy="4.5" rx="5" ry="2" stroke="currentColor" stroke-width="1.1"/>
           <path d="M1.5 4.5v4c0 1.1 2.2 2 5 2s5-.9 5-2v-4" stroke="currentColor" stroke-width="1.1"/>
@@ -97,18 +119,19 @@
         {/if}
       </button>
 
-      {#if s.expanded}
+      {#if s.expanded || q}
         <div class="kinds">
           {#each KIND_ORDER as kind}
             {#if s.kinds[kind] !== undefined}
               {@const loadable = s.kinds[kind]!}
-              {@const count = kindCount(loadable)}
+              {@const filtered = loadable.kind === "ok" ? filteredObjects(loadable.value) : []}
+              {#if !q || kindVisible(loadable, kind)}
               <details class="kind" open>
                 <summary class="kind-head" style="--kc:{KIND_COLOR[kind]}">
                   <span class="kind-dot" style="background:{KIND_COLOR[kind]}" aria-hidden="true"></span>
                   <span class="kind-label">{KIND_LABELS[kind]}</span>
-                  {#if count !== null}
-                    <span class="kind-count">{count}</span>
+                  {#if loadable.kind === "ok"}
+                    <span class="kind-count">{kindCount(loadable, filtered)}</span>
                   {:else if loadable.kind === "loading"}
                     <span class="kind-spinner" aria-label="loading"></span>
                   {/if}
@@ -122,7 +145,7 @@
                       <button class="retry-btn" onclick={() => onRetry(s.name, kind)}>retry</button>
                     </div>
                   {:else if loadable.kind === "ok"}
-                    {#each filteredObjects(loadable.value) as o (o.name)}
+                    {#each filtered as o (o.name)}
                       <button
                         class="object"
                         class:selected={isSelected(s.name, o.name, kind)}
@@ -141,11 +164,13 @@
                   {/if}
                 </div>
               </details>
+              {/if}
             {/if}
           {/each}
         </div>
       {/if}
     </div>
+    {/if}
   {/each}
 </nav>
 
