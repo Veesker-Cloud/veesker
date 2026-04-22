@@ -153,6 +153,8 @@ export async function withActiveSession<T>(
   try {
     return await fn(conn);
   } catch (err) {
+    // Let already-coded errors (e.g. QUERY_CANCELLED) pass through as-is.
+    if (err instanceof RpcCodedError) throw err;
     if (isLostSessionError(err)) {
       clearSession();
       throw new RpcCodedError(SESSION_LOST, (err as Error).message);
@@ -164,7 +166,7 @@ export async function withActiveSession<T>(
   }
 }
 
-import { OBJECT_NOT_FOUND } from "./errors";
+import { OBJECT_NOT_FOUND, QUERY_CANCELLED } from "./errors";
 
 export type SchemaRow = { name: string; isCurrent: boolean };
 export type ObjectRef = { name: string };
@@ -335,6 +337,21 @@ export type QueryResult = {
   elapsedMs: number;
 };
 
+// ── In-flight query tracking ─────────────────────────────────────────────────
+// At most one query is running at a time on the shared connection.
+type RunningQuery = { requestId: string; cancelled: boolean };
+let _running: RunningQuery | null = null;
+
+/** Exposed for tests only — allows resetting module-level state. */
+export function _resetRunning(): void {
+  _running = null;
+}
+
+/** Exposed for tests only — allows inspecting current running state. */
+export function _getRunning(): RunningQuery | null {
+  return _running;
+}
+
 function formatColumnType(m: {
   dbTypeName?: string;
   precision?: number | null;
@@ -362,23 +379,66 @@ function normalizeCell(v: unknown): unknown {
   return v;
 }
 
-export async function queryExecute(p: { sql: string }): Promise<QueryResult> {
-  return withActiveSession(async (conn) => {
-    const started = Date.now();
-    const r: any = await conn.execute(p.sql, [], {
-      maxRows: 100,
-      outFormat: oracledb.OUT_FORMAT_ARRAY,
-    });
-    const elapsedMs = Date.now() - started;
+function isCancelError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const m = err.message || "";
+  // node-oracledb thin driver raises ORA-01013 or NJS-018 when break() is called.
+  return m.includes("ORA-01013") || m.includes("NJS-018");
+}
 
-    const meta: any[] = r.metaData ?? [];
-    const rawRows: any[][] = r.rows ?? [];
-    const columns: QueryColumn[] = meta.map((m) => ({
-      name: m.name,
-      dataType: formatColumnType(m),
-    }));
-    const rows: QueryResultRow[] = rawRows.map((row) => row.map(normalizeCell));
-    const rowCount = rawRows.length > 0 ? rawRows.length : (r.rowsAffected ?? 0);
-    return { columns, rows, rowCount, elapsedMs };
-  });
+export async function queryExecute(p: { sql: string; requestId?: string }): Promise<QueryResult> {
+  // Assign or generate a requestId so cancellation can be matched.
+  const requestId = p.requestId ?? crypto.randomUUID();
+  _running = { requestId, cancelled: false };
+  try {
+    return await withActiveSession(async (conn) => {
+      const started = Date.now();
+      let r: any;
+      try {
+        r = await conn.execute(p.sql, [], {
+          maxRows: 100,
+          outFormat: oracledb.OUT_FORMAT_ARRAY,
+        });
+      } catch (execErr) {
+        // If we were cancelled and this looks like a break error, raise code -2.
+        if (_running?.requestId === requestId && _running.cancelled && isCancelError(execErr)) {
+          throw new RpcCodedError(QUERY_CANCELLED, "Cancelled by user");
+        }
+        throw execErr;
+      }
+      const elapsedMs = Date.now() - started;
+
+      const meta: any[] = r.metaData ?? [];
+      const rawRows: any[][] = r.rows ?? [];
+      const columns: QueryColumn[] = meta.map((m) => ({
+        name: m.name,
+        dataType: formatColumnType(m),
+      }));
+      const rows: QueryResultRow[] = rawRows.map((row) => row.map(normalizeCell));
+      const rowCount = rawRows.length > 0 ? rawRows.length : (r.rowsAffected ?? 0);
+      return { columns, rows, rowCount, elapsedMs };
+    });
+  } finally {
+    // Clear only if this request is still current (avoid clobbering a newer query).
+    if (_running?.requestId === requestId) {
+      _running = null;
+    }
+  }
+}
+
+export type QueryCancelResult = { cancelled: true; requestId: string } | { cancelled: false };
+
+export async function queryCancel(p: { requestId: string }): Promise<QueryCancelResult> {
+  if (_running === null || _running.requestId !== p.requestId) {
+    return { cancelled: false };
+  }
+  _running.cancelled = true;
+  // Interrupt the in-flight call on the shared connection.
+  const conn = getActiveSession();
+  try {
+    await (conn as any).break();
+  } catch {
+    // break() may fail if the query already completed; that's fine.
+  }
+  return { cancelled: true, requestId: p.requestId };
 }

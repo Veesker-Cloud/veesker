@@ -164,7 +164,7 @@
       ></div>
 
       <div class="grid-pane" style="flex: 1 1 auto">
-        <ResultGrid {tab} />
+        <ResultGrid {tab} onCancel={() => void sqlEditor.cancelActive()} />
       </div>
     {/if}
   </div>

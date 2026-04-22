@@ -3,6 +3,8 @@ import { render, screen } from "@testing-library/svelte";
 import ResultGrid from "./ResultGrid.svelte";
 import type { SqlTab } from "$lib/stores/sql-editor.svelte";
 
+const noopCancel = () => {};
+
 function tab(partial: Partial<SqlTab> = {}): SqlTab {
   return {
     id: "t1",
@@ -11,18 +13,19 @@ function tab(partial: Partial<SqlTab> = {}): SqlTab {
     result: null,
     running: false,
     error: null,
+    runningRequestId: null,
     ...partial,
   };
 }
 
 describe("ResultGrid", () => {
   it("shows placeholder when tab is null", () => {
-    render(ResultGrid, { props: { tab: null } });
+    render(ResultGrid, { props: { tab: null, onCancel: noopCancel } });
     expect(screen.getByText(/run a query/i)).toBeInTheDocument();
   });
 
   it("shows spinner when tab.running", () => {
-    render(ResultGrid, { props: { tab: tab({ running: true }) } });
+    render(ResultGrid, { props: { tab: tab({ running: true }), onCancel: noopCancel } });
     expect(screen.getByRole("status")).toBeInTheDocument();
   });
 
@@ -30,6 +33,7 @@ describe("ResultGrid", () => {
     render(ResultGrid, {
       props: {
         tab: tab({ error: { code: -32013, message: "ORA-00942: table or view does not exist" } }),
+        onCancel: noopCancel,
       },
     });
     expect(screen.getByText(/ORA-00942/)).toBeInTheDocument();
@@ -41,6 +45,7 @@ describe("ResultGrid", () => {
         tab: tab({
           result: { columns: [], rows: [], rowCount: 3, elapsedMs: 45 },
         }),
+        onCancel: noopCancel,
       },
     });
     expect(screen.getByText(/Statement executed/)).toBeInTheDocument();
@@ -62,6 +67,7 @@ describe("ResultGrid", () => {
             elapsedMs: 12,
           },
         }),
+        onCancel: noopCancel,
       },
     });
     expect(screen.getByText("ID")).toBeInTheDocument();
@@ -83,6 +89,7 @@ describe("ResultGrid", () => {
             elapsedMs: 7,
           },
         }),
+        onCancel: noopCancel,
       },
     });
     expect(screen.getByText("X")).toBeInTheDocument();
@@ -100,6 +107,7 @@ describe("ResultGrid", () => {
             elapsedMs: 1,
           },
         }),
+        onCancel: noopCancel,
       },
     });
     expect(screen.getByText("<NULL>")).toBeInTheDocument();
@@ -117,6 +125,7 @@ describe("ResultGrid", () => {
             elapsedMs: 1,
           },
         }),
+        onCancel: noopCancel,
       },
     });
     const cell = screen.getByText(/A{60}…/);

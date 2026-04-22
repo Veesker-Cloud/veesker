@@ -1,8 +1,9 @@
 <script lang="ts">
   import type { SqlTab } from "$lib/stores/sql-editor.svelte";
+  import CancelOverlay from "./CancelOverlay.svelte";
 
-  type Props = { tab: SqlTab | null };
-  let { tab }: Props = $props();
+  type Props = { tab: SqlTab | null; onCancel: () => void };
+  let { tab, onCancel }: Props = $props();
 
   function isNumericType(t: string): boolean {
     const u = t.toUpperCase();
@@ -35,6 +36,7 @@
     <div class="placeholder" role="status" aria-live="polite">
       <span class="spinner"></span> Running…
     </div>
+    <CancelOverlay {onCancel} />
   {:else if tab.error}
     <div class="banner">
       <strong>{tab.error.code}</strong>
@@ -84,6 +86,7 @@
     font-family: "Inter", -apple-system, system-ui, sans-serif;
     font-size: 12px;
     color: #1a1612;
+    position: relative;
   }
   .placeholder, .ok {
     padding: 1rem;

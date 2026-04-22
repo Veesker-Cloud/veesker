@@ -2,12 +2,14 @@ import { describe, expect, it, beforeEach, vi } from "vitest";
 
 vi.mock("$lib/sql-query", () => ({
   queryExecute: vi.fn(),
+  queryCancel: vi.fn(),
 }));
 
-import { queryExecute } from "$lib/sql-query";
+import { queryExecute, queryCancel } from "$lib/sql-query";
 import { sqlEditor } from "./sql-editor.svelte";
 
 const mockedQueryExecute = vi.mocked(queryExecute);
+const mockedQueryCancel = vi.mocked(queryCancel);
 
 // localStorage in this jsdom env is a stub without .clear().
 // Replace it with a real in-memory implementation so our tests can isolate state.
@@ -23,6 +25,7 @@ vi.stubGlobal("localStorage", mockLocalStorage);
 beforeEach(() => {
   sqlEditor.reset();
   mockedQueryExecute.mockReset();
+  mockedQueryCancel.mockReset();
   mockLocalStorage.clear();
 });
 
@@ -60,7 +63,8 @@ describe("sqlEditor.openPreview", () => {
     });
     await sqlEditor.openPreview("SYSTEM", "HELP");
     expect(mockedQueryExecute).toHaveBeenCalledWith(
-      `SELECT * FROM "SYSTEM"."HELP" FETCH FIRST 100 ROWS ONLY`
+      `SELECT * FROM "SYSTEM"."HELP" FETCH FIRST 100 ROWS ONLY`,
+      expect.any(String)
     );
     expect(sqlEditor.tabs[0].title).toBe("SYSTEM.HELP");
     expect(sqlEditor.drawerOpen).toBe(true);
@@ -112,7 +116,7 @@ describe("sqlEditor.runActive", () => {
       data: { columns: [], rows: [], rowCount: 0, elapsedMs: 1 },
     });
     await sqlEditor.runActive();
-    expect(mockedQueryExecute).toHaveBeenCalledWith("SELECT 1 FROM DUAL");
+    expect(mockedQueryExecute).toHaveBeenCalledWith("SELECT 1 FROM DUAL", expect.any(String));
   });
 
   it("does nothing when there is no active tab", async () => {
@@ -240,5 +244,62 @@ describe("sqlEditor.editorRatio", () => {
   it("setEditorRatio writes to localStorage with 4 decimals", () => {
     sqlEditor.setEditorRatio(0.4);
     expect(localStorage.getItem("veesker.sql.editorRatio")).toBe("0.4000");
+  });
+});
+
+describe("sqlEditor.cancelActive", () => {
+  it("is a no-op when there is no active tab", async () => {
+    // No tabs open — cancelActive should resolve without throwing or calling queryCancel.
+    await sqlEditor.cancelActive();
+    expect(mockedQueryCancel).not.toHaveBeenCalled();
+  });
+
+  it("is a no-op when active tab has no running request", async () => {
+    sqlEditor.openBlank();
+    // runningRequestId is null by default; no cancel should fire.
+    await sqlEditor.cancelActive();
+    expect(mockedQueryCancel).not.toHaveBeenCalled();
+  });
+
+  it("invokes queryCancel with the running requestId", async () => {
+    mockedQueryCancel.mockResolvedValue({ ok: true, data: { cancelled: true, requestId: "req-abc" } });
+
+    // Start a query that hangs (deferred) so runningRequestId is set.
+    let resolvePending!: (v: any) => void;
+    mockedQueryExecute.mockReturnValue(new Promise((res) => { resolvePending = res; }));
+
+    sqlEditor.openBlank();
+    sqlEditor.updateSql(sqlEditor.activeId!, "SELECT 1 FROM DUAL");
+
+    const runPromise = sqlEditor.runActive();
+    // At this point the tab should have a runningRequestId set.
+    const requestId = sqlEditor.active!.runningRequestId;
+    expect(requestId).not.toBeNull();
+
+    await sqlEditor.cancelActive();
+    expect(mockedQueryCancel).toHaveBeenCalledWith(requestId);
+
+    // Resolve the pending execute so runActive can finish.
+    resolvePending({ ok: true, data: { columns: [], rows: [], rowCount: 0, elapsedMs: 1 } });
+    await runPromise;
+  });
+});
+
+describe("sqlEditor.runActive — requestId lifecycle", () => {
+  it("sets runningRequestId on the tab during execute, clears it after", async () => {
+    let capturedRequestId: string | null = null;
+    mockedQueryExecute.mockImplementation((_sql: string, requestId: string) => {
+      capturedRequestId = requestId;
+      return Promise.resolve({ ok: true, data: { columns: [], rows: [], rowCount: 0, elapsedMs: 1 } });
+    });
+
+    sqlEditor.openBlank();
+    sqlEditor.updateSql(sqlEditor.activeId!, "SELECT 1 FROM DUAL");
+    await sqlEditor.runActive();
+
+    // After completion, runningRequestId should be null.
+    expect(sqlEditor.active?.runningRequestId).toBeNull();
+    // A UUID was passed to queryExecute.
+    expect(capturedRequestId).toMatch(/^[0-9a-f-]{36}$/);
   });
 });

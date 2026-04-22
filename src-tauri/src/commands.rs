@@ -316,10 +316,32 @@ pub struct QueryResult {
 pub async fn query_execute(
     app: AppHandle,
     sql: String,
+    request_id: Option<String>,
 ) -> Result<QueryResult, ConnectionTestErr> {
-    let res = call_sidecar(&app, "query.execute", json!({ "sql": sql })).await?;
+    let res = call_sidecar(&app, "query.execute", json!({ "sql": sql, "requestId": request_id })).await?;
     serde_json::from_value(res).map_err(|e| ConnectionTestErr {
         code: -32099,
         message: format!("decode query.execute: {e}"),
+    })
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueryCancelResult {
+    pub cancelled: bool,
+    pub request_id: Option<String>,
+}
+
+#[tauri::command]
+pub async fn query_cancel(
+    app: AppHandle,
+    request_id: String,
+) -> Result<QueryCancelResult, ConnectionTestErr> {
+    let res = call_sidecar(&app, "query.cancel", json!({ "requestId": request_id })).await?;
+    let cancelled = res.get("cancelled").and_then(|v| v.as_bool()).unwrap_or(false);
+    let returned_id = res.get("requestId").and_then(|v| v.as_str()).map(|s| s.to_string());
+    Ok(QueryCancelResult {
+        cancelled,
+        request_id: returned_id,
     })
 }
