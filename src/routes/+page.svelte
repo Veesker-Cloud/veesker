@@ -6,6 +6,7 @@
     deleteConnection,
     type ConnectionMeta,
   } from "$lib/connections";
+  import VeeskerMark from "$lib/VeeskerMark.svelte";
 
   let connections = $state<ConnectionMeta[]>([]);
   let loading = $state(true);
@@ -59,7 +60,7 @@
 <main>
   <header>
     <div class="brand">
-      <img class="logo" src="/veesker-logo.png" alt="" width="52" height="52" />
+      <VeeskerMark size={52} />
       <div class="brand-text">
         <h1>veesker</h1>
         <p class="tagline">Oracle Studio</p>
@@ -215,9 +216,7 @@
     align-items: center;
     gap: 1rem;
   }
-  .logo {
-    width: 52px;
-    height: 52px;
+  .brand :global(svg) {
     border-radius: 12px;
     display: block;
     box-shadow: 0 2px 8px rgba(26, 22, 18, 0.12);
