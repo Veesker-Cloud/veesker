@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { sqlEditor } from "$lib/stores/sql-editor.svelte";
+  import { sqlEditor, COMPILE_REGEX } from "$lib/stores/sql-editor.svelte";
   import SqlEditor from "./SqlEditor.svelte";
   import ResultGrid from "./ResultGrid.svelte";
   import ExecutionLog from "./ExecutionLog.svelte";
@@ -16,8 +16,6 @@
   let activeTabResult = $derived(
     active ? active.results.find((r) => r.id === active.activeResultId) ?? null : null
   );
-
-  const COMPILABLE_RE = /^\s*CREATE\s+(OR\s+REPLACE\s+)?(PROCEDURE|FUNCTION|TRIGGER|PACKAGE(\s+BODY)?|TYPE(\s+BODY)?)\s/i;
 
   // ── Top drag handle (resizes drawer height) ──────────────────────────────
   let topDragStartY = 0;
@@ -201,7 +199,7 @@
           </svg>
           Save As
         </button>
-        {#if active && COMPILABLE_RE.test(active.sql)}
+        {#if active && COMPILE_REGEX.test(active.sql)}
           <button
             class="file-btn compile-btn"
             title="Compile (run and check for errors)"

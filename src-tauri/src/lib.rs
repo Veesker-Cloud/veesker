@@ -46,6 +46,7 @@ pub fn run() {
             commands::history_clear,
             commands::compile_errors_get,
             commands::object_ddl_get,
+            commands::object_dataflow_get,
             commands::objects_list_plsql,
         ])
         .run(tauri::generate_context!())

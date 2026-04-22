@@ -1,6 +1,7 @@
 <script lang="ts">
-  import type { TableDetails, ObjectKind, Loadable } from "$lib/workspace";
+  import type { TableDetails, ObjectKind, Loadable, DataFlowResult } from "$lib/workspace";
   import { sqlEditor } from "$lib/stores/sql-editor.svelte";
+  import DataFlow from "./DataFlow.svelte";
 
   type Props = {
     selected: { owner: string; name: string; kind: ObjectKind } | null;
@@ -8,8 +9,24 @@
     onRetry: () => void;
     onReconnect?: () => void;
     sessionLost?: boolean;
+    detailError?: string | null;
+    dataflow?: DataFlowResult | null;
+    dataflowLoading?: boolean;
+    dataflowError?: string | null;
+    onNavigateDataflow?: (owner: string, objectType: string, name: string) => void;
   };
-  let { selected, details, onRetry, onReconnect, sessionLost = false }: Props = $props();
+  let {
+    selected,
+    details,
+    onRetry,
+    onReconnect,
+    sessionLost = false,
+    detailError = null,
+    dataflow = null,
+    dataflowLoading = false,
+    dataflowError = null,
+    onNavigateDataflow,
+  }: Props = $props();
 
   function previewData() {
     if (selected && selected.kind !== "SEQUENCE") {
@@ -26,7 +43,19 @@
       <h2>{selected.owner}.{selected.name}</h2>
       <p class="muted">SEQUENCE</p>
     </header>
+    {#if detailError}
+      <p class="detail-error">{detailError}</p>
+    {/if}
     <p class="muted">Sequences expose only metadata in this view.</p>
+    <!-- DATA FLOW section -->
+    <h3>Data Flow</h3>
+    {#if dataflowLoading}
+      <p class="muted">Loading…</p>
+    {:else if dataflowError}
+      <p class="detail-error">{dataflowError}</p>
+    {:else if dataflow}
+      <DataFlow result={dataflow} onNavigate={onNavigateDataflow} />
+    {/if}
   {:else if details.kind === "loading"}
     <header>
       <h2>{selected.owner}.{selected.name}</h2>
@@ -107,6 +136,39 @@
         </tbody>
       </table>
     {/if}
+
+    <!-- DATA FLOW section -->
+    {#if detailError}
+      <p class="detail-error">{detailError}</p>
+    {/if}
+    <h3>Data Flow</h3>
+    {#if dataflowLoading}
+      <p class="muted">Loading…</p>
+    {:else if dataflowError}
+      <p class="detail-error">{dataflowError}</p>
+    {:else if dataflow}
+      <DataFlow result={dataflow} onNavigate={onNavigateDataflow} />
+    {/if}
+  {:else if details.kind === "idle"}
+    <!-- PL/SQL objects: details not loaded, show header + DATA FLOW -->
+    {#if selected}
+      <header>
+        <h2>{selected.owner}.{selected.name}</h2>
+        <p class="muted">{selected.kind}</p>
+      </header>
+      {#if detailError}
+        <p class="detail-error">{detailError}</p>
+      {/if}
+      <!-- DATA FLOW section -->
+      <h3>Data Flow</h3>
+      {#if dataflowLoading}
+        <p class="muted">Loading…</p>
+      {:else if dataflowError}
+        <p class="detail-error">{dataflowError}</p>
+      {:else if dataflow}
+        <DataFlow result={dataflow} onNavigate={onNavigateDataflow} />
+      {/if}
+    {/if}
   {/if}
 </section>
 
@@ -123,6 +185,11 @@
   .empty, .muted {
     color: rgba(26, 22, 18, 0.5);
     font-size: 12px;
+  }
+  .detail-error {
+    color: #7a2a14;
+    font-size: 12px;
+    margin: 0.5rem 0;
   }
   header { margin-bottom: 1rem; }
   h2 {
