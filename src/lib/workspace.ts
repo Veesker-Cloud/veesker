@@ -2,8 +2,11 @@ import { invoke } from "@tauri-apps/api/core";
 
 export type WorkspaceInfo = { serverVersion: string; currentSchema: string };
 export type Schema = { name: string; isCurrent: boolean };
-export type ObjectKind = "TABLE" | "VIEW" | "SEQUENCE";
+export type ObjectKind =
+  | "TABLE" | "VIEW" | "SEQUENCE"
+  | "PROCEDURE" | "FUNCTION" | "PACKAGE" | "TRIGGER" | "TYPE";
 export type ObjectRef = { name: string };
+export type ObjectRefWithStatus = { name: string; status: string };
 export type Column = {
   name: string;
   dataType: string;
@@ -55,3 +58,14 @@ export const NO_ACTIVE_SESSION = -32010;
 export const SESSION_LOST      = -32011;
 export const OBJECT_NOT_FOUND  = -32012;
 export const ORACLE_ERR        = -32013;
+
+export type CompileError = { line: number; position: number; text: string };
+
+export const compileErrorsGet = (objectType: string, objectName: string) =>
+  call<CompileError[]>("compile_errors_get", { objectType, objectName });
+
+export const objectsListPlsql = (owner: string, kind: string) =>
+  call<ObjectRefWithStatus[]>("objects_list_plsql", { owner, kind });
+
+export const objectDdlGet = (owner: string, objectType: string, objectName: string) =>
+  call<string>("object_ddl_get", { owner, objectType, objectName });

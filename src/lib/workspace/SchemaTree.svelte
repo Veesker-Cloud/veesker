@@ -1,15 +1,11 @@
 <script lang="ts">
-  import type { ObjectKind, ObjectRef, Loadable } from "$lib/workspace";
+  import type { ObjectKind, ObjectRefWithStatus, Loadable } from "$lib/workspace";
 
   export type SchemaNode = {
     name: string;
     isCurrent: boolean;
     expanded: boolean;
-    kinds: {
-      TABLE: Loadable<ObjectRef[]>;
-      VIEW: Loadable<ObjectRef[]>;
-      SEQUENCE: Loadable<ObjectRef[]>;
-    };
+    kinds: Partial<Record<ObjectKind, Loadable<Array<{ name: string; status?: string }>>>>;
   };
 
   type Props = {
@@ -25,8 +21,25 @@
     TABLE: "Tables",
     VIEW: "Views",
     SEQUENCE: "Sequences",
+    PROCEDURE: "Procedures",
+    FUNCTION: "Functions",
+    PACKAGE: "Packages",
+    TRIGGER: "Triggers",
+    TYPE: "Types",
   };
-  const KIND_ORDER: ObjectKind[] = ["TABLE", "VIEW", "SEQUENCE"];
+
+  const KIND_BADGES: Partial<Record<ObjectKind, string>> = {
+    PROCEDURE: "proc",
+    FUNCTION: "fn",
+    PACKAGE: "pkg",
+    TRIGGER: "trg",
+    TYPE: "type",
+  };
+
+  const KIND_ORDER: ObjectKind[] = [
+    "TABLE", "VIEW", "SEQUENCE",
+    "PROCEDURE", "FUNCTION", "PACKAGE", "TRIGGER", "TYPE",
+  ];
 
   function isSelected(owner: string, name: string, kind: ObjectKind): boolean {
     return (
@@ -52,27 +65,45 @@
       {#if s.expanded}
         <div class="kinds">
           {#each KIND_ORDER as kind}
-            <div class="kind">
-              <div class="kind-head">{KIND_LABELS[kind]}</div>
-              {#if s.kinds[kind].kind === "loading"}
-                <div class="muted">loading…</div>
-              {:else if s.kinds[kind].kind === "err"}
-                <div class="err">
-                  <span>{s.kinds[kind].message}</span>
-                  <button class="retry" onclick={() => onRetry(s.name, kind)}>Retry</button>
+            {#if s.kinds[kind] !== undefined}
+              {@const loadable = s.kinds[kind]!}
+              <div class="kind">
+                <div class="kind-head">
+                  {#if KIND_BADGES[kind]}
+                    <span class="kind-badge">{KIND_BADGES[kind]}</span>
+                  {/if}
+                  {KIND_LABELS[kind]}
                 </div>
-              {:else if s.kinds[kind].kind === "ok"}
-                {#each s.kinds[kind].value as o (o.name)}
-                  <button
-                    class="object"
-                    class:selected={isSelected(s.name, o.name, kind)}
-                    onclick={() => onSelect(s.name, o.name, kind)}
-                  >{o.name}</button>
-                {:else}
-                  <div class="muted">— none —</div>
-                {/each}
-              {/if}
-            </div>
+                {#if loadable.kind === "loading"}
+                  <div class="muted">loading…</div>
+                {:else if loadable.kind === "err"}
+                  <div class="err">
+                    <span>{loadable.message}</span>
+                    <button class="retry" onclick={() => onRetry(s.name, kind)}>Retry</button>
+                  </div>
+                {:else if loadable.kind === "ok"}
+                  {#each loadable.value as o (o.name)}
+                    <button
+                      class="object"
+                      class:selected={isSelected(s.name, o.name, kind)}
+                      onclick={() => onSelect(s.name, o.name, kind)}
+                    >
+                      {o.name}
+                      {#if o.status}
+                        <span
+                          class="status-dot"
+                          class:valid={o.status === "VALID"}
+                          class:invalid={o.status !== "VALID"}
+                          title={o.status}
+                        ></span>
+                      {/if}
+                    </button>
+                  {:else}
+                    <div class="muted">— none —</div>
+                  {/each}
+                {/if}
+              </div>
+            {/if}
           {/each}
         </div>
       {/if}
@@ -125,9 +156,12 @@
     text-transform: uppercase;
     letter-spacing: 0.06em;
     padding: 0.1rem 0.4rem;
+    display: flex;
+    align-items: center;
   }
   .object {
-    display: block;
+    display: flex;
+    align-items: center;
     width: 100%;
     text-align: left;
     background: transparent;
@@ -166,5 +200,26 @@
     padding: 0.05rem 0.3rem;
     border-radius: 3px;
     cursor: pointer;
+  }
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-left: 4px;
+    vertical-align: middle;
+    flex-shrink: 0;
+  }
+  .status-dot.valid { background: #22a355; }
+  .status-dot.invalid { background: #b33e1f; }
+  .kind-badge {
+    font-size: 9px;
+    font-weight: 600;
+    background: rgba(26, 22, 18, 0.08);
+    border-radius: 3px;
+    padding: 1px 4px;
+    margin-right: 4px;
+    letter-spacing: 0.02em;
+    text-transform: none;
   }
 </style>

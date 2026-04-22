@@ -3,6 +3,7 @@ import { queryExecute, queryExecuteMulti, queryCancel, type QueryResult } from "
 import { splitSql } from "$lib/sql-splitter";
 import { historySave, type HistoryEntry } from "$lib/query-history";
 import { saveAs, saveExisting, openFile } from "$lib/sql-files";
+import { compileErrorsGet } from "$lib/workspace";
 
 export type CompileError = {
   line: number;
@@ -46,6 +47,22 @@ export function activeResult(tab: SqlTab): TabResult | null {
 function makeSqlPreview(sql: string): string {
   const single = sql.replace(/\s+/g, " ").trim();
   return single.length > 80 ? single.slice(0, 80) : single;
+}
+
+// ── Compile detection ─────────────────────────────────────────────────────────
+
+const COMPILE_REGEX =
+  /^\s*CREATE\s+(OR\s+REPLACE\s+)?(PROCEDURE|FUNCTION|TRIGGER|PACKAGE(\s+BODY)?|TYPE(\s+BODY)?)\s+("?\w+"?\.)?("?\w+"?)/i;
+
+function extractCompilable(sql: string): { objectType: string; objectName: string } | null {
+  const m = COMPILE_REGEX.exec(sql);
+  if (!m) return null;
+  const rawType = m[2].toUpperCase();
+  const body = m[3] ? " BODY" : "";
+  const objectType = rawType + body;
+  const objectName = (m[6] ?? "").replace(/"/g, "").toUpperCase();
+  if (!objectName) return null;
+  return { objectType, objectName };
 }
 
 let _tabs = $state<SqlTab[]>([]);
@@ -430,6 +447,25 @@ export const sqlEditor = {
       for (const tr of tabResults) {
         pushHistory(tr.sqlPreview, tr);
       }
+
+      // Post-execution compile check for CREATE statements
+      const tabId = tab.id;
+      for (const sr of res.data.results) {
+        if (sr.status !== "ok") continue;
+        const compilable = extractCompilable(sr.sql);
+        if (!compilable) continue;
+        const resultId = tabResults[sr.statementIndex]?.id;
+        if (!resultId) continue;
+        compileErrorsGet(compilable.objectType, compilable.objectName).then((ceRes) => {
+          const t = _tabs.find((x) => x.id === tabId);
+          if (!t) return;
+          const r = t.results.find((x) => x.id === resultId);
+          if (r) {
+            r.compileErrors = ceRes.ok ? ceRes.data : [];
+            _tabs = [..._tabs];
+          }
+        });
+      }
     } finally {
       tab.running = false;
       tab.runningRequestId = null;
@@ -617,6 +653,26 @@ export const sqlEditor = {
     await queryCancel(tab.runningRequestId);
     // The original run promise will reject with code -2;
     // its finally block will clear running / runningRequestId.
+  },
+
+  openWithDdl(title: string, ddl: string): void {
+    const id = crypto.randomUUID();
+    const tab: SqlTab = {
+      id,
+      title,
+      sql: ddl,
+      results: [],
+      activeResultId: null,
+      running: false,
+      runningRequestId: null,
+      splitterError: null,
+      filePath: null,
+      isDirty: false,
+      savedContent: null,
+    };
+    _tabs = [..._tabs, tab];
+    _activeId = id;
+    if (!_drawerOpen) _drawerOpen = true;
   },
 
   reset(): void {

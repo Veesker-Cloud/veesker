@@ -12,6 +12,8 @@
     workspaceClose,
     schemaList,
     objectsList,
+    objectsListPlsql,
+    objectDdlGet,
     tableDescribe,
     SESSION_LOST,
     type WorkspaceInfo,
@@ -20,6 +22,8 @@
     type Loadable,
   } from "$lib/workspace";
   import { getConnection, type ConnectionMeta } from "$lib/connections";
+
+  const PLSQL_KINDS: ObjectKind[] = ["PROCEDURE", "FUNCTION", "PACKAGE", "TRIGGER", "TYPE"];
 
   let meta     = $state<ConnectionMeta | null>(null);
   let info     = $state<WorkspaceInfo | null>(null);
@@ -45,6 +49,11 @@
         TABLE: { kind: "idle" },
         VIEW: { kind: "idle" },
         SEQUENCE: { kind: "idle" },
+        PROCEDURE: { kind: "idle" },
+        FUNCTION: { kind: "idle" },
+        PACKAGE: { kind: "idle" },
+        TRIGGER: { kind: "idle" },
+        TYPE: { kind: "idle" },
       },
     };
   }
@@ -52,21 +61,34 @@
   async function loadKind(node: SchemaNode, kind: ObjectKind): Promise<void> {
     node.kinds[kind] = { kind: "loading" };
     schemas = [...schemas];
-    const res = await objectsList(node.name, kind);
-    if (res.ok) {
-      node.kinds[kind] = { kind: "ok", value: res.data };
+    if (PLSQL_KINDS.includes(kind)) {
+      const res = await objectsListPlsql(node.name, kind);
+      if (res.ok) {
+        node.kinds[kind] = { kind: "ok", value: res.data };
+      } else {
+        if (res.error.code === SESSION_LOST) sessionLost = true;
+        node.kinds[kind] = { kind: "err", message: res.error.message };
+      }
     } else {
-      if (res.error.code === SESSION_LOST) sessionLost = true;
-      node.kinds[kind] = { kind: "err", message: res.error.message };
+      const res = await objectsList(node.name, kind);
+      if (res.ok) {
+        node.kinds[kind] = { kind: "ok", value: res.data };
+      } else {
+        if (res.error.code === SESSION_LOST) sessionLost = true;
+        node.kinds[kind] = { kind: "err", message: res.error.message };
+      }
     }
     schemas = [...schemas];
   }
 
   function expandIfNeeded(node: SchemaNode): void {
-    const kinds: ObjectKind[] = ["TABLE", "VIEW", "SEQUENCE"];
+    const kinds: ObjectKind[] = [
+      "TABLE", "VIEW", "SEQUENCE",
+      "PROCEDURE", "FUNCTION", "PACKAGE", "TRIGGER", "TYPE",
+    ];
     void Promise.all(
       kinds
-        .filter((k) => node.kinds[k].kind === "idle")
+        .filter((k) => node.kinds[k]?.kind === "idle")
         .map((k) => loadKind(node, k))
     );
   }
@@ -98,6 +120,18 @@
 
   function onSelect(owner: string, name: string, kind: ObjectKind): void {
     selected = { owner, name, kind };
+    if (PLSQL_KINDS.includes(kind)) {
+      details = { kind: "idle" };
+      void (async () => {
+        const res = await objectDdlGet(owner, kind, name);
+        if (res.ok) {
+          sqlEditor.openWithDdl(`${owner}.${name}`, res.data);
+        } else {
+          if (res.error.code === SESSION_LOST) sessionLost = true;
+        }
+      })();
+      return;
+    }
     if (kind === "SEQUENCE") {
       details = { kind: "idle" };
       return;
@@ -106,7 +140,7 @@
   }
 
   function onRetryDetails(): void {
-    if (selected && selected.kind !== "SEQUENCE") {
+    if (selected && selected.kind !== "SEQUENCE" && !PLSQL_KINDS.includes(selected.kind)) {
       void loadDetails(selected.owner, selected.name);
     }
   }
@@ -144,7 +178,7 @@
   async function onReconnect(): Promise<void> {
     sessionLost = false;
     await bootstrap();
-    if (selected && selected.kind !== "SEQUENCE") {
+    if (selected && selected.kind !== "SEQUENCE" && !PLSQL_KINDS.includes(selected.kind)) {
       await loadDetails(selected.owner, selected.name);
     }
   }
@@ -160,6 +194,17 @@
       if (tag === "INPUT" || tag === "TEXTAREA") return;
       e.preventDefault();
       void sqlEditor.openFromFile();
+      return;
+    }
+    // Cmd+Shift+S → Save As; Cmd+S → Save (check Shift first — order matters)
+    if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "s") {
+      e.preventDefault();
+      void sqlEditor.saveAsActive();
+      return;
+    }
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "s") {
+      e.preventDefault();
+      void sqlEditor.saveActive();
       return;
     }
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j") {

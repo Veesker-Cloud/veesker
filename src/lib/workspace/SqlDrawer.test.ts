@@ -35,7 +35,8 @@ describe("SqlDrawer", () => {
   it("clicking + opens a new tab", async () => {
     sqlEditor.toggleDrawer(); // open drawer manually
     render(SqlDrawer);
-    const plus = screen.getByRole("button", { name: /new query/i });
+    // The tab bar "+" button is the first "New query" button; the toolbar also has one
+    const [plus] = screen.getAllByRole("button", { name: /new query/i });
     await fireEvent.click(plus);
     expect(sqlEditor.tabs.length).toBe(1);
     expect(sqlEditor.tabs[0].title).toBe("Query 1");
