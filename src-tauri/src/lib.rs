@@ -44,6 +44,9 @@ pub fn run() {
             commands::history_list,
             commands::history_save,
             commands::history_clear,
+            commands::compile_errors_get,
+            commands::object_ddl_get,
+            commands::objects_list_plsql,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
