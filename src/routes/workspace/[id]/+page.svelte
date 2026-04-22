@@ -5,6 +5,8 @@
   import StatusBar from "$lib/workspace/StatusBar.svelte";
   import SchemaTree, { type SchemaNode } from "$lib/workspace/SchemaTree.svelte";
   import ObjectDetails from "$lib/workspace/ObjectDetails.svelte";
+  import SqlDrawer from "$lib/workspace/SqlDrawer.svelte";
+  import { sqlEditor } from "$lib/stores/sql-editor.svelte";
   import {
     workspaceOpen,
     workspaceClose,
@@ -151,9 +153,19 @@
     await goto("/");
   }
 
+  function onKeydown(e: KeyboardEvent) {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j") {
+      e.preventDefault();
+      sqlEditor.toggleDrawer();
+    }
+  }
+
   onMount(() => {
     void bootstrap();
+    window.addEventListener("keydown", onKeydown);
     return () => {
+      window.removeEventListener("keydown", onKeydown);
+      sqlEditor.reset();
       void workspaceClose();
     };
   });
@@ -203,6 +215,7 @@
         sessionLost={sessionLost}
       />
     </div>
+    <SqlDrawer />
   </div>
 {/if}
 
