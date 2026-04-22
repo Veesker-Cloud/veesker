@@ -1,7 +1,7 @@
 // src/lib/stores/sql-editor.svelte.ts
 import { queryExecute, queryExecuteMulti, queryCancel, type QueryResult } from "$lib/sql-query";
 import { splitSql } from "$lib/sql-splitter";
-import { historySave } from "$lib/query-history";
+import { historySave, type HistoryEntry } from "$lib/query-history";
 
 export type TabResult = {
   id: string;                         // crypto.randomUUID for selection stability
@@ -81,9 +81,19 @@ function loadLogCollapsed(): boolean {
   return false;
 }
 
+function loadHistoryPanelOpen(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    const raw = localStorage.getItem("veesker.sql.historyPanelOpen");
+    if (raw !== null) return raw === "true";
+  } catch { /* Safari private mode */ }
+  return true;
+}
+
 let _drawerHeight = $state<number>(loadDrawerHeight());
 let _editorRatio = $state<number>(loadEditorRatio());
 let _logCollapsed = $state<boolean>(loadLogCollapsed());
+let _historyPanelOpen = $state<boolean>(loadHistoryPanelOpen());
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -199,6 +209,24 @@ export const sqlEditor = {
         localStorage.setItem("veesker.sql.logCollapsed", String(_logCollapsed));
       }
     } catch { /* Safari private mode */ }
+  },
+
+  // ── History panel ──────────────────────────────────────────────────────────
+  get historyPanelOpen() { return _historyPanelOpen; },
+  toggleHistoryPanel(): void {
+    _historyPanelOpen = !_historyPanelOpen;
+    try {
+      if (typeof window !== "undefined") {
+        localStorage.setItem("veesker.sql.historyPanelOpen", String(_historyPanelOpen));
+      }
+    } catch { /* Safari private mode */ }
+  },
+
+  loadHistoryEntry(entry: HistoryEntry): void {
+    const tab = makeTab(nextQueryTitle(), entry.sql);
+    _tabs.push(tab);
+    _activeId = tab.id;
+    _drawerOpen = true;
   },
 
   setActiveResult(tabId: string, resultId: string): void {

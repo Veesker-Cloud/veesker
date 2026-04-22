@@ -3,6 +3,7 @@
   import SqlEditor from "./SqlEditor.svelte";
   import ResultGrid from "./ResultGrid.svelte";
   import ExecutionLog from "./ExecutionLog.svelte";
+  import QueryHistory from "./QueryHistory.svelte";
 
   // ── Refs ────────────────────────────────────────────────────────────────────
   let drawerEl: HTMLDivElement | undefined = $state();
@@ -109,6 +110,11 @@
     bind:this={drawerEl}
   >
     <div class="tabbar" bind:this={tabbarEl}>
+      <button
+        class="history-toggle"
+        aria-label="Toggle query history"
+        onclick={() => sqlEditor.toggleHistoryPanel()}
+      >{sqlEditor.historyPanelOpen ? "◀" : "▶"}</button>
       <div class="tabs" role="tablist">
         {#each sqlEditor.tabs as t (t.id)}
           <div
@@ -137,49 +143,57 @@
       >▼</button>
     </div>
 
-    {#if sqlEditor.activeId === null}
-      <div class="empty">Click + to open a new query.</div>
-    {:else}
-      {@const tab = sqlEditor.active}
-      <div class="editor-pane" style="flex: 0 0 {sqlEditor.editorRatio * 100}%">
-        {#if tab}
-          <SqlEditor
-            value={tab.sql}
-            onChange={(s) => sqlEditor.updateSql(tab.id, s)}
-            onRunCursor={(selection, cursorPos, docText) => {
-              if (selection !== null) {
-                void sqlEditor.runSelection(selection);
-              } else {
-                void sqlEditor.runStatementAtCursor(docText, cursorPos);
-              }
-            }}
-            onRunAll={() => void sqlEditor.runActiveAll()}
-          />
+    <div class="drawer-body">
+      {#if sqlEditor.historyPanelOpen}
+        <QueryHistory />
+      {/if}
+
+      <div class="main-area">
+        {#if sqlEditor.activeId === null}
+          <div class="empty">Click + to open a new query.</div>
+        {:else}
+          {@const tab = sqlEditor.active}
+          <div class="editor-pane" style="flex: 0 0 {sqlEditor.editorRatio * 100}%">
+            {#if tab}
+              <SqlEditor
+                value={tab.sql}
+                onChange={(s) => sqlEditor.updateSql(tab.id, s)}
+                onRunCursor={(selection, cursorPos, docText) => {
+                  if (selection !== null) {
+                    void sqlEditor.runSelection(selection);
+                  } else {
+                    void sqlEditor.runStatementAtCursor(docText, cursorPos);
+                  }
+                }}
+                onRunAll={() => void sqlEditor.runActiveAll()}
+              />
+            {/if}
+          </div>
+
+          <!-- Middle resize handle -->
+          <div
+            class="mid-handle"
+            role="separator"
+            aria-orientation="horizontal"
+            tabindex="0"
+            onpointerdown={onMidPointerDown}
+            onpointermove={onMidPointerMove}
+            onpointerup={onMidPointerUp}
+            onpointercancel={onMidPointerUp}
+            onkeydown={onMidKeyDown}
+          ></div>
+
+          <div class="grid-pane" style="flex: 1 1 auto">
+            {#if tab}
+              <ExecutionLog {tab} />
+            {/if}
+            <div class="grid-host">
+              <ResultGrid {tab} onCancel={() => void sqlEditor.cancelActive()} />
+            </div>
+          </div>
         {/if}
       </div>
-
-      <!-- Middle resize handle -->
-      <div
-        class="mid-handle"
-        role="separator"
-        aria-orientation="horizontal"
-        tabindex="0"
-        onpointerdown={onMidPointerDown}
-        onpointermove={onMidPointerMove}
-        onpointerup={onMidPointerUp}
-        onpointercancel={onMidPointerUp}
-        onkeydown={onMidKeyDown}
-      ></div>
-
-      <div class="grid-pane" style="flex: 1 1 auto">
-        {#if tab}
-          <ExecutionLog {tab} />
-        {/if}
-        <div class="grid-host">
-          <ResultGrid {tab} onCancel={() => void sqlEditor.cancelActive()} />
-        </div>
-      </div>
-    {/if}
+    </div>
   </div>
 {/if}
 
@@ -281,7 +295,7 @@
     border-radius: 3px;
   }
   .tab-close:hover { opacity: 1; background: rgba(0,0,0,0.1); }
-  .plus, .collapse {
+  .plus, .collapse, .history-toggle {
     background: transparent;
     border: none;
     padding: 0 0.7rem;
@@ -290,7 +304,29 @@
     font-size: 14px;
     font-family: "Space Grotesk", sans-serif;
   }
-  .plus:hover, .collapse:hover { background: rgba(26, 22, 18, 0.06); color: #1a1612; }
+  .plus:hover, .collapse:hover, .history-toggle:hover { background: rgba(26, 22, 18, 0.06); color: #1a1612; }
+  .history-toggle {
+    font-size: 10px;
+    padding: 0 0.6rem;
+    border-right: 1px solid rgba(26, 22, 18, 0.08);
+  }
+
+  /* ── 3-pane body layout ─────────────────────────────────────────────────── */
+  .drawer-body {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: row;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .main-area {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+  }
+
   .empty {
     padding: 1.5rem;
     color: rgba(26, 22, 18, 0.5);
