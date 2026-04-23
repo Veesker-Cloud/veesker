@@ -12,8 +12,15 @@
     onToggleChat?: () => void;
     onDisconnect: () => void;
     onSwitchConnection: () => void;
+    theme?: "light" | "dark";
+    onToggleTheme?: () => void;
   };
-  let { connectionName, userLabel, schema, serverVersion, hasPendingTx = false, chatOpen = false, onToggleChat, onDisconnect, onSwitchConnection }: Props = $props();
+  let {
+    connectionName, userLabel, schema, serverVersion,
+    hasPendingTx = false, chatOpen = false, onToggleChat,
+    onDisconnect, onSwitchConnection,
+    theme = "light", onToggleTheme,
+  }: Props = $props();
 
   // Shorten version: "Oracle AI Database 26ai Free Release 23.26.1.0.0 – ..." → "23.26.1.0.0"
   const shortVersion = $derived(() => {
@@ -76,6 +83,15 @@
         <line x1="6" y1="8.5" x2="10.5" y2="8.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
       </svg>
       SQL
+    </button>
+    <button
+      class="action-btn theme-btn"
+      class:active={theme === "dark"}
+      aria-label="Toggle dark mode"
+      title="Toggle dark mode"
+      onclick={onToggleTheme}
+    >
+      {#if theme === "dark"}🌙{:else}☀{/if}
     </button>
     <button
       class="action-btn switch-btn"
@@ -246,6 +262,12 @@
     color: #fff;
   }
   .sql-btn.active:hover { background: #c94b28; }
+  .theme-btn.active {
+    background: rgba(249, 115, 22, 0.15);
+    border-color: rgba(249, 115, 22, 0.4);
+    color: #fb923c;
+  }
+  .theme-btn.active:hover { background: rgba(249, 115, 22, 0.25); }
   .switch-btn:hover {
     background: rgba(255,255,255,0.12);
     color: rgba(255,255,255,0.9);

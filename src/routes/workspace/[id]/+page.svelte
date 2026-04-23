@@ -30,6 +30,7 @@
     type DataFlowResult,
   } from "$lib/workspace";
   import { getConnection, type ConnectionMeta } from "$lib/connections";
+  import { theme } from "$lib/stores/theme.svelte";
 
   const PLSQL_KINDS: ObjectKind[] = ["PROCEDURE", "FUNCTION", "PACKAGE", "TRIGGER", "TYPE"];
 
@@ -428,6 +429,8 @@
       onToggleChat={() => showChat = !showChat}
       onDisconnect={onDisconnect}
       onSwitchConnection={onSwitchConnection}
+      theme={theme.current}
+      onToggleTheme={() => theme.toggle()}
     />
     <div class="body" class:body-collapsed={sqlEditor.editorExpanded}>
       <div class="panel-wrap" style="width: {schemaWidth}px; min-width: 160px; max-width: 480px;">
