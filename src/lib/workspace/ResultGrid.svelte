@@ -340,7 +340,7 @@
   .banner-cancelled {
     background: var(--bg-surface-alt);
     color: var(--text-secondary);
-    border-bottom: 1px solid rgba(26, 22, 18, 0.12);
+    border-bottom: 1px solid var(--border-strong);
     font-family: "Space Grotesk", sans-serif;
     font-size: 12px;
   }
@@ -358,8 +358,8 @@
     background: rgba(179, 62, 31, 0.1);
     text-align: left;
     padding: 0.4rem 0.6rem;
-    border-right: 1px solid rgba(26, 22, 18, 0.06);
-    border-bottom: 1px solid rgba(26, 22, 18, 0.12);
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border-strong);
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -387,8 +387,8 @@
   thead th.numeric .th-stack { align-items: flex-end; }
   tbody td {
     padding: 0.3rem 0.6rem;
-    border-right: 1px solid rgba(26, 22, 18, 0.04);
-    border-bottom: 1px solid rgba(26, 22, 18, 0.04);
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
     font-family: "JetBrains Mono", "SF Mono", monospace;
     font-size: 11.5px;
     white-space: nowrap;
@@ -410,7 +410,7 @@
   }
   .resize-handle:hover { background: rgba(179, 62, 31, 0.5); }
   .footer {
-    border-top: 1px solid rgba(26, 22, 18, 0.08);
+    border-top: 1px solid var(--border);
     padding: 0.4rem 0.8rem;
     color: var(--text-secondary);
     font-size: 11px;
@@ -423,7 +423,7 @@
   .export-wrap { position: relative; }
   .export-btn {
     background: transparent;
-    border: 1px solid rgba(26,22,18,0.2);
+    border: 1px solid var(--border-strong);
     border-radius: 3px;
     padding: 0.2rem 0.5rem;
     font-size: 10.5px;
@@ -437,7 +437,7 @@
     bottom: calc(100% + 4px);
     left: 0;
     background: var(--bg-surface-raised);
-    border: 1px solid rgba(26,22,18,0.15);
+    border: 1px solid var(--border-strong);
     border-radius: 4px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.12);
     min-width: 90px;
