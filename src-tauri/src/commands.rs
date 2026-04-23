@@ -676,3 +676,19 @@ pub async fn explain_plan_get(app: AppHandle, sql: String) -> Result<Value, Conn
     let res = call_sidecar(&app, "explain.plan", json!({ "sql": sql })).await?;
     Ok(res)
 }
+
+#[tauri::command]
+pub async fn proc_describe(
+    app: AppHandle,
+    owner: String,
+    name: String,
+) -> Result<Value, ConnectionTestErr> {
+    let res = call_sidecar(&app, "proc.describe", json!({ "owner": owner, "name": name })).await?;
+    Ok(res)
+}
+
+#[tauri::command]
+pub async fn proc_execute(app: AppHandle, payload: Value) -> Result<Value, ConnectionTestErr> {
+    let res = call_sidecar(&app, "proc.execute", payload).await?;
+    Ok(res)
+}

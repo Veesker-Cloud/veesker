@@ -28,6 +28,8 @@ import {
   embedCountPending,
   embedBatch,
   explainPlan,
+  procDescribe,
+  procExecute,
 } from "./oracle";
 import { aiChat } from "./ai";
 
@@ -63,6 +65,8 @@ const handlers: HandlerMap = {
   "embed.batch": (params) => embedBatch(params as any),
   "ai.chat": (params) => aiChat(params as any),
   "explain.plan": (params) => explainPlan(params as any),
+  "proc.describe": (params) => procDescribe(params as any),
+  "proc.execute": (params) => procExecute(params as any),
   ping: async () => ({ pong: true }),
 };
 
