@@ -3,7 +3,7 @@ import { queryExecute, queryExecuteMulti, queryCancel, type QueryResult } from "
 import { splitSql } from "$lib/sql-splitter";
 import { historySave, type HistoryEntry } from "$lib/query-history";
 import { saveAs, saveExisting, openFile } from "$lib/sql-files";
-import { compileErrorsGet, connectionCommit, connectionRollback } from "$lib/workspace";
+import { compileErrorsGet, connectionCommit, connectionRollback, explainPlanGet } from "$lib/workspace";
 
 export type CompileError = {
   line: number;
@@ -15,12 +15,13 @@ export type TabResult = {
   id: string;                         // crypto.randomUUID for selection stability
   statementIndex: number;             // 0-based; for display as "Statement N+1"
   sqlPreview: string;                 // first ~80 chars of the statement, single line
-  status: "ok" | "error" | "cancelled" | "running";
+  status: "ok" | "error" | "cancelled" | "running" | "explain";
   result: QueryResult | null;
   error: { code: number; message: string } | null;
   elapsedMs: number;                  // 0 while running
   dbmsOutput: string[] | null;        // null = not captured; [] = enabled but nothing printed
   compileErrors: CompileError[] | null; // null = not a compilable stmt; [] = clean
+  explainNodes: import("$lib/workspace").ExplainNode[] | null;
 };
 
 export type SqlTab = {
@@ -350,6 +351,7 @@ export const sqlEditor = {
         elapsedMs: res.ok ? res.data.elapsedMs : 0,
         dbmsOutput: null,
         compileErrors: null,
+        explainNodes: null,
       };
       tab.results = [tabResult];
       tab.activeResultId = resultId;
@@ -421,6 +423,7 @@ export const sqlEditor = {
             elapsedMs: 0,
             dbmsOutput: null,
             compileErrors: null,
+            explainNodes: null,
           };
           tab.results = [errResult];
           tab.activeResultId = errResult.id;
@@ -442,6 +445,7 @@ export const sqlEditor = {
             elapsedMs: sr.elapsedMs,
             dbmsOutput: sr.output ?? null,
             compileErrors: null,
+            explainNodes: null,
           };
         } else if (sr.status === "error") {
           return {
@@ -454,6 +458,7 @@ export const sqlEditor = {
             elapsedMs: sr.elapsedMs,
             dbmsOutput: sr.output ?? null,
             compileErrors: null,
+            explainNodes: null,
           };
         } else {
           // cancelled
@@ -467,6 +472,7 @@ export const sqlEditor = {
             elapsedMs: sr.elapsedMs,
             dbmsOutput: null,
             compileErrors: null,
+            explainNodes: null,
           };
         }
       });
@@ -526,6 +532,7 @@ export const sqlEditor = {
         elapsedMs: res.ok ? res.data.elapsedMs : 0,
         dbmsOutput: null,
         compileErrors: null,
+        explainNodes: null,
       };
       tab.results = [tabResult];
       tab.activeResultId = resultId;
@@ -603,6 +610,7 @@ export const sqlEditor = {
         elapsedMs: res.ok ? res.data.elapsedMs : 0,
         dbmsOutput: null,
         compileErrors: null,
+        explainNodes: null,
       };
       tab.results = [tabResult];
       tab.activeResultId = resultId;
@@ -749,3 +757,34 @@ export const sqlEditor = {
     _editorExpanded = false;
   },
 };
+
+export async function runExplain(sql: string): Promise<void> {
+  const tab = _tabs.find((t) => t.id === _activeId);
+  if (!tab) return;
+  const res = await explainPlanGet(sql);
+  const resultId = crypto.randomUUID();
+  const tabResult: TabResult = {
+    id: resultId,
+    statementIndex: 0,
+    sqlPreview: "EXPLAIN PLAN",
+    status: res.ok ? "explain" : "error",
+    result: null,
+    error: res.ok ? null : res.error,
+    elapsedMs: 0,
+    dbmsOutput: null,
+    compileErrors: null,
+    explainNodes: res.ok ? res.data.nodes : null,
+  };
+  const t = _tabs.find((x) => x.id === _activeId);
+  if (!t) return;
+  t.results = [...t.results, tabResult];
+  t.activeResultId = resultId;
+  _tabs = [..._tabs];
+}
+
+export function setActiveResult(tabId: string, resultId: string): void {
+  const tab = _tabs.find((t) => t.id === tabId);
+  if (!tab) return;
+  tab.activeResultId = resultId;
+  _tabs = [..._tabs];
+}
