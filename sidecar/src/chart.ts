@@ -72,11 +72,11 @@ function buildPreview(
   if (xi === -1) return null;
 
   const labelSet: string[] = [];
-  const labelIndex = new Map<string, number>();
+  const seen = new Set<string>();
   for (const row of rows) {
     const label = String(row[xi] ?? "");
-    if (!labelIndex.has(label)) {
-      labelIndex.set(label, labelSet.length);
+    if (!seen.has(label)) {
+      seen.add(label);
       labelSet.push(label);
     }
   }
@@ -116,9 +116,7 @@ export async function chartConfigure(p: ConfigureParams): Promise<ChartConfigure
   sessions.set(p.sessionId, config);
 
   const previewData = buildPreview(config, p.columns, p.rows);
-  const ready =
-    (isReady(config) && previewData !== null) ||
-    (isReady(config) && config.type === "table");
+  const ready = isReady(config) && (previewData !== null || config.type === "table");
 
   return { config: { ...config }, previewData, ready };
 }
