@@ -2,7 +2,7 @@ mod commands;
 mod persistence;
 mod sidecar;
 
-use tauri::menu::MenuBuilder;
+use tauri::menu::{AboutMetadataBuilder, MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::Manager;
 use tokio::sync::Mutex;
 
@@ -16,7 +16,36 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        .menu(|app| MenuBuilder::new(app).build())
+        .menu(|app| {
+            let about = SubmenuBuilder::new(app, "Veesker")
+                .about(Some(
+                    AboutMetadataBuilder::new()
+                        .name(Some("Veesker"))
+                        .comments(Some("Oracle 23ai Vector Search Studio"))
+                        .build(),
+                ))
+                .separator()
+                .quit()
+                .build()?;
+
+            let file = SubmenuBuilder::new(app, "File")
+                .item(&MenuItemBuilder::with_id("new_connection", "New Connection").accelerator("CmdOrCtrl+N").build(app)?)
+                .separator()
+                .close_window()
+                .build()?;
+
+            let edit = SubmenuBuilder::new(app, "Edit")
+                .undo()
+                .redo()
+                .separator()
+                .cut()
+                .copy()
+                .paste()
+                .select_all()
+                .build()?;
+
+            MenuBuilder::new(app).items(&[&about, &file, &edit]).build()
+        })
         .manage(SidecarState(Mutex::new(None)))
         .setup(|app| {
             let app_data = app.path().app_data_dir().expect("app data dir");
