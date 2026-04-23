@@ -8,7 +8,8 @@
   import SqlDrawer from "$lib/workspace/SqlDrawer.svelte";
   import CommandPalette from "$lib/workspace/CommandPalette.svelte";
   import SheepChat from "$lib/workspace/SheepChat.svelte";
-  import { sqlEditor } from "$lib/stores/sql-editor.svelte";
+  import { sqlEditor, addProcResults } from "$lib/stores/sql-editor.svelte";
+  import ProcExecModal from "$lib/workspace/ProcExecModal.svelte";
   import {
     workspaceOpen,
     workspaceClose,
@@ -46,6 +47,7 @@
   let showChat = $state(false);
   let chatPendingMessage = $state("");
   let refreshing = $state(false);
+  let procExecTarget = $state<{ owner: string; name: string; objectType: "PROCEDURE" | "FUNCTION" } | null>(null);
   let detailError = $state<string | null>(null);
   let dataflow = $state<DataFlowResult | null>(null);
   let dataflowLoading = $state(false);
@@ -443,6 +445,9 @@
           onRetry={onRetryKind}
           onRefresh={refreshSchemas}
           {refreshing}
+          onExecuteProc={(owner, name, objectType) => {
+            procExecTarget = { owner, name, objectType };
+          }}
         />
       </div>
       <div
@@ -516,6 +521,18 @@
     <CommandPalette
       onSelect={(owner, name, kind) => { showPalette = false; onSelect(owner, name, kind); }}
       onClose={() => showPalette = false}
+    />
+  {/if}
+  {#if procExecTarget}
+    <ProcExecModal
+      owner={procExecTarget.owner}
+      name={procExecTarget.name}
+      objectType={procExecTarget.objectType}
+      onClose={() => (procExecTarget = null)}
+      onResult={(result) => {
+        addProcResults(result);
+        procExecTarget = null;
+      }}
     />
   {/if}
 {/if}

@@ -18,8 +18,9 @@
     onRetry: (owner: string, kind: ObjectKind) => void;
     onRefresh?: () => void;
     refreshing?: boolean;
+    onExecuteProc?: (owner: string, name: string, objectType: "PROCEDURE" | "FUNCTION") => void;
   };
-  let { schemas, selected, onToggle, onSelect, onRetry, onRefresh, refreshing = false }: Props = $props();
+  let { schemas, selected, onToggle, onSelect, onRetry, onRefresh, refreshing = false, onExecuteProc }: Props = $props();
 
   let search = $state("");
   let hiddenKinds = $state<Set<ObjectKind>>(new Set());
@@ -235,21 +236,31 @@
                     </div>
                   {:else if loadable.kind === "ok"}
                     {#each filtered as o (o.name)}
-                      <button
-                        class="object"
-                        class:selected={isSelected(s.name, o.name, kind)}
-                        style={isSelected(s.name, o.name, kind) ? `--kc:${KIND_COLOR[kind]}` : ""}
-                        onclick={() => onSelect(s.name, o.name, kind)}
-                        title="{s.name}.{o.name}"
-                      >
-                        <span class="obj-name">{o.name}</span>
-                        {#if kind === "TABLE" && s.vectorTables?.has(o.name)}
-                          <span class="vector-dot" title="Has VECTOR columns" aria-label="vector">⬡</span>
+                      <div class="obj-row">
+                        <button
+                          class="object"
+                          class:selected={isSelected(s.name, o.name, kind)}
+                          style={isSelected(s.name, o.name, kind) ? `--kc:${KIND_COLOR[kind]}` : ""}
+                          onclick={() => onSelect(s.name, o.name, kind)}
+                          title="{s.name}.{o.name}"
+                        >
+                          <span class="obj-name">{o.name}</span>
+                          {#if kind === "TABLE" && s.vectorTables?.has(o.name)}
+                            <span class="vector-dot" title="Has VECTOR columns" aria-label="vector">⬡</span>
+                          {/if}
+                          {#if o.status && o.status !== "VALID"}
+                            <span class="invalid-dot" title="{o.status}" aria-label="invalid"></span>
+                          {/if}
+                        </button>
+                        {#if (kind === "PROCEDURE" || kind === "FUNCTION") && onExecuteProc}
+                          <button
+                            class="exec-btn"
+                            onclick={(e) => { e.stopPropagation(); onExecuteProc!(s.name, o.name, kind as "PROCEDURE" | "FUNCTION"); }}
+                            title="Execute {o.name}"
+                            aria-label="Execute {o.name}"
+                          >▶</button>
                         {/if}
-                        {#if o.status && o.status !== "VALID"}
-                          <span class="invalid-dot" title="{o.status}" aria-label="invalid"></span>
-                        {/if}
-                      </button>
+                      </div>
                     {:else}
                       <div class="muted-row">— none —</div>
                     {/each}
@@ -561,4 +572,14 @@
     cursor: pointer;
     flex-shrink: 0;
   }
+
+  .obj-row { display: flex; align-items: center; }
+  .obj-row .object { flex: 1; }
+  .exec-btn {
+    flex-shrink: 0; background: none; border: none; cursor: pointer;
+    color: var(--text-muted); font-size: 9px; padding: 2px 5px; border-radius: 3px;
+    opacity: 0; transition: opacity 0.1s;
+  }
+  .obj-row:hover .exec-btn { opacity: 1; }
+  .exec-btn:hover { background: rgba(179,62,31,0.15); color: #f5a08a; }
 </style>
