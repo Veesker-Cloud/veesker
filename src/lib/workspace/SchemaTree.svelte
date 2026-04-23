@@ -23,6 +23,17 @@
 
   let search = $state("");
   let hiddenKinds = $state<Set<ObjectKind>>(new Set());
+  let showSystemSchemas = $state(false);
+
+  const SYSTEM_SCHEMAS = new Set([
+    "ANONYMOUS", "APPQOSYS", "AUDSYS", "CTXSYS", "DBSFWUSER", "DBSNMP",
+    "DGPDB_INT", "DIP", "DVF", "DVSYS", "EXFSYS", "GGSHAREDCAP", "GGSYS",
+    "GSMADMIN_INTERNAL", "GSMCATUSER", "GSMUSER", "LBACSYS", "MDDATA",
+    "MDSYS", "MGMT_VIEW", "OJVMSYS", "OLAPSYS", "ORDDATA", "ORDPLUGINS",
+    "ORDSYS", "OUTLN", "OWBSYS", "OWBSYS_AUDIT", "REMOTE_SCHEDULER_AGENT",
+    "SI_INFORMTN_SCHEMA", "SYS", "SYSBACKUP", "SYSDG", "SYSKM", "SYSRAC",
+    "SYSMAN", "SYSTEM", "WMSYS", "XDB", "XS$NULL",
+  ]);
 
   const KIND_LABELS: Record<ObjectKind, string> = {
     TABLE: "Tables", VIEW: "Views", SEQUENCE: "Sequences",
@@ -59,6 +70,15 @@
     TRIGGER:   "#e74c3c",
     TYPE:      "#3498db",
   };
+
+  function isSystemSchema(name: string): boolean {
+    return SYSTEM_SCHEMAS.has(name.toUpperCase());
+  }
+
+  function isVisible(s: SchemaNode): boolean {
+    if (!showSystemSchemas && isSystemSchema(s.name) && !s.isCurrent) return false;
+    return schemaVisible(s);
+  }
 
   function isSelected(owner: string, name: string, kind: ObjectKind): boolean {
     return selected?.owner === owner && selected?.name === name && selected?.kind === kind;
@@ -123,6 +143,13 @@
     {#if search}
       <button class="search-clear" onclick={() => search = ""} aria-label="Clear filter">×</button>
     {/if}
+    <button
+      class="sys-btn"
+      class:active={showSystemSchemas}
+      onclick={() => showSystemSchemas = !showSystemSchemas}
+      aria-pressed={showSystemSchemas}
+      title={showSystemSchemas ? "Hide system schemas" : "Show system schemas"}
+    >sys</button>
     {#if onRefresh}
       <button
         class="refresh-btn"
@@ -158,7 +185,7 @@
   </div>
 
   {#each schemas as s (s.name)}
-    {#if schemaVisible(s)}
+    {#if isVisible(s)}
     <div class="schema">
       <button
         class="schema-row"
@@ -300,6 +327,26 @@
     padding: 0;
   }
   .search-clear:hover { color: rgba(255,255,255,0.7); }
+  .sys-btn {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 3px;
+    color: rgba(255,255,255,0.25);
+    font-size: 9px;
+    font-family: "Inter", sans-serif;
+    letter-spacing: 0.04em;
+    padding: 2px 5px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: color 0.12s, border-color 0.12s, background 0.12s;
+  }
+  .sys-btn:hover { color: rgba(255,255,255,0.55); border-color: rgba(255,255,255,0.2); }
+  .sys-btn.active {
+    color: #e8d5a0;
+    border-color: rgba(232,213,160,0.35);
+    background: rgba(232,213,160,0.08);
+  }
+
   .refresh-btn {
     background: transparent;
     border: none;
