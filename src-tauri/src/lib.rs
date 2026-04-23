@@ -1,6 +1,7 @@
 mod commands;
 mod persistence;
 mod sidecar;
+mod tray;
 
 use tauri::menu::{AboutMetadataBuilder, MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::Manager;
