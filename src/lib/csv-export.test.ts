@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { toCsv, toJson } from "./csv-export";
+import { toCsv, toJson, toInsertSql } from "./csv-export";
 
 describe("toCsv", () => {
   it("empty rows — header only", () => {
@@ -111,5 +111,53 @@ describe("toJson", () => {
     const parsed = JSON.parse(result);
     expect(parsed).toHaveLength(2);
     expect(parsed[1]).toEqual({ ID: 2, VAL: "b" });
+  });
+});
+
+describe("toInsertSql", () => {
+  it("basic row with number and string", () => {
+    const result = toInsertSql("EMPLOYEES", ["ID", "NAME"], [[1, "Alice"]]);
+    expect(result).toBe(`INSERT INTO "EMPLOYEES" ("ID", "NAME") VALUES (1, 'Alice');\n`);
+  });
+
+  it("null and undefined become NULL", () => {
+    const result = toInsertSql("T", ["A", "B"], [[null, undefined]]);
+    expect(result).toBe(`INSERT INTO "T" ("A", "B") VALUES (NULL, NULL);\n`);
+  });
+
+  it("string with single quote is escaped", () => {
+    const result = toInsertSql("T", ["NAME"], [["O'Brien"]]);
+    expect(result).toBe(`INSERT INTO "T" ("NAME") VALUES ('O''Brien');\n`);
+  });
+
+  it("boolean becomes literal", () => {
+    const result = toInsertSql("T", ["FLAG"], [[true], [false]]);
+    expect(result).toBe(
+      `INSERT INTO "T" ("FLAG") VALUES (true);\nINSERT INTO "T" ("FLAG") VALUES (false);\n`
+    );
+  });
+
+  it("Date at midnight UTC becomes TO_DATE", () => {
+    const d = new Date("2024-01-15T00:00:00.000Z");
+    const result = toInsertSql("T", ["DT"], [[d]]);
+    expect(result).toBe(`INSERT INTO "T" ("DT") VALUES (TO_DATE('2024-01-15','YYYY-MM-DD'));\n`);
+  });
+
+  it("Date with time becomes TIMESTAMP", () => {
+    const d = new Date("2024-01-15T10:30:00.000Z");
+    const result = toInsertSql("T", ["DT"], [[d]]);
+    expect(result).toBe(`INSERT INTO "T" ("DT") VALUES (TIMESTAMP '2024-01-15 10:30:00');\n`);
+  });
+
+  it("multiple rows — one INSERT per row", () => {
+    const result = toInsertSql("T", ["A"], [["x"], ["y"]]);
+    expect(result).toBe(
+      `INSERT INTO "T" ("A") VALUES ('x');\nINSERT INTO "T" ("A") VALUES ('y');\n`
+    );
+  });
+
+  it("empty rows — empty string", () => {
+    const result = toInsertSql("T", ["A"], []);
+    expect(result).toBe("");
   });
 });
