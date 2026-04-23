@@ -1,8 +1,10 @@
 <script lang="ts">
   import type { TableDetails, TableRelated, ObjectKind, Loadable, DataFlowResult, VectorIndex, VectorSearchResult, EmbedConfig, EmbedProvider } from "$lib/workspace";
-  import { tableCountRows, vectorIndexList, vectorSearch, embedCountPending, embedBatch } from "$lib/workspace";
+  import { tableCountRows, vectorIndexList, vectorSearch, vectorIndexCreate, vectorIndexDrop, embedCountPending, embedBatch, aiKeyGet, aiKeySave } from "$lib/workspace";
   import { sqlEditor } from "$lib/stores/sql-editor.svelte";
   import DataFlow from "./DataFlow.svelte";
+  import VectorScatter from "./VectorScatter.svelte";
+  import { onMount } from "svelte";
 
   type Props = {
     selected: { owner: string; name: string; kind: ObjectKind } | null;
@@ -94,6 +96,19 @@
   let showConfigBar  = $state(true);
   let expandedRow    = $state<number | null>(null);
 
+  // Scatter view
+  let scatterView      = $state(false);
+  let withVectors      = $state(false);
+
+  // Index creation
+  let showCreateIdx    = $state(false);
+  let newIdxName       = $state("");
+  let newIdxType       = $state<"hnsw" | "ivf">("hnsw");
+  let newIdxMetric     = $state<"COSINE" | "EUCLIDEAN" | "DOT">("COSINE");
+  let newIdxAccuracy   = $state(95);
+  let createIdxLoading = $state(false);
+  let createIdxError   = $state<string | null>(null);
+
   // Generate embeddings state
   let showGenPanel   = $state(false);
   let genTextCol     = $state("");
@@ -115,6 +130,9 @@
     genDone = false;
     genError = null;
     genProgress = { done: 0, total: 0, errors: 0 };
+    scatterView = false;
+    showCreateIdx = false;
+    createIdxError = null;
   });
 
   // Auto-select first VECTOR column when entering Vectors tab
@@ -122,6 +140,13 @@
     if (activeTab === "vectors" && !vectorColName && details.kind === "ok") {
       const first = details.value.columns.find(c => c.isVector);
       if (first) vectorColName = first.name;
+    }
+  });
+
+  // Auto-suggest index name when selected object or vector column changes
+  $effect(() => {
+    if (selected && vectorColName && !newIdxName) {
+      newIdxName = `IDX_${selected.name}_${vectorColName}`.slice(0, 128);
     }
   });
 
@@ -133,23 +158,56 @@
     if (defaults.baseUrl) embedBaseUrl = loadEmbedConfig().provider === embedProvider
       ? (loadEmbedConfig().baseUrl || defaults.baseUrl)
       : defaults.baseUrl;
+    // Reload API key from keychain when provider changes
+    void aiKeyGet(`embed-${embedProvider}`).then(k => { if (k) embedApiKey = k; else embedApiKey = ""; });
   });
 
-  function persistEmbed() {
-    saveEmbedConfig({ provider: embedProvider, model: embedModel, baseUrl: embedBaseUrl, apiKey: embedApiKey });
+  onMount(async () => {
+    const key = await aiKeyGet(`embed-${embedProvider}`);
+    if (key) embedApiKey = key;
+  });
+
+  async function persistEmbed() {
+    saveEmbedConfig({ provider: embedProvider, model: embedModel, baseUrl: embedBaseUrl, apiKey: "" });
+    if (embedApiKey) await aiKeySave(`embed-${embedProvider}`, embedApiKey);
   }
 
   async function runVectorSearch() {
     if (!selected || !searchText.trim() || !vectorColName) return;
     searchResult = { kind: "loading" };
     expandedRow = null;
-    persistEmbed();
+    await persistEmbed();
     const res = await vectorSearch(
       { provider: embedProvider, model: embedModel, baseUrl: embedBaseUrl || undefined, apiKey: embedApiKey || undefined },
       searchText.trim(),
       selected.owner, selected.name, vectorColName, embedDistance, embedLimit,
+      withVectors,
     );
     searchResult = res.ok ? { kind: "ok", value: res.data } : { kind: "err", message: res.error.message };
+  }
+
+  async function createVectorIndex() {
+    if (!selected || !newIdxName.trim() || createIdxLoading) return;
+    createIdxLoading = true;
+    createIdxError = null;
+    const res = await vectorIndexCreate({
+      owner: selected.owner, tableName: selected.name,
+      columnName: vectorColName, indexName: newIdxName.trim(),
+      metric: newIdxMetric, accuracy: newIdxAccuracy, indexType: newIdxType,
+    });
+    createIdxLoading = false;
+    if (res.ok) {
+      showCreateIdx = false;
+      newIdxName = "";
+      vectorIndexes = { kind: "idle" };
+    } else {
+      createIdxError = res.error.message;
+    }
+  }
+
+  async function dropVectorIndex(owner: string, indexName: string) {
+    const res = await vectorIndexDrop(owner, indexName);
+    if (res.ok) vectorIndexes = { kind: "idle" };
   }
 
   async function startGenerate() {
@@ -789,6 +847,20 @@
                 <path d="M2 3.5l3 3 3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </button>
+            <div class="vec-strip-right">
+              <label class="vec-vec-toggle" title="Include vector values in results (enables scatter plot)">
+                <input type="checkbox" bind:checked={withVectors} />
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.2"/>
+                  <circle cx="6" cy="6" r="2" fill="currentColor"/>
+                  <line x1="1" y1="6" x2="3" y2="6" stroke="currentColor" stroke-width="1.2"/>
+                  <line x1="9" y1="6" x2="11" y2="6" stroke="currentColor" stroke-width="1.2"/>
+                  <line x1="6" y1="1" x2="6" y2="3" stroke="currentColor" stroke-width="1.2"/>
+                  <line x1="6" y1="9" x2="6" y2="11" stroke="currentColor" stroke-width="1.2"/>
+                </svg>
+                Scatter
+              </label>
+            </div>
           </div>
 
           <!-- Provider config bar (collapsible) -->
@@ -961,78 +1033,139 @@
               {#if searchResult.value.rows.length === 0}
                 <div class="vec-empty-results">No similar rows found for this query.</div>
               {:else}
-                <div class="col-table-wrap">
-                  <table class="col-table vec-result-table">
-                    <thead>
-                      <tr>
-                        <th class="score-th">Score</th>
-                        {#each dataCols as col}<th>{col.name}</th>{/each}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {#each searchResult.value.rows as row, i}
-                        {@const score = scoreCol >= 0 ? Number((row as any[])[scoreCol]) : null}
-                        {@const similarity = score != null ? (1 - score) : 0}
-                        {@const dataVals = (row as any[]).filter((_, idx) => idx !== scoreCol)}
-                        <tr
-                          class="vec-result-row"
-                          class:vec-row-expanded={expandedRow === i}
-                          onclick={() => expandedRow = expandedRow === i ? null : i}
-                          title="Click to expand"
-                        >
-                          <td class="score-cell">
-                            <div class="score-bar-wrap">
-                              <div class="score-bar" style="width:{Math.round(similarity * 100)}%"></div>
-                              <span class="score-num">{similarity.toFixed(3)}</span>
-                            </div>
-                          </td>
-                          {#each dataVals as v, ci}
-                            <td class="mono vec-result-cell" class:vec-cell-expanded={expandedRow === i}>{String(v ?? "")}</td>
-                          {/each}
+                <!-- Table / Scatter toggle -->
+                <div class="vec-view-tabs">
+                  <button class="vec-view-tab" class:active={!scatterView} onclick={() => scatterView = false}>Table</button>
+                  <button class="vec-view-tab" class:active={scatterView} onclick={() => scatterView = true}>
+                    <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+                      <circle cx="3" cy="8" r="1.5" fill="currentColor"/>
+                      <circle cx="6" cy="4" r="1.5" fill="currentColor"/>
+                      <circle cx="9" cy="6" r="1.5" fill="currentColor"/>
+                      <circle cx="5" cy="7" r="1.5" fill="currentColor"/>
+                    </svg>
+                    Scatter
+                  </button>
+                </div>
+
+                {#if scatterView}
+                  <VectorScatter result={searchResult.value} />
+                {:else}
+                  <div class="col-table-wrap">
+                    <table class="col-table vec-result-table">
+                      <thead>
+                        <tr>
+                          <th class="score-th">Score</th>
+                          {#each dataCols as col}<th>{col.name}</th>{/each}
                         </tr>
-                        {#if expandedRow === i}
-                          <tr class="vec-detail-row">
-                            <td colspan={dataCols.length + 1}>
-                              <div class="vec-detail-grid">
-                                <div class="vec-detail-item">
-                                  <span class="vec-detail-label">Score</span>
-                                  <span class="vec-detail-value mono">{similarity.toFixed(6)}</span>
-                                </div>
-                                {#each dataCols as col, ci}
-                                  <div class="vec-detail-item" class:vec-detail-full={String(dataVals[ci] ?? "").length > 60}>
-                                    <span class="vec-detail-label">{col.name}</span>
-                                    <span class="vec-detail-value">{String(dataVals[ci] ?? "")}</span>
-                                  </div>
-                                {/each}
+                      </thead>
+                      <tbody>
+                        {#each searchResult.value.rows as row, i}
+                          {@const score = scoreCol >= 0 ? Number((row as any[])[scoreCol]) : null}
+                          {@const similarity = score != null ? (1 - score) : 0}
+                          {@const dataVals = (row as any[]).filter((_, idx) => idx !== scoreCol)}
+                          <tr
+                            class="vec-result-row"
+                            class:vec-row-expanded={expandedRow === i}
+                            onclick={() => expandedRow = expandedRow === i ? null : i}
+                            title="Click to expand"
+                          >
+                            <td class="score-cell">
+                              <div class="score-bar-wrap">
+                                <div class="score-bar" style="width:{Math.round(similarity * 100)}%"></div>
+                                <span class="score-num">{similarity.toFixed(3)}</span>
                               </div>
                             </td>
+                            {#each dataVals as v, ci}
+                              <td class="mono vec-result-cell" class:vec-cell-expanded={expandedRow === i}>{String(v ?? "")}</td>
+                            {/each}
                           </tr>
-                        {/if}
-                      {/each}
-                    </tbody>
-                  </table>
-                </div>
+                          {#if expandedRow === i}
+                            <tr class="vec-detail-row">
+                              <td colspan={dataCols.length + 1}>
+                                <div class="vec-detail-grid">
+                                  <div class="vec-detail-item">
+                                    <span class="vec-detail-label">Score</span>
+                                    <span class="vec-detail-value mono">{similarity.toFixed(6)}</span>
+                                  </div>
+                                  {#each dataCols as col, ci}
+                                    <div class="vec-detail-item" class:vec-detail-full={String(dataVals[ci] ?? "").length > 60}>
+                                      <span class="vec-detail-label">{col.name}</span>
+                                      <span class="vec-detail-value">{String(dataVals[ci] ?? "")}</span>
+                                    </div>
+                                  {/each}
+                                </div>
+                              </td>
+                            </tr>
+                          {/if}
+                        {/each}
+                      </tbody>
+                    </table>
+                  </div>
+                {/if}
               {/if}
             {:else}
-              <!-- Idle: show vector indexes info -->
+              <!-- Idle: show vector indexes + create button -->
               {#if vectorIndexes.kind === "idle"}
                 {@const __ = loadVectorIndexes()}
               {/if}
               {#if vectorIndexes.kind === "loading"}
                 <div class="loading-row"><span class="spinner"></span> Loading…</div>
-              {:else if vectorIndexes.kind === "ok" && vectorIndexes.value.length > 0}
-                <div class="vec-index-hint">
-                  <span class="vec-label">Vector indexes</span>
-                  {#each vectorIndexes.value as vi}
-                    <span class="vector-col-chip" title="{vi.indexType} · {vi.distanceMetric}">
-                      ⬡ {vi.indexName} on {vi.targetColumn}
-                    </span>
-                  {/each}
-                </div>
               {:else if vectorIndexes.kind === "ok"}
-                <div class="empty-section" style="font-size:12px">
-                  No VECTOR indexes yet — search still works (full scan).<br>
-                  <small style="opacity:0.6">For performance, create one: <code>CREATE VECTOR INDEX idx ON {selected.name}({vectorColName}) ORGANIZATION INMEMORY NEIGHBOR GRAPH DISTANCE COSINE;</code></small>
+                <div class="vec-index-section">
+                  <div class="vec-index-header">
+                    <span class="vec-label">Vector indexes</span>
+                    <button class="vec-create-idx-btn" onclick={() => { showCreateIdx = !showCreateIdx; createIdxError = null; }} class:active={showCreateIdx}>
+                      <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                        <path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                      </svg>
+                      Create Index
+                    </button>
+                  </div>
+
+                  {#if showCreateIdx}
+                    <div class="vec-create-form">
+                      <div class="vec-cfg-row">
+                        <span class="vec-label">Name</span>
+                        <input class="vec-model-input" type="text" bind:value={newIdxName} placeholder="IDX_…" />
+                        <span class="vec-label">Type</span>
+                        <select class="vec-select" bind:value={newIdxType}>
+                          <option value="hnsw">HNSW</option>
+                          <option value="ivf">IVF</option>
+                        </select>
+                      </div>
+                      <div class="vec-cfg-row">
+                        <span class="vec-label">Distance</span>
+                        <select class="vec-select" bind:value={newIdxMetric}>
+                          <option value="COSINE">COSINE</option>
+                          <option value="EUCLIDEAN">EUCLIDEAN</option>
+                          <option value="DOT">DOT</option>
+                        </select>
+                        <span class="vec-label">Accuracy</span>
+                        <input class="vec-limit" type="number" min="50" max="100" bind:value={newIdxAccuracy} />
+                        <button class="vec-gen-start-btn" disabled={!newIdxName.trim() || createIdxLoading} onclick={() => void createVectorIndex()}>
+                          {#if createIdxLoading}<span class="vec-spinner"></span>{:else}Create{/if}
+                        </button>
+                      </div>
+                      {#if createIdxError}
+                        <div class="banner banner-err">{createIdxError}</div>
+                      {/if}
+                    </div>
+                  {/if}
+
+                  {#if vectorIndexes.value.length > 0}
+                    <div class="vec-index-list">
+                      {#each vectorIndexes.value as vi}
+                        <div class="vec-index-row">
+                          <span class="vec-index-icon">⬡</span>
+                          <span class="vec-index-name">{vi.indexName}</span>
+                          <span class="vec-index-meta">{vi.indexType} · {vi.distanceMetric} · {vi.targetColumn}</span>
+                          <button class="vec-drop-btn" title="Drop index" onclick={() => void dropVectorIndex(selected!.owner, vi.indexName)}>×</button>
+                        </div>
+                      {/each}
+                    </div>
+                  {:else}
+                    <div class="vec-index-empty">No VECTOR indexes — search works via full scan. Create one for performance.</div>
+                  {/if}
                 </div>
               {/if}
             {/if}
@@ -1488,6 +1621,130 @@
   .vec-model-input:focus, .vec-url-input:focus {
     border-color: rgba(167,139,250,0.5);
   }
+  /* ── Config strip right side ────────────────────────────────── */
+  .vec-config-strip { justify-content: space-between; }
+  .vec-strip-right {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-shrink: 0;
+    padding-right: 0.4rem;
+  }
+  .vec-vec-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 10px;
+    color: rgba(255,255,255,0.35);
+    cursor: pointer;
+    user-select: none;
+  }
+  .vec-vec-toggle input { display: none; }
+  .vec-vec-toggle:has(input:checked) { color: rgba(179,62,31,0.9); }
+  .vec-vec-toggle:hover { color: rgba(255,255,255,0.65); }
+
+  /* ── View tabs (Table / Scatter) ─────────────────────────────── */
+  .vec-view-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    flex-shrink: 0;
+  }
+  .vec-view-tab {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: rgba(255,255,255,0.35);
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 0.35rem 0.75rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    transition: color 0.1s;
+  }
+  .vec-view-tab:hover { color: rgba(255,255,255,0.65); }
+  .vec-view-tab.active { color: rgba(255,255,255,0.85); border-bottom-color: #b33e1f; }
+
+  /* ── Index section ───────────────────────────────────────────── */
+  .vec-index-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.5rem 0.7rem;
+  }
+  .vec-index-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .vec-create-idx-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: rgba(255,255,255,0.45);
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 10.5px;
+    font-weight: 500;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.1s;
+  }
+  .vec-create-idx-btn:hover, .vec-create-idx-btn.active {
+    background: rgba(179,62,31,0.15);
+    border-color: rgba(179,62,31,0.4);
+    color: rgba(255,255,255,0.75);
+  }
+  .vec-create-form {
+    background: rgba(0,0,0,0.12);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 5px;
+    padding: 0.5rem 0.6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+  .vec-index-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  .vec-index-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.4rem;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 4px;
+    font-size: 11px;
+  }
+  .vec-index-icon { color: rgba(167,139,250,0.7); font-size: 12px; }
+  .vec-index-name { color: rgba(255,255,255,0.8); font-weight: 500; font-family: "JetBrains Mono", monospace; }
+  .vec-index-meta { color: rgba(255,255,255,0.3); font-size: 10px; flex: 1; }
+  .vec-drop-btn {
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.2);
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0 2px;
+    border-radius: 3px;
+  }
+  .vec-drop-btn:hover { color: rgba(179,62,31,0.9); background: rgba(179,62,31,0.1); }
+  .vec-index-empty {
+    font-size: 11px;
+    color: rgba(255,255,255,0.3);
+    padding: 0.25rem 0;
+    line-height: 1.4;
+  }
+
   /* ── Generate embeddings panel ──────────────────────────────── */
   .vec-gen-strip {
     border-bottom: 1px solid rgba(255,255,255,0.05);
@@ -1749,29 +2006,6 @@
     font-size: 12px;
     color: rgba(26,22,18,0.35);
     text-align: center;
-  }
-  .vec-index-hint {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-    padding: 0.6rem 0.75rem;
-  }
-  .vector-col-chip {
-    font-family: "JetBrains Mono", monospace;
-    font-size: 11px;
-    color: #a78bfa;
-    background: rgba(167,139,250,0.1);
-    border: 1px solid rgba(167,139,250,0.2);
-    border-radius: 4px;
-    padding: 2px 8px;
-  }
-  .empty-section small code {
-    font-family: "JetBrains Mono", monospace;
-    font-size: 10px;
-    background: rgba(26,22,18,0.06);
-    padding: 2px 4px;
-    border-radius: 3px;
   }
   .col-default, .mono {
     font-family: "JetBrains Mono", "SF Mono", monospace;

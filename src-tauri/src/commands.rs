@@ -553,6 +553,18 @@ pub async fn ai_chat(app: AppHandle, payload: Value) -> Result<Value, Connection
 }
 
 #[tauri::command]
+pub async fn vector_index_create(app: AppHandle, payload: Value) -> Result<Value, ConnectionTestErr> {
+    let res = call_sidecar(&app, "vector.create_index", payload).await?;
+    Ok(res)
+}
+
+#[tauri::command]
+pub async fn vector_index_drop(app: AppHandle, payload: Value) -> Result<Value, ConnectionTestErr> {
+    let res = call_sidecar(&app, "vector.drop_index", payload).await?;
+    Ok(res)
+}
+
+#[tauri::command]
 pub async fn embed_count_pending(app: AppHandle, payload: Value) -> Result<Value, ConnectionTestErr> {
     let res = call_sidecar(&app, "embed.count_pending", payload).await?;
     Ok(res)

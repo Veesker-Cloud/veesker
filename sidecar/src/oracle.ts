@@ -1058,6 +1058,8 @@ export type VectorSearchResult = {
   columns: Array<{ name: string }>;
   rows: unknown[][];
   scores: number[];
+  vectors?: number[][];
+  queryVector?: number[];
 };
 
 export async function vectorSimilaritySearch(p: {
@@ -1067,10 +1069,9 @@ export async function vectorSimilaritySearch(p: {
   vector: number[];
   distanceMetric: "COSINE" | "EUCLIDEAN" | "DOT";
   limit: number;
+  withVectors?: boolean;
 }): Promise<VectorSearchResult> {
   return withActiveSession(async (conn) => {
-    // Oracle TO_VECTOR() rejects JavaScript scientific notation (e.g. 1.2e-7).
-    // Format each float as fixed decimal with enough precision.
     const badIdx = p.vector.findIndex(n => !isFinite(n) || isNaN(n));
     if (badIdx >= 0) throw new Error(`Invalid vector value at index ${badIdx}: ${p.vector[badIdx]}`);
     const vecStr = `[${p.vector.map(n => n.toFixed(8)).join(",")}]`;
@@ -1079,7 +1080,6 @@ export async function vectorSimilaritySearch(p: {
       : "COSINE";
     const limit = Math.min(Math.max(1, p.limit), 100);
 
-    // Fetch column names (excluding the VECTOR column itself)
     const colRes = await conn.execute<{ COLUMN_NAME: string }>(
       `SELECT column_name FROM all_tab_columns
         WHERE owner = :owner AND table_name = :tbl
@@ -1097,10 +1097,14 @@ export async function vectorSimilaritySearch(p: {
     const qTable = quoteIdent(p.tableName);
     const qCol   = quoteIdent(p.columnName);
 
-    // Use explicit STRING type with maxSize — default maxSize truncates large vectors.
+    // Optionally include the serialized vector for scatter/PCA
+    const vecExtra = p.withVectors
+      ? `, FROM_VECTOR(t.${qCol} RETURNING VARCHAR2(32767)) AS VEC_STR__`
+      : "";
+
     const sql = `
       SELECT ${colList},
-             VECTOR_DISTANCE(t.${qCol}, TO_VECTOR(:vecStr), ${metric}) AS VD_SCORE
+             VECTOR_DISTANCE(t.${qCol}, TO_VECTOR(:vecStr), ${metric}) AS VD_SCORE${vecExtra}
         FROM ${qOwner}.${qTable} t
        WHERE t.${qCol} IS NOT NULL
        ORDER BY VECTOR_DISTANCE(t.${qCol}, TO_VECTOR(:vecStr), ${metric})
@@ -1110,12 +1114,28 @@ export async function vectorSimilaritySearch(p: {
       outFormat: oracledb.OUT_FORMAT_ARRAY,
     });
 
-    const metaCols = (res.metaData ?? []).map((m) => ({ name: m.name }));
-    const rows = (res.rows ?? []) as unknown[][];
-    const scoreIdx = metaCols.findIndex((c) => c.name === "VD_SCORE");
-    const scores = rows.map((r) => (scoreIdx >= 0 ? Number(r[scoreIdx]) : 0));
+    const allCols = (res.metaData ?? []).map((m) => ({ name: m.name }));
+    const vecStrIdx = allCols.findIndex(c => c.name === "VEC_STR__");
+    const metaCols = allCols.filter(c => c.name !== "VEC_STR__");
+    const allRows = (res.rows ?? []) as unknown[][];
 
-    return { columns: metaCols, rows, scores };
+    // Strip VEC_STR__ from data rows
+    const rows = vecStrIdx >= 0
+      ? allRows.map(r => (r as unknown[]).filter((_, i) => i !== vecStrIdx))
+      : allRows;
+
+    const scoreIdx = metaCols.findIndex((c) => c.name === "VD_SCORE");
+    const scores = rows.map((r) => (scoreIdx >= 0 ? Number((r as unknown[])[scoreIdx]) : 0));
+
+    let vectors: number[][] | undefined;
+    if (p.withVectors && vecStrIdx >= 0) {
+      vectors = allRows.map(r => {
+        const s = String((r as unknown[])[vecStrIdx] ?? "");
+        try { return JSON.parse(s) as number[]; } catch { return []; }
+      });
+    }
+
+    return { columns: metaCols, rows, scores, vectors, queryVector: p.withVectors ? p.vector : undefined };
   });
 }
 
@@ -1193,6 +1213,49 @@ export async function vectorIndexList(p: {
       // ALL_VECTOR_INDEXES doesn't exist on Oracle < 23ai
       return { indexes: [] };
     }
+  });
+}
+
+// ── Vector Index Management ───────────────────────────────────────────────────
+
+export async function vectorCreateIndex(p: {
+  owner: string;
+  tableName: string;
+  columnName: string;
+  indexName: string;
+  metric: "COSINE" | "EUCLIDEAN" | "DOT";
+  accuracy: number;
+  indexType: "hnsw" | "ivf";
+}): Promise<{ created: true }> {
+  return withActiveSession(async (conn) => {
+    const qOwner = quoteIdent(p.owner);
+    const qTable = quoteIdent(p.tableName);
+    const qCol   = quoteIdent(p.columnName);
+    const qIdx   = quoteIdent(p.indexName);
+    const metric = ["COSINE", "EUCLIDEAN", "DOT"].includes(p.metric) ? p.metric : "COSINE";
+    const accuracy = Math.min(100, Math.max(50, Math.round(p.accuracy)));
+    const org = p.indexType === "ivf" ? "NEIGHBOR PARTITIONS" : "INMEMORY NEIGHBOR GRAPH";
+    await conn.execute(
+      `CREATE VECTOR INDEX ${qIdx} ON ${qOwner}.${qTable}(${qCol})
+       ORGANIZATION ${org}
+       DISTANCE ${metric}
+       WITH TARGET ACCURACY ${accuracy}`
+    );
+    await conn.commit();
+    return { created: true };
+  });
+}
+
+export async function vectorDropIndex(p: {
+  owner: string;
+  indexName: string;
+}): Promise<{ dropped: true }> {
+  return withActiveSession(async (conn) => {
+    const qOwner = quoteIdent(p.owner);
+    const qIdx   = quoteIdent(p.indexName);
+    await conn.execute(`DROP INDEX ${qOwner}.${qIdx}`);
+    await conn.commit();
+    return { dropped: true };
   });
 }
 

@@ -171,6 +171,8 @@ export type VectorSearchResult = {
   columns: Array<{ name: string }>;
   rows: unknown[][];
   scores: number[];
+  vectors?: number[][];
+  queryVector?: number[];
 };
 
 export async function vectorSearch(
@@ -181,16 +183,25 @@ export async function vectorSearch(
   columnName: string,
   distanceMetric: "COSINE" | "EUCLIDEAN" | "DOT",
   limit: number,
+  withVectors = false,
 ): Promise<Result<VectorSearchResult>> {
   try {
     const data = await invoke<VectorSearchResult>("vector_search", {
-      payload: { embed: { ...embed, text }, owner, tableName, columnName, distanceMetric, limit },
+      payload: { embed: { ...embed, text }, owner, tableName, columnName, distanceMetric, limit, withVectors },
     });
     return { ok: true, data };
   } catch (err) {
     return { ok: false, error: err as WorkspaceError };
   }
 }
+
+export const vectorIndexCreate = (payload: {
+  owner: string; tableName: string; columnName: string;
+  indexName: string; metric: string; accuracy: number; indexType: string;
+}) => call<{ created: true }>("vector_index_create", { payload });
+
+export const vectorIndexDrop = (owner: string, indexName: string) =>
+  call<{ dropped: true }>("vector_index_drop", { payload: { owner, indexName } });
 
 // ── AI Chat ───────────────────────────────────────────────────────────────────
 

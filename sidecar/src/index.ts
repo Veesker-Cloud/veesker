@@ -22,6 +22,8 @@ import {
   vectorTablesInSchema,
   vectorIndexList,
   vectorSimilaritySearch,
+  vectorCreateIndex,
+  vectorDropIndex,
   embedCountPending,
   embedBatch,
 } from "./oracle";
@@ -49,10 +51,12 @@ const handlers: HandlerMap = {
   "vector.tables_in_schema": (params) => vectorTablesInSchema(params as any),
   "vector.index_list": (params) => vectorIndexList(params as any),
   "vector.search": async (params: any) => {
-    const { embed, owner, tableName, columnName, distanceMetric, limit } = params;
+    const { embed, owner, tableName, columnName, distanceMetric, limit, withVectors } = params;
     const vector = await embedText(embed as EmbedParams);
-    return vectorSimilaritySearch({ owner, tableName, columnName, vector, distanceMetric: distanceMetric ?? "COSINE", limit: limit ?? 10 });
+    return vectorSimilaritySearch({ owner, tableName, columnName, vector, distanceMetric: distanceMetric ?? "COSINE", limit: limit ?? 10, withVectors: !!withVectors });
   },
+  "vector.create_index": (params) => vectorCreateIndex(params as any),
+  "vector.drop_index": (params) => vectorDropIndex(params as any),
   "embed.count_pending": (params) => embedCountPending(params as any),
   "embed.batch": (params) => embedBatch(params as any),
   "ai.chat": (params) => aiChat(params as any),
