@@ -2,6 +2,7 @@ import { parseRequest, makeError } from "./rpc";
 import { dispatch, type HandlerMap } from "./handlers";
 import { embedText, type EmbedParams } from "./embedding";
 import {
+  connectionTest,
   openSession,
   closeSession,
   schemaList,
