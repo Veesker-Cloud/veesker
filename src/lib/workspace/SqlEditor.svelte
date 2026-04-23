@@ -18,9 +18,10 @@
     onRunAll: () => void;
     onSave: () => void;
     onSaveAs: () => void;
+    onExplain: () => void;
     compileErrors?: CompileError[] | null;
   };
-  let { value, onChange, onRunCursor, onRunAll, onSave, onSaveAs, compileErrors = null }: Props = $props();
+  let { value, onChange, onRunCursor, onRunAll, onSave, onSaveAs, onExplain, compileErrors = null }: Props = $props();
 
   let host: HTMLDivElement | undefined = $state();
   let view: EditorView | null = null;
@@ -80,6 +81,11 @@
                 key: "Mod-Shift-s",
                 preventDefault: true,
                 run: () => { onSaveAs(); return true; },
+              },
+              {
+                key: "F6",
+                preventDefault: true,
+                run: () => { onExplain(); return true; },
               },
             ])
           ),

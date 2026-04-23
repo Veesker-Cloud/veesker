@@ -5,8 +5,9 @@
   type Props = {
     context: AiContext;
     onClose: () => void;
+    pendingMessage?: string;
   };
-  let { context, onClose }: Props = $props();
+  let { context, onClose, pendingMessage = "" }: Props = $props();
 
   let messages = $state<AiMessage[]>([]);
   let input = $state("");
@@ -15,6 +16,10 @@
   let showSettings = $state(false);
   let apiKey = $state("");
   let messagesEl = $state<HTMLDivElement | null>(null);
+
+  $effect(() => {
+    if (pendingMessage) input = pendingMessage;
+  });
 
   onMount(async () => {
     apiKey = (await aiKeyGet("anthropic")) ?? "";

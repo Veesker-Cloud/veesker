@@ -44,6 +44,7 @@
   let sessionLost = $state(false);
   let showPalette = $state(false);
   let showChat = $state(false);
+  let chatPendingMessage = $state("");
   let refreshing = $state(false);
   let detailError = $state<string | null>(null);
   let dataflow = $state<DataFlowResult | null>(null);
@@ -497,11 +498,18 @@
               activeSql: sqlEditor.active?.sql ?? undefined,
             }}
             onClose={() => showChat = false}
+            pendingMessage={chatPendingMessage}
           />
         </div>
       {/if}
     </div>
-    <SqlDrawer />
+    <SqlDrawer
+      onCancel={() => void sqlEditor.cancelActive()}
+      onExplainWithAI={(msg) => {
+        chatPendingMessage = msg;
+        showChat = true;
+      }}
+    />
   </div>
   {#if showPalette}
     <CommandPalette

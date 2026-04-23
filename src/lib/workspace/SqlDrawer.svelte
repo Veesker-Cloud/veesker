@@ -1,10 +1,14 @@
 <script lang="ts">
-  import { sqlEditor, COMPILE_REGEX } from "$lib/stores/sql-editor.svelte";
+  import { sqlEditor, COMPILE_REGEX, runExplain, setActiveResult } from "$lib/stores/sql-editor.svelte";
   import SqlEditor from "./SqlEditor.svelte";
   import ResultGrid from "./ResultGrid.svelte";
   import ExecutionLog from "./ExecutionLog.svelte";
   import QueryHistory from "./QueryHistory.svelte";
   import CompileErrors from "./CompileErrors.svelte";
+  import ExplainPlan from "./ExplainPlan.svelte";
+
+  type Props = { onCancel: () => void; onExplainWithAI: (msg: string) => void; };
+  let { onCancel, onExplainWithAI }: Props = $props();
 
   // ── Refs ────────────────────────────────────────────────────────────────────
   let drawerEl: HTMLDivElement | undefined = $state();
@@ -215,6 +219,17 @@
             Compile
           </button>
         {/if}
+        <button
+          class="file-btn"
+          title="Explain Plan (F6)"
+          aria-label="Explain Plan"
+          onclick={() => {
+            const sql = active?.sql ?? "";
+            if (sql.trim()) void runExplain(sql);
+          }}
+        >
+          Explain
+        </button>
       </div>
       <div class="txn-actions">
         <button
@@ -294,6 +309,10 @@
                 onRunAll={() => void sqlEditor.runActiveAll()}
                 onSave={() => void sqlEditor.saveActive()}
                 onSaveAs={() => void sqlEditor.saveAsActive()}
+                onExplain={() => {
+                  const sql = active?.sql ?? "";
+                  if (sql.trim()) void runExplain(sql);
+                }}
               />
             {/if}
           </div>
@@ -323,7 +342,19 @@
               <ExecutionLog {tab} />
             {/if}
             <div class="grid-host">
-              <ResultGrid {tab} onCancel={() => void sqlEditor.cancelActive()} />
+              {#if activeTabResult?.status === "explain" && activeTabResult.explainNodes !== null}
+                <ExplainPlan
+                  nodes={activeTabResult.explainNodes}
+                  onBack={() => {
+                    if (!active) return;
+                    const prev = active.results.findLast((r) => r.id !== active!.activeResultId && r.status !== "explain");
+                    if (prev) setActiveResult(active.id, prev.id);
+                  }}
+                  {onExplainWithAI}
+                />
+              {:else}
+                <ResultGrid {tab} {onCancel} />
+              {/if}
             </div>
           </div>
         {/if}
