@@ -326,4 +326,4 @@ export const chartConfigureRpc = (payload: {
 }) => call<ChartConfigureResult>("chart_configure", { payload });
 
 export const chartResetRpc = (sessionId: string) =>
-  call<{ ok: true }>("chart_reset", { sessionId });
+  call<{ ok: boolean }>("chart_reset", { sessionId });
