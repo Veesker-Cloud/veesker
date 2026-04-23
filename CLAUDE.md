@@ -92,6 +92,80 @@ rustc -vV
 # Look for the "host:" line, e.g. host: x86_64-pc-windows-msvc
 ```
 
+### Zombie sidecar processes (Windows)
+
+If `tauri dev` fails with `PermissionDenied` when copying the sidecar binary, a previous dev session left zombie processes locking the file. Kill them first:
+
+```powershell
+Get-Process | Where-Object { $_.Name -like "*veesker*" } | Stop-Process -Force
+```
+
+Then retry `bun run tauri dev`.
+
+---
+
+## macOS prerequisites
+
+Install all of these before building on macOS.
+
+### 1. Xcode Command Line Tools
+
+```bash
+xcode-select --install
+```
+
+### 2. Bun
+
+```bash
+brew install oven-sh/bun/bun
+```
+
+Verify: `bun --version` (need ≥ 1.1)
+
+### 3. Rust stable toolchain
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+rustup default stable
+```
+
+Add the correct target for your Mac:
+
+```bash
+# Apple Silicon (M1/M2/M3)
+rustup target add aarch64-apple-darwin
+
+# Intel Mac
+rustup target add x86_64-apple-darwin
+```
+
+Verify: `rustc -vV` — look for the `host:` line.
+
+---
+
+## Compile the sidecar binary (macOS)
+
+```bash
+cd sidecar
+
+# Apple Silicon
+bun build src/index.ts --compile --minify --outfile ../src-tauri/binaries/veesker-sidecar-aarch64-apple-darwin
+
+# Intel Mac
+bun build src/index.ts --compile --minify --outfile ../src-tauri/binaries/veesker-sidecar-x86_64-apple-darwin
+
+cd ..
+```
+
+The binary has no `.exe` extension on macOS. Tauri appends the target triple automatically.
+
+After compiling, run normally:
+
+```bash
+bun run tauri dev        # development
+bun run tauri build      # production (.dmg / .app in src-tauri/target/release/bundle/)
+```
+
 ---
 
 ## Development mode
@@ -153,6 +227,7 @@ Fix all Biome and clippy warnings before committing.
 - **English only.** No Portuguese in code, comments, variable names, or commit messages.
 - **Conventional Commits.** Prefix: `feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`.
 - **Thin Tauri commands.** `src-tauri/src/commands.rs` commands marshal args and delegate to helpers — no business logic in command handlers.
+- **CSS theming.** Never hardcode background colors in components. Always use CSS variables from `src/app.css`: `--bg-surface` (main panel), `--bg-surface-alt` (secondary/detail panels), `--bg-page` (page root), `--text-primary`, `--text-muted`, `--border`. Components that don't declare `background` inherit white in dark mode.
 
 ---
 
@@ -193,6 +268,9 @@ taskkill /PID <PID> /F
 | `bun: command not found` | Bun not in PATH after install | Restart terminal or add `%USERPROFILE%\.bun\bin` to PATH |
 | `Cannot find module 'node:fs'` in tests | Pre-existing issue in `sql-splitter.test.ts` | Not blocking — ignore this specific file |
 | Blank app window, no content | Vite not running or CSP block | Check `bun run dev` output; ensure port 1420 is free |
+| `-32601 Method not found: <rpc.method>` | Old sidecar binary running — new RPC handlers not compiled in | Recompile sidecar binary (see above), restart `tauri dev` |
+| `PermissionDenied` in `tauri-build lib.rs` | Zombie sidecar processes locking the binary | Kill with `Get-Process \| Where-Object { $_.Name -like "*veesker*" } \| Stop-Process -Force` |
+| `ORA-01780 string literal required` in EXPLAIN PLAN | `EXPLAIN PLAN SET STATEMENT_ID = :bind` — Oracle requires a literal, not a bind variable | Use `'${sid}'` string interpolation for STATEMENT_ID; sid is machine-generated so this is safe |
 
 ---
 
