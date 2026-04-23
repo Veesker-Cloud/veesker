@@ -1098,8 +1098,9 @@ export async function vectorSimilaritySearch(p: {
     const qCol   = quoteIdent(p.columnName);
 
     // Optionally include the serialized vector for scatter/PCA
+    // Use CLOB to avoid ORA-00910 (VARCHAR2 SQL limit is 4000 bytes; vectors exceed it)
     const vecExtra = p.withVectors
-      ? `, FROM_VECTOR(t.${qCol} RETURNING VARCHAR2(32767)) AS VEC_STR__`
+      ? `, FROM_VECTOR(t.${qCol} RETURNING CLOB) AS VEC_STR__`
       : "";
 
     const sql = `
@@ -1112,6 +1113,9 @@ export async function vectorSimilaritySearch(p: {
 
     const res = await conn.execute<unknown[]>(sql, { vecStr: { val: vecStr, type: oracledb.STRING, maxSize: 16000 } }, {
       outFormat: oracledb.OUT_FORMAT_ARRAY,
+      fetchTypeHandler: (meta: { name: string }) => {
+        if (meta.name === "VEC_STR__") return { type: oracledb.STRING };
+      },
     });
 
     const allCols = (res.metaData ?? []).map((m) => ({ name: m.name }));
