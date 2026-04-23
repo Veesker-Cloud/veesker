@@ -88,6 +88,7 @@
       class="action-btn theme-btn"
       class:active={theme === "dark"}
       aria-label="Toggle dark mode"
+      aria-pressed={theme === "dark"}
       title="Toggle dark mode"
       onclick={onToggleTheme}
     >
