@@ -91,6 +91,10 @@
       sqlEditor.setEditorRatio(sqlEditor.editorRatio + 10 / sqlEditor.drawerHeight);
     }
   }
+
+  function triggerExplain(sql: string) {
+    if (sql.trim()) void runExplain(sql);
+  }
 </script>
 
 {#if !sqlEditor.drawerOpen}
@@ -223,10 +227,7 @@
           class="file-btn"
           title="Explain Plan (F6)"
           aria-label="Explain Plan"
-          onclick={() => {
-            const sql = active?.sql ?? "";
-            if (sql.trim()) void runExplain(sql);
-          }}
+          onclick={() => triggerExplain(active?.sql ?? "")}
         >
           Explain
         </button>
@@ -309,10 +310,7 @@
                 onRunAll={() => void sqlEditor.runActiveAll()}
                 onSave={() => void sqlEditor.saveActive()}
                 onSaveAs={() => void sqlEditor.saveAsActive()}
-                onExplain={() => {
-                  const sql = active?.sql ?? "";
-                  if (sql.trim()) void runExplain(sql);
-                }}
+                onExplain={triggerExplain}
               />
             {/if}
           </div>
@@ -347,7 +345,10 @@
                   nodes={activeTabResult.explainNodes}
                   onBack={() => {
                     if (!active) return;
-                    const prev = active.results.findLast((r) => r.id !== active!.activeResultId && r.status !== "explain");
+                    const prev =
+                      active.results.findLast(
+                        (r) => r.id !== active!.activeResultId && r.status !== "explain"
+                      ) ?? active.results.findLast((r) => r.id !== active!.activeResultId);
                     if (prev) setActiveResult(active.id, prev.id);
                   }}
                   {onExplainWithAI}

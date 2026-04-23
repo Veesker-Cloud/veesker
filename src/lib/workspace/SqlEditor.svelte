@@ -18,7 +18,7 @@
     onRunAll: () => void;
     onSave: () => void;
     onSaveAs: () => void;
-    onExplain: () => void;
+    onExplain: (sql: string) => void;
     compileErrors?: CompileError[] | null;
   };
   let { value, onChange, onRunCursor, onRunAll, onSave, onSaveAs, onExplain, compileErrors = null }: Props = $props();
@@ -85,7 +85,14 @@
               {
                 key: "F6",
                 preventDefault: true,
-                run: () => { onExplain(); return true; },
+                run: (v) => {
+                  const sel = v.state.selection.main;
+                  const sql = sel.from !== sel.to
+                    ? v.state.sliceDoc(sel.from, sel.to)
+                    : v.state.doc.toString();
+                  onExplain(sql);
+                  return true;
+                },
               },
             ])
           ),
