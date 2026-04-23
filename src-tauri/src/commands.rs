@@ -4,6 +4,7 @@ use tauri::AppHandle;
 use tauri::Manager;
 
 use crate::sidecar::{ensure, SidecarState};
+use crate::tray::{self, TrayState, ActiveConnection};
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "authType")]
@@ -223,15 +224,33 @@ pub async fn workspace_open(
     app: AppHandle,
     connection_id: String,
 ) -> Result<WorkspaceInfo, ConnectionTestErr> {
-    let params = {
+    let (params, conn_name) = {
         let svc = app.state::<ConnectionService>();
-        svc.sidecar_params(&connection_id).map_err(map_err)?
+        let params = svc.sidecar_params(&connection_id).map_err(map_err)?;
+        let name = svc.get(&connection_id).ok().map(|f| match f.meta {
+            crate::persistence::connections::ConnectionMeta::Basic { name, .. } => name,
+            crate::persistence::connections::ConnectionMeta::Wallet { name, .. } => name,
+        }).unwrap_or_else(|| connection_id.clone());
+        (params, name)
     };
-    let res = call_sidecar(&app, "workspace.open", params).await?;
+
+    tray::update_tray(&app, TrayState::Connecting).await;
+
+    let res = match call_sidecar(&app, "workspace.open", params).await {
+        Ok(v) => v,
+        Err(e) => {
+            tray::update_tray(&app, TrayState::Error).await;
+            return Err(e);
+        }
+    };
+
+    *app.state::<ActiveConnection>().0.lock().await = Some(conn_name);
+    tray::update_tray(&app, TrayState::Connected).await;
+
     let server_version = res
         .get("serverVersion")
         .and_then(|v| v.as_str())
-        .unwrap_or("Oracle (unknown)")
+        .unwrap_or("")
         .to_string();
     let current_schema = res
         .get("currentSchema")
@@ -244,6 +263,8 @@ pub async fn workspace_open(
 #[tauri::command]
 pub async fn workspace_close(app: AppHandle) -> Result<(), ConnectionTestErr> {
     call_sidecar(&app, "workspace.close", json!({})).await?;
+    *app.state::<ActiveConnection>().0.lock().await = None;
+    tray::update_tray(&app, TrayState::Idle).await;
     Ok(())
 }
 
