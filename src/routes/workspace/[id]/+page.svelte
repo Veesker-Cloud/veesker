@@ -508,6 +508,7 @@
       onExplainWithAI={(msg) => {
         chatPendingMessage = msg;
         showChat = true;
+        Promise.resolve().then(() => { chatPendingMessage = ""; });
       }}
     />
   </div>

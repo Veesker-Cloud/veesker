@@ -3,11 +3,12 @@ import { render } from "@testing-library/svelte";
 import SqlEditor from "./SqlEditor.svelte";
 
 const noop = () => {};
+const explainNoop = (_sql: string) => {};
 
 describe("SqlEditor", () => {
   it("mounts a CodeMirror editor", async () => {
     const { container } = render(SqlEditor, {
-      props: { value: "SELECT 1 FROM DUAL", onChange: noop, onRunCursor: noop, onRunAll: noop, onSave: noop, onSaveAs: noop, onExplain: noop },
+      props: { value: "SELECT 1 FROM DUAL", onChange: noop, onRunCursor: noop, onRunAll: noop, onSave: noop, onSaveAs: noop, onExplain: explainNoop },
     });
     await new Promise((r) => setTimeout(r, 0));
     expect(container.querySelector(".cm-editor")).not.toBeNull();
@@ -15,7 +16,7 @@ describe("SqlEditor", () => {
 
   it("displays the initial value", async () => {
     const { container } = render(SqlEditor, {
-      props: { value: "SELECT * FROM dual", onChange: noop, onRunCursor: noop, onRunAll: noop, onSave: noop, onSaveAs: noop, onExplain: noop },
+      props: { value: "SELECT * FROM dual", onChange: noop, onRunCursor: noop, onRunAll: noop, onSave: noop, onSaveAs: noop, onExplain: explainNoop },
     });
     await new Promise((r) => setTimeout(r, 0));
     expect(container.textContent).toContain("SELECT * FROM dual");
@@ -25,7 +26,7 @@ describe("SqlEditor", () => {
   it.skip("calls onRunCursor when Mod-Enter is triggered", async () => {
     const onRunCursor = vi.fn();
     const { container } = render(SqlEditor, {
-      props: { value: "SELECT 1", onChange: noop, onRunCursor, onRunAll: noop, onSave: noop, onSaveAs: noop, onExplain: noop },
+      props: { value: "SELECT 1", onChange: noop, onRunCursor, onRunAll: noop, onSave: noop, onSaveAs: noop, onExplain: explainNoop },
     });
     await new Promise((r) => setTimeout(r, 0));
     const editor = container.querySelector(".cm-editor") as HTMLElement;
