@@ -194,7 +194,7 @@
     width: 220px;
     flex-shrink: 0;
     border-right: 1px solid rgba(26, 22, 18, 0.1);
-    background: #f6f1e8;
+    background: var(--bg-surface);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -214,7 +214,7 @@
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: rgba(26, 22, 18, 0.55);
+    color: var(--text-secondary);
     font-weight: 600;
   }
 
@@ -232,8 +232,8 @@
     padding: 3px 6px;
     border: 1px solid rgba(26, 22, 18, 0.15);
     border-radius: 3px;
-    background: #fff;
-    color: #1a1612;
+    background: var(--bg-surface-raised);
+    color: var(--text-primary);
     outline: none;
   }
   .history-search:focus {
@@ -246,7 +246,7 @@
     border: none;
     cursor: pointer;
     font-size: 10px;
-    color: rgba(26, 22, 18, 0.5);
+    color: var(--text-muted);
     padding: 2px 4px;
     border-radius: 3px;
     line-height: 1;
@@ -278,7 +278,7 @@
     text-align: left;
   }
   .history-item:hover {
-    background: rgba(26, 22, 18, 0.04);
+    background: var(--row-hover);
   }
 
   .status-icon {
@@ -286,7 +286,7 @@
     font-weight: 700;
     flex-shrink: 0;
     margin-top: 1px;
-    color: rgba(26, 22, 18, 0.45);
+    color: var(--text-muted);
   }
   .status-icon.icon-ok {
     color: #2d8a4e;
@@ -306,7 +306,7 @@
   .item-sql {
     font-family: "SF Mono", Menlo, monospace;
     font-size: 11px;
-    color: #1a1612;
+    color: var(--text-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -315,14 +315,14 @@
   .item-meta {
     font-family: "Inter", -apple-system, system-ui, sans-serif;
     font-size: 10px;
-    color: rgba(26, 22, 18, 0.5);
+    color: var(--text-muted);
   }
 
   .history-empty {
     padding: 16px 10px;
     font-family: "Inter", -apple-system, system-ui, sans-serif;
     font-size: 11px;
-    color: rgba(26, 22, 18, 0.45);
+    color: var(--text-muted);
     text-align: center;
     line-height: 1.4;
   }
@@ -343,7 +343,7 @@
   }
 
   .skeleton {
-    background: rgba(26, 22, 18, 0.1);
+    background: var(--bg-surface-alt);
     border-radius: 2px;
     animation: shimmer 1.4s ease-in-out infinite;
   }
@@ -386,7 +386,7 @@
     padding: 6px 10px;
     font-family: "Inter", -apple-system, system-ui, sans-serif;
     font-size: 10px;
-    color: rgba(26, 22, 18, 0.45);
+    color: var(--text-muted);
     text-align: center;
   }
 </style>
