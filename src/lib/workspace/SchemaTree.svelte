@@ -502,7 +502,7 @@
   .object {
     display: flex;
     align-items: center;
-    width: 100%;
+    min-width: 0;
     text-align: left;
     background: transparent;
     border: none;
