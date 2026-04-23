@@ -1,4 +1,5 @@
 import oracledb from "oracledb";
+import { embedText, type EmbedParams } from "./embedding";
 
 /** Validate and quote an Oracle identifier for use in double-quoted SQL interpolation. */
 function quoteIdent(name: string): string {
@@ -1192,5 +1193,75 @@ export async function vectorIndexList(p: {
       // ALL_VECTOR_INDEXES doesn't exist on Oracle < 23ai
       return { indexes: [] };
     }
+  });
+}
+
+// ── Embedding generation ──────────────────────────────────────────────────────
+
+export async function embedCountPending(p: {
+  owner: string;
+  tableName: string;
+  vectorColumn: string;
+}): Promise<{ total: number; pending: number }> {
+  return withActiveSession(async (conn) => {
+    const qOwner = quoteIdent(p.owner);
+    const qTable = quoteIdent(p.tableName);
+    const qVec   = quoteIdent(p.vectorColumn);
+    const res = await conn.execute<[number, number]>(
+      `SELECT COUNT(*) AS total,
+              COUNT(CASE WHEN ${qVec} IS NULL THEN 1 END) AS pending
+         FROM ${qOwner}.${qTable}`,
+      [],
+      { outFormat: oracledb.OUT_FORMAT_ARRAY }
+    );
+    const row = res.rows?.[0] ?? [0, 0];
+    return { total: Number(row[0]), pending: Number(row[1]) };
+  });
+}
+
+export async function embedBatch(p: {
+  owner: string;
+  tableName: string;
+  textColumn: string;
+  vectorColumn: string;
+  batchSize: number;
+  embed: EmbedParams;
+}): Promise<{ embedded: number; errors: number }> {
+  return withActiveSession(async (conn) => {
+    const qOwner = quoteIdent(p.owner);
+    const qTable = quoteIdent(p.tableName);
+    const qText  = quoteIdent(p.textColumn);
+    const qVec   = quoteIdent(p.vectorColumn);
+    const limit  = Math.min(Math.max(1, p.batchSize ?? 20), 200);
+
+    const res = await conn.execute<[string, string]>(
+      `SELECT ROWIDTOCHAR(ROWID) AS ROWID_CHAR, ${qText}
+         FROM ${qOwner}.${qTable}
+        WHERE ${qVec} IS NULL
+        FETCH FIRST ${limit} ROWS ONLY`,
+      [],
+      { outFormat: oracledb.OUT_FORMAT_ARRAY }
+    );
+
+    const rows = (res.rows ?? []) as [string, string][];
+    let embedded = 0;
+    let errors = 0;
+
+    for (const [rowid, text] of rows) {
+      try {
+        const vector = await embedText({ ...p.embed, text: String(text ?? "") });
+        const vecStr = `[${vector.map(n => n.toFixed(8)).join(",")}]`;
+        await conn.execute(
+          `UPDATE ${qOwner}.${qTable} SET ${qVec} = TO_VECTOR(:v) WHERE ROWID = CHARTOROWID(:rowid)`,
+          { v: { val: vecStr, type: oracledb.STRING, maxSize: 16000 }, rowid }
+        );
+        embedded++;
+      } catch {
+        errors++;
+      }
+    }
+
+    if (embedded > 0) await conn.commit();
+    return { embedded, errors };
   });
 }

@@ -85,6 +85,8 @@ pub fn run() {
             commands::vector_tables_in_schema,
             commands::vector_index_list,
             commands::ai_chat,
+            commands::embed_count_pending,
+            commands::embed_batch,
             commands::ai_key_save,
             commands::ai_key_get,
             commands::connection_commit,

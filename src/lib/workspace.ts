@@ -226,3 +226,20 @@ export async function aiKeySave(service: string, key: string): Promise<void> {
 export async function aiKeyGet(service: string): Promise<string | null> {
   return invoke<string | null>("ai_key_get", { service });
 }
+
+export const embedCountPending = (owner: string, tableName: string, vectorColumn: string) =>
+  call<{ total: number; pending: number }>("embed_count_pending", {
+    payload: { owner, tableName, vectorColumn },
+  });
+
+export const embedBatch = (
+  owner: string,
+  tableName: string,
+  textColumn: string,
+  vectorColumn: string,
+  batchSize: number,
+  embed: EmbedConfig,
+) =>
+  call<{ embedded: number; errors: number }>("embed_batch", {
+    payload: { owner, tableName, textColumn, vectorColumn, batchSize, embed },
+  });
