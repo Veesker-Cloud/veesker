@@ -134,7 +134,7 @@
 </div>
 
 <style>
-  .ep-root { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+  .ep-root { display: flex; flex-direction: column; height: 100%; overflow: hidden; background: var(--bg-surface); }
   .ep-header {
     display: flex; align-items: center; gap: 8px; padding: 6px 10px;
     border-bottom: 1px solid var(--border); flex-shrink: 0;
@@ -163,7 +163,7 @@
   .tree-children { padding-left: 16px; }
   .obj { color: var(--text-muted); }
   .cost { color: var(--text-muted); font-size: 10px; }
-  .detail-col { width: 220px; flex-shrink: 0; overflow-y: auto; padding: 10px 12px; }
+  .detail-col { width: 220px; flex-shrink: 0; overflow-y: auto; padding: 10px 12px; background: var(--bg-surface-alt); }
   .detail-grid { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin: 0; }
   dt { font-size: 10px; color: var(--text-muted); align-self: start; padding-top: 1px; }
   dd { font-size: 11px; color: var(--text-primary); margin: 0; word-break: break-all; }
