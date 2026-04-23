@@ -3,7 +3,7 @@ import { queryExecute, queryExecuteMulti, queryCancel, type QueryResult } from "
 import { splitSql } from "$lib/sql-splitter";
 import { historySave, type HistoryEntry } from "$lib/query-history";
 import { saveAs, saveExisting, openFile } from "$lib/sql-files";
-import { compileErrorsGet, connectionCommit, connectionRollback, explainPlanGet } from "$lib/workspace";
+import { compileErrorsGet, connectionCommit, connectionRollback, explainPlanGet, type ProcExecuteResult } from "$lib/workspace";
 
 export type CompileError = {
   line: number;
@@ -787,5 +787,60 @@ export function setActiveResult(tabId: string, resultId: string): void {
   if (!tab) return;
   if (!tab.results.some((r) => r.id === resultId)) return;
   tab.activeResultId = resultId;
+  _tabs = [..._tabs];
+}
+
+export function addProcResults(result: ProcExecuteResult): void {
+  const tab = _tabs.find((t) => t.id === _activeId);
+  if (!tab) return;
+
+  const logLines: string[] = [
+    ...result.outParams.map((p) => `OUT ${p.name} = ${p.value}`),
+    ...result.dbmsOutput,
+  ];
+
+  let lastId: string | null = null;
+
+  if (result.refCursors.length > 0) {
+    for (const rc of result.refCursors) {
+      const id = crypto.randomUUID();
+      tab.results = [
+        ...tab.results,
+        {
+          id,
+          statementIndex: 0,
+          sqlPreview: `REF CURSOR: ${rc.name}`,
+          status: "ok",
+          result: { columns: rc.columns, rows: rc.rows, rowCount: rc.rows.length, elapsedMs: 0 },
+          error: null,
+          elapsedMs: 0,
+          dbmsOutput: logLines.length > 0 ? logLines : null,
+          compileErrors: null,
+          explainNodes: null,
+        },
+      ];
+      lastId = id;
+    }
+  } else {
+    const id = crypto.randomUUID();
+    tab.results = [
+      ...tab.results,
+      {
+        id,
+        statementIndex: 0,
+        sqlPreview: "Procedure executed",
+        status: "ok",
+        result: null,
+        error: null,
+        elapsedMs: 0,
+        dbmsOutput: logLines.length > 0 ? logLines : ["(no output)"],
+        compileErrors: null,
+        explainNodes: null,
+      },
+    ];
+    lastId = id;
+  }
+
+  if (lastId) tab.activeResultId = lastId;
   _tabs = [..._tabs];
 }
