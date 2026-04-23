@@ -357,6 +357,21 @@ export const sqlEditor = {
       if (tabResult.status === "ok" && tabResult.result !== null && tabResult.result.columns.length === 0 && tabResult.result.rowCount > 0) {
         _pendingTx = true;
       }
+      if (tabResult.status === "ok") {
+        const compilable = extractCompilable(sql);
+        if (compilable) {
+          const tabId = tab.id;
+          compileErrorsGet(compilable.objectType, compilable.objectName).then((ceRes) => {
+            const t = _tabs.find((x) => x.id === tabId);
+            if (!t) return;
+            const r = t.results.find((x) => x.id === resultId);
+            if (r) {
+              r.compileErrors = ceRes.ok ? ceRes.data : [];
+              _tabs = [..._tabs];
+            }
+          });
+        }
+      }
     } finally {
       tab.running = false;
       tab.runningRequestId = null;
@@ -592,6 +607,21 @@ export const sqlEditor = {
       tab.results = [tabResult];
       tab.activeResultId = resultId;
       pushHistory(sqlToRun, tabResult);
+      if (tabResult.status === "ok") {
+        const compilable = extractCompilable(sqlToRun);
+        if (compilable) {
+          const tabId = tab.id;
+          compileErrorsGet(compilable.objectType, compilable.objectName).then((ceRes) => {
+            const t = _tabs.find((x) => x.id === tabId);
+            if (!t) return;
+            const r = t.results.find((x) => x.id === resultId);
+            if (r) {
+              r.compileErrors = ceRes.ok ? ceRes.data : [];
+              _tabs = [..._tabs];
+            }
+          });
+        }
+      }
     } finally {
       tab.running = false;
       tab.runningRequestId = null;
