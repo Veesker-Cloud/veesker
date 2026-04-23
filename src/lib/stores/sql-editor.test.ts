@@ -91,7 +91,7 @@ describe("sqlEditor.openPreview", () => {
     mockedQueryExecute.mockResolvedValue(okResult());
     await sqlEditor.openPreview("SYSTEM", "HELP");
     expect(mockedQueryExecute).toHaveBeenCalledWith(
-      `SELECT * FROM "SYSTEM"."HELP" FETCH FIRST 100 ROWS ONLY`,
+      `SELECT * FROM "SYSTEM"."HELP" FETCH FIRST 200 ROWS ONLY`,
       expect.any(String)
     );
     expect(sqlEditor.tabs[0].title).toBe("SYSTEM.HELP");

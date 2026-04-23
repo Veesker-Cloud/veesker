@@ -58,11 +58,17 @@ describe("queryExecute multi-statement (splitMulti: true)", () => {
   });
 
   test("second statement errors stops iteration with error entry, third not run", async () => {
-    let callIdx = 0;
-    const conn = fakeConn(async () => {
-      callIdx++;
-      if (callIdx === 2) throw new Error("ORA-00942: table or view does not exist");
-      return makeSelectResult([[callIdx]]);
+    let stmtCallIdx = 0;
+    const conn = fakeConn(async (sql: string) => {
+      // Ignore DBMS_OUTPUT infrastructure calls — only count real statement executes.
+      if (typeof sql === "string" && sql.toUpperCase().includes("DBMS_OUTPUT")) {
+        return { outBinds: { LINE: null, STATUS: 1 } };
+      }
+      stmtCallIdx++;
+      if (typeof sql === "string" && sql.toLowerCase().includes("nope")) {
+        throw new Error("ORA-00942: table or view does not exist");
+      }
+      return makeSelectResult([[stmtCallIdx]]);
     });
     setSession(conn, "SCOTT");
     const sql = "SELECT 1 FROM dual;\nSELECT * FROM nope;\nSELECT 3 FROM dual;";
@@ -73,8 +79,8 @@ describe("queryExecute multi-statement (splitMulti: true)", () => {
     expect(mr.results[0].status).toBe("ok");
     expect(mr.results[1].status).toBe("error");
     expect(mr.results[1].error.message).toContain("ORA-00942");
-    // Third statement should NOT have been executed (callIdx would be 3 if it ran)
-    expect(callIdx).toBe(2);
+    // Third statement should NOT have been executed
+    expect(stmtCallIdx).toBe(2);
   });
 
   test("splitter error (unterminated string) throws SPLITTER_ERROR code -32014", async () => {
@@ -111,19 +117,21 @@ describe("queryExecute multi-statement (splitMulti: true)", () => {
   });
 
   test("cancel between statements produces cancelled entry and stops", async () => {
-    // We simulate cancel by manually setting _running.cancelled after the first execute.
-    // We can't call queryCancel mid-test easily (no real break), so we inject via
-    // a side-effectful execute that marks the request as cancelled via _running internals.
-    // Strategy: make the second execute throw with a cancel-like error by injecting
-    // a fake _running state via the execute mock.
+    // We simulate cancel by marking _running.cancelled inside the first real statement
+    // execute, so that the inter-statement check fires before the second statement runs.
+    // DBMS_OUTPUT infrastructure calls are ignored so they don't interfere with the counter.
     const { _getRunning } = await import("../src/oracle");
 
-    let callIdx = 0;
+    let stmtCallIdx = 0;
     let capturedRequestId: string | null = null;
 
-    const conn = fakeConn(async () => {
-      callIdx++;
-      if (callIdx === 1) {
+    const conn = fakeConn(async (sql: string) => {
+      // Skip DBMS_OUTPUT calls — return a drain-stop response.
+      if (typeof sql === "string" && sql.toUpperCase().includes("DBMS_OUTPUT")) {
+        return { outBinds: { LINE: null, STATUS: 1 } };
+      }
+      stmtCallIdx++;
+      if (stmtCallIdx === 1) {
         // Capture requestId and mark cancelled before returning, simulating
         // a cancel that arrives between statements
         const running = _getRunning();
@@ -147,7 +155,7 @@ describe("queryExecute multi-statement (splitMulti: true)", () => {
     expect(mr.results[1].statementIndex).toBe(1);
     // Total: 2 results
     expect(mr.results).toHaveLength(2);
-    // execute was only called once (second statement was skipped)
-    expect(callIdx).toBe(1);
+    // only the first real statement was executed (second was skipped due to cancel)
+    expect(stmtCallIdx).toBe(1);
   });
 });

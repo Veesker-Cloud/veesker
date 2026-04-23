@@ -10,6 +10,22 @@ vi.mock("$lib/sql-query", () => ({
   }),
 }));
 
+vi.mock("$lib/workspace", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("$lib/workspace")>();
+  return {
+    ...mod,
+    aiKeyGet: vi.fn().mockResolvedValue(null),
+    aiKeySave: vi.fn().mockResolvedValue(undefined),
+    tableCountRows: vi.fn().mockResolvedValue({ count: 0 }),
+    vectorIndexList: vi.fn().mockResolvedValue({ indexes: [] }),
+    vectorSearch: vi.fn().mockResolvedValue({ columns: [], rows: [] }),
+    vectorIndexCreate: vi.fn().mockResolvedValue({}),
+    vectorIndexDrop: vi.fn().mockResolvedValue({}),
+    embedCountPending: vi.fn().mockResolvedValue({ count: 0 }),
+    embedBatch: vi.fn().mockResolvedValue({}),
+  };
+});
+
 beforeEach(() => sqlEditor.reset());
 
 const okDetails = {
