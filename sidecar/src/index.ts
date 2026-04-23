@@ -22,6 +22,8 @@ import {
   vectorTablesInSchema,
   vectorIndexList,
   vectorSimilaritySearch,
+  embedCountPending,
+  embedBatch,
 } from "./oracle";
 import { aiChat } from "./ai";
 
@@ -51,6 +53,8 @@ const handlers: HandlerMap = {
     const vector = await embedText(embed as EmbedParams);
     return vectorSimilaritySearch({ owner, tableName, columnName, vector, distanceMetric: distanceMetric ?? "COSINE", limit: limit ?? 10 });
   },
+  "embed.count_pending": (params) => embedCountPending(params as any),
+  "embed.batch": (params) => embedBatch(params as any),
   "ai.chat": (params) => aiChat(params as any),
   ping: async () => ({ pong: true }),
 };

@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { TableDetails, TableRelated, ObjectKind, Loadable, DataFlowResult, VectorIndex, VectorSearchResult, EmbedConfig, EmbedProvider } from "$lib/workspace";
-  import { tableCountRows, vectorIndexList, vectorSearch } from "$lib/workspace";
+  import { tableCountRows, vectorIndexList, vectorSearch, embedCountPending, embedBatch } from "$lib/workspace";
   import { sqlEditor } from "$lib/stores/sql-editor.svelte";
   import DataFlow from "./DataFlow.svelte";
 
@@ -94,12 +94,27 @@
   let showConfigBar  = $state(true);
   let expandedRow    = $state<number | null>(null);
 
+  // Generate embeddings state
+  let showGenPanel   = $state(false);
+  let genTextCol     = $state("");
+  let genRunning     = $state(false);
+  let genAbort       = $state(false);
+  let genProgress    = $state({ done: 0, total: 0, errors: 0 });
+  let genDone        = $state(false);
+  let genError       = $state<string | null>(null);
+
   $effect(() => {
     void selected;
     vectorIndexes = { kind: "idle" };
     searchResult = { kind: "idle" };
     searchText = "";
     vectorColName = "";
+    showGenPanel = false;
+    genRunning = false;
+    genAbort = false;
+    genDone = false;
+    genError = null;
+    genProgress = { done: 0, total: 0, errors: 0 };
   });
 
   // Auto-select first VECTOR column when entering Vectors tab
@@ -135,6 +150,45 @@
       selected.owner, selected.name, vectorColName, embedDistance, embedLimit,
     );
     searchResult = res.ok ? { kind: "ok", value: res.data } : { kind: "err", message: res.error.message };
+  }
+
+  async function startGenerate() {
+    if (!selected || !vectorColName || !genTextCol || genRunning) return;
+    genRunning = true;
+    genAbort = false;
+    genDone = false;
+    genError = null;
+    genProgress = { done: 0, total: 0, errors: 0 };
+    persistEmbed();
+
+    const embed: EmbedConfig = {
+      provider: embedProvider, model: embedModel,
+      baseUrl: embedBaseUrl || undefined, apiKey: embedApiKey || undefined,
+    };
+
+    const countRes = await embedCountPending(selected.owner, selected.name, vectorColName);
+    if (!countRes.ok) {
+      genError = countRes.error.message;
+      genRunning = false;
+      return;
+    }
+    genProgress = { done: 0, total: countRes.data.pending, errors: 0 };
+
+    const BATCH = 20;
+    while (!genAbort) {
+      const res = await embedBatch(selected.owner, selected.name, genTextCol, vectorColName, BATCH, embed);
+      if (!res.ok) { genError = res.error.message; break; }
+      if (res.data.embedded === 0 && res.data.errors === 0) break;
+      genProgress = {
+        done: genProgress.done + res.data.embedded,
+        total: genProgress.total,
+        errors: genProgress.errors + res.data.errors,
+      };
+    }
+
+    genRunning = false;
+    if (!genAbort && !genError) genDone = true;
+    vectorIndexes = { kind: "idle" };
   }
 
   async function loadVectorIndexes() {
@@ -720,6 +774,7 @@
 
       {:else if activeTab === "vectors"}
         {@const vectorCols = details.kind === "ok" ? details.value.columns.filter(c => c.isVector) : []}
+        {@const textCols = details.kind === "ok" ? details.value.columns.filter(c => !c.isVector) : []}
         <div class="vec-panel">
 
           <!-- Config toggle strip -->
@@ -791,6 +846,81 @@
                 {/if}
               </div>
             {/if}
+          {/if}
+
+          <!-- Generate embeddings panel -->
+          <div class="vec-gen-strip">
+            <button
+              class="vec-gen-toggle"
+              class:active={showGenPanel}
+              onclick={() => { showGenPanel = !showGenPanel; if (showGenPanel && !genTextCol && textCols.length > 0) genTextCol = textCols[0].name; }}
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.2"/>
+                <path d="M6 3.5v5M3.5 6h5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+              </svg>
+              Generate Embeddings
+              {#if genRunning}
+                <span class="gen-running-badge">{genProgress.done}/{genProgress.total}</span>
+              {:else if genDone}
+                <span class="gen-done-badge">✓ {genProgress.done}</span>
+              {/if}
+            </button>
+          </div>
+
+          {#if showGenPanel}
+            <div class="vec-gen-panel">
+              {#if !genRunning && !genDone}
+                <div class="vec-cfg-row">
+                  <span class="vec-label">Text column</span>
+                  <select class="vec-select" bind:value={genTextCol}>
+                    {#each textCols as c}
+                      <option value={c.name}>{c.name} <span style="opacity:0.5">({c.dataType})</span></option>
+                    {/each}
+                  </select>
+                  <span class="vec-label">→ Vector column</span>
+                  <select class="vec-select" bind:value={vectorColName}>
+                    {#each vectorCols as vc}
+                      <option value={vc.name}>⬡ {vc.name}</option>
+                    {/each}
+                  </select>
+                </div>
+                <div class="vec-cfg-row">
+                  <span class="vec-label-hint">Uses current embedding provider ({PROVIDER_LABELS[embedProvider]} · {embedModel || PROVIDER_DEFAULTS[embedProvider].model}). Configure above if needed.</span>
+                  <button
+                    class="vec-gen-start-btn"
+                    disabled={!genTextCol || !vectorColName}
+                    onclick={() => void startGenerate()}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                      <path d="M3 2l7 4-7 4V2z" fill="currentColor"/>
+                    </svg>
+                    Start
+                  </button>
+                </div>
+              {:else if genRunning}
+                {@const pct = genProgress.total > 0 ? Math.round(genProgress.done / genProgress.total * 100) : 0}
+                <div class="vec-gen-progress">
+                  <div class="gen-progress-bar-wrap">
+                    <div class="gen-progress-bar" style="width:{pct}%"></div>
+                  </div>
+                  <span class="gen-progress-label">{genProgress.done} / {genProgress.total} rows embedded{genProgress.errors > 0 ? ` · ${genProgress.errors} errors` : ""}</span>
+                  <button class="vec-gen-stop-btn" onclick={() => { genAbort = true; }}>Stop</button>
+                </div>
+              {:else if genDone}
+                <div class="vec-gen-done">
+                  <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+                    <circle cx="6.5" cy="6.5" r="5.5" stroke="#4caf50" stroke-width="1.2"/>
+                    <path d="M3.5 6.5l2 2 4-4" stroke="#4caf50" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                  {genProgress.done} rows embedded{genProgress.errors > 0 ? ` · ${genProgress.errors} errors` : ""}
+                  <button class="vec-gen-again-btn" onclick={() => { genDone = false; genProgress = { done: 0, total: 0, errors: 0 }; }}>Run again</button>
+                </div>
+              {/if}
+              {#if genError}
+                <div class="banner banner-err" style="margin:0.4rem 0 0">{genError}</div>
+              {/if}
+            </div>
           {/if}
 
           <!-- Search input -->
@@ -1358,6 +1488,130 @@
   .vec-model-input:focus, .vec-url-input:focus {
     border-color: rgba(167,139,250,0.5);
   }
+  /* ── Generate embeddings panel ──────────────────────────────── */
+  .vec-gen-strip {
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    flex-shrink: 0;
+  }
+  .vec-gen-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.45);
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 0.4rem 0.7rem;
+    cursor: pointer;
+    width: 100%;
+    text-align: left;
+    transition: color 0.12s;
+  }
+  .vec-gen-toggle:hover, .vec-gen-toggle.active { color: rgba(255,255,255,0.75); }
+  .gen-running-badge {
+    background: rgba(179,62,31,0.3);
+    color: #f5a08a;
+    font-size: 9.5px;
+    padding: 1px 5px;
+    border-radius: 8px;
+    margin-left: 2px;
+  }
+  .gen-done-badge {
+    background: rgba(76,175,80,0.2);
+    color: #81c784;
+    font-size: 9.5px;
+    padding: 1px 5px;
+    border-radius: 8px;
+    margin-left: 2px;
+  }
+  .vec-gen-panel {
+    background: rgba(0,0,0,0.15);
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    padding: 0.5rem 0.7rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    flex-shrink: 0;
+  }
+  .vec-label-hint {
+    font-size: 10px;
+    color: rgba(255,255,255,0.3);
+    flex: 1;
+  }
+  .vec-gen-start-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: #b33e1f;
+    border: none;
+    color: #fff;
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 0.25rem 0.65rem;
+    border-radius: 4px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .vec-gen-start-btn:hover:not(:disabled) { background: #c94b28; }
+  .vec-gen-start-btn:disabled { opacity: 0.4; cursor: default; }
+  .vec-gen-progress {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .gen-progress-bar-wrap {
+    flex: 1;
+    height: 4px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .gen-progress-bar {
+    height: 100%;
+    background: #b33e1f;
+    border-radius: 2px;
+    transition: width 0.3s ease;
+  }
+  .gen-progress-label {
+    font-size: 10.5px;
+    color: rgba(255,255,255,0.5);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .vec-gen-stop-btn {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: rgba(255,255,255,0.55);
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 10px;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .vec-gen-stop-btn:hover { color: rgba(255,255,255,0.85); }
+  .vec-gen-done {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 11px;
+    color: rgba(255,255,255,0.65);
+  }
+  .vec-gen-again-btn {
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: rgba(255,255,255,0.45);
+    font-size: 10px;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-left: auto;
+  }
+  .vec-gen-again-btn:hover { color: rgba(255,255,255,0.75); }
+
   .vec-search-row {
     display: flex;
     gap: 0.5rem;

@@ -553,6 +553,18 @@ pub async fn ai_chat(app: AppHandle, payload: Value) -> Result<Value, Connection
 }
 
 #[tauri::command]
+pub async fn embed_count_pending(app: AppHandle, payload: Value) -> Result<Value, ConnectionTestErr> {
+    let res = call_sidecar(&app, "embed.count_pending", payload).await?;
+    Ok(res)
+}
+
+#[tauri::command]
+pub async fn embed_batch(app: AppHandle, payload: Value) -> Result<Value, ConnectionTestErr> {
+    let res = call_sidecar(&app, "embed.batch", payload).await?;
+    Ok(res)
+}
+
+#[tauri::command]
 pub async fn ai_key_save(service: String, key: String) -> Result<(), String> {
     crate::persistence::secrets::set_api_key(&service, &key).map_err(|e| e.to_string())
 }
