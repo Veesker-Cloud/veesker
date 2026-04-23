@@ -31,16 +31,19 @@
   async function execute() {
     executing = true;
     execError = null;
-    const paramsToSend = params
-      .filter((p) => p.direction !== "OUT")
-      .map((p) => ({ name: p.name, value: values[p.name] ?? "" }));
-    const res = await procExecuteRun({ owner, name, params: paramsToSend });
-    executing = false;
-    if (res.ok) {
-      onResult(res.data);
-      onClose();
-    } else {
-      execError = res.error.message;
+    try {
+      const paramsToSend = params
+        .filter((p) => p.direction !== "OUT")
+        .map((p) => ({ name: p.name, value: values[p.name] ?? "" }));
+      const res = await procExecuteRun({ owner, name, params: paramsToSend });
+      if (res.ok) {
+        onResult(res.data);
+        onClose();
+      } else {
+        execError = res.error.message;
+      }
+    } finally {
+      executing = false;
     }
   }
 
