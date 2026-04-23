@@ -848,18 +848,21 @@
               </svg>
             </button>
             <div class="vec-strip-right">
-              <label class="vec-vec-toggle" title="Include vector values in results (enables scatter plot)">
-                <input type="checkbox" bind:checked={withVectors} />
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.2"/>
-                  <circle cx="6" cy="6" r="2" fill="currentColor"/>
-                  <line x1="1" y1="6" x2="3" y2="6" stroke="currentColor" stroke-width="1.2"/>
-                  <line x1="9" y1="6" x2="11" y2="6" stroke="currentColor" stroke-width="1.2"/>
-                  <line x1="6" y1="1" x2="6" y2="3" stroke="currentColor" stroke-width="1.2"/>
-                  <line x1="6" y1="9" x2="6" y2="11" stroke="currentColor" stroke-width="1.2"/>
+              <button
+                class="scatter-pill"
+                class:scatter-pill-on={withVectors}
+                onclick={() => withVectors = !withVectors}
+                title="Include vector values in results to enable the Scatter plot"
+              >
+                <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+                  <circle cx="3" cy="8" r="1.5" fill="currentColor"/>
+                  <circle cx="6" cy="4" r="1.5" fill="currentColor"/>
+                  <circle cx="9" cy="6" r="1.5" fill="currentColor"/>
+                  <circle cx="5" cy="7" r="1.5" fill="currentColor"/>
                 </svg>
                 Scatter
-              </label>
+                <span class="scatter-pill-state">{withVectors ? "ON" : "OFF"}</span>
+              </button>
             </div>
           </div>
 
@@ -1048,7 +1051,29 @@
                 </div>
 
                 {#if scatterView}
-                  <VectorScatter result={searchResult.value} />
+                  {#if searchResult.value.vectors && searchResult.value.vectors.length > 0}
+                    <VectorScatter result={searchResult.value} />
+                  {:else}
+                    <div class="scatter-cta">
+                      <svg width="32" height="32" viewBox="0 0 32 32" fill="none" opacity="0.3">
+                        <circle cx="8" cy="22" r="4" stroke="currentColor" stroke-width="1.5"/>
+                        <circle cx="16" cy="10" r="4" stroke="currentColor" stroke-width="1.5"/>
+                        <circle cx="25" cy="17" r="4" stroke="currentColor" stroke-width="1.5"/>
+                        <circle cx="13" cy="20" r="4" stroke="currentColor" stroke-width="1.5"/>
+                      </svg>
+                      <p class="scatter-cta-title">Scatter requer vetores</p>
+                      <p class="scatter-cta-hint">A busca foi feita sem incluir vetores. Ative o Scatter e busque novamente.</p>
+                      <button class="scatter-cta-btn" onclick={() => { withVectors = true; void runVectorSearch(); }}>
+                        <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+                          <circle cx="3" cy="8" r="1.5" fill="currentColor"/>
+                          <circle cx="6" cy="4" r="1.5" fill="currentColor"/>
+                          <circle cx="9" cy="6" r="1.5" fill="currentColor"/>
+                          <circle cx="5" cy="7" r="1.5" fill="currentColor"/>
+                        </svg>
+                        Ativar Scatter e re-buscar
+                      </button>
+                    </div>
+                  {/if}
                 {:else}
                   <div class="col-table-wrap">
                     <table class="col-table vec-result-table">
@@ -1630,18 +1655,87 @@
     flex-shrink: 0;
     padding-right: 0.4rem;
   }
-  .vec-vec-toggle {
-    display: flex;
+  /* ── Scatter pill toggle ─────────────────────────────────────── */
+  .scatter-pill {
+    display: inline-flex;
     align-items: center;
-    gap: 0.25rem;
-    font-size: 10px;
-    color: rgba(26,22,18,0.35);
+    gap: 0.3rem;
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 0.25rem 0.6rem;
+    border-radius: 20px;
+    border: 1.5px solid rgba(26,22,18,0.18);
+    background: rgba(26,22,18,0.04);
+    color: rgba(26,22,18,0.45);
     cursor: pointer;
+    transition: all 0.15s;
     user-select: none;
   }
-  .vec-vec-toggle input { display: none; }
-  .vec-vec-toggle:has(input:checked) { color: #7c3aed; }
-  .vec-vec-toggle:hover { color: rgba(26,22,18,0.65); }
+  .scatter-pill:hover {
+    border-color: #7c3aed;
+    color: #7c3aed;
+    background: rgba(124,58,237,0.06);
+  }
+  .scatter-pill-on {
+    border-color: #7c3aed;
+    background: rgba(124,58,237,0.1);
+    color: #7c3aed;
+  }
+  .scatter-pill-state {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    padding: 1px 4px;
+    border-radius: 3px;
+    background: rgba(26,22,18,0.07);
+    color: rgba(26,22,18,0.4);
+  }
+  .scatter-pill-on .scatter-pill-state {
+    background: rgba(124,58,237,0.15);
+    color: #7c3aed;
+  }
+
+  /* ── Scatter CTA (no vector data) ───────────────────────────── */
+  .scatter-cta {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 2.5rem 1rem;
+    text-align: center;
+  }
+  .scatter-cta-title {
+    margin: 0;
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(26,22,18,0.6);
+  }
+  .scatter-cta-hint {
+    margin: 0;
+    font-size: 11.5px;
+    color: rgba(26,22,18,0.4);
+    max-width: 280px;
+    line-height: 1.5;
+  }
+  .scatter-cta-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: #7c3aed;
+    border: none;
+    color: #fff;
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 0.4rem 1rem;
+    border-radius: 6px;
+    cursor: pointer;
+    margin-top: 0.25rem;
+    transition: background 0.12s;
+  }
+  .scatter-cta-btn:hover { background: #6d28d9; }
 
   /* ── View tabs (Table / Scatter) ─────────────────────────────── */
   .vec-view-tabs {
