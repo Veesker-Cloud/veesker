@@ -9,6 +9,10 @@
   let { nodes, onBack, onExplainWithAI }: Props = $props();
 
   let selectedId = $state<number | null>(nodes.find((n) => n.parentId === null)?.id ?? null);
+  $effect(() => {
+    nodes; // establish reactive dependency
+    selectedId = nodes.find((n) => n.parentId === null)?.id ?? null;
+  });
   let selectedNode = $derived(
     selectedId !== null ? (nodes.find((n) => n.id === selectedId) ?? null) : null
   );
@@ -32,18 +36,21 @@
   }
 
   function formatPlanForAI(): string {
-    function depth(node: ExplainNode): number {
+    const parentMap = new Map(nodes.map((n) => [n.id, n.parentId]));
+    function depth(id: number): number {
       let d = 0;
-      let cur: ExplainNode | undefined = node;
-      while (cur?.parentId !== null && cur?.parentId !== undefined) {
-        cur = nodes.find((n) => n.id === cur!.parentId);
-        if (++d > 30) break;
+      let cur: number | null = id;
+      while (true) {
+        const p = parentMap.get(cur);
+        if (p === undefined || p === null) break;
+        cur = p;
+        d++;
       }
       return d;
     }
     return nodes
       .map((n) => {
-        const indent = "  ".repeat(depth(n));
+        const indent = "  ".repeat(depth(n.id));
         const op = n.options ? `${n.operation} ${n.options}` : n.operation;
         const obj = n.objectName
           ? ` [${n.objectOwner ? n.objectOwner + "." : ""}${n.objectName}]`
