@@ -128,7 +128,6 @@
     if (!selected || !searchText.trim() || !vectorColName) return;
     searchResult = { kind: "loading" };
     expandedRow = null;
-    showConfigBar = false;
     persistEmbed();
     const res = await vectorSearch(
       { provider: embedProvider, model: embedModel, baseUrl: embedBaseUrl || undefined, apiKey: embedApiKey || undefined },
@@ -730,7 +729,10 @@
                 <circle cx="6.5" cy="6.5" r="2" stroke="currentColor" stroke-width="1.2"/>
                 <path d="M6.5 1v1.2M6.5 10.8V12M1 6.5h1.2M10.8 6.5H12M2.6 2.6l.85.85M9.55 9.55l.85.85M2.6 10.4l.85-.85M9.55 3.45l.85-.85" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
               </svg>
-              {#if showConfigBar}Hide settings{:else}{PROVIDER_LABELS[embedProvider]} · {embedDistance} · {vectorColName || "…"}{/if}
+              {PROVIDER_LABELS[embedProvider]} · {embedDistance} · {vectorColName || "…"}
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style="margin-left:2px;transition:transform 0.15s" style:transform={showConfigBar ? "rotate(180deg)" : "rotate(0deg)"}>
+                <path d="M2 3.5l3 3 3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
             </button>
           </div>
 
