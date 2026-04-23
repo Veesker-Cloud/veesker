@@ -1568,8 +1568,10 @@ export async function procExecute(p: {
           }));
           const rows: unknown[][] = [];
           let row: unknown[] | undefined;
-          while ((row = (await rs.getRow()) as unknown[] | undefined)) {
+          let rowCount = 0;
+          while ((row = (await rs.getRow()) as unknown[] | undefined) && rowCount < 1000) {
             rows.push(row.map(normalizeCell));
+            rowCount++;
           }
           await rs.close();
           refCursors.push({ name: pm.name, columns, rows });
