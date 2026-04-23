@@ -553,6 +553,16 @@ pub async fn ai_chat(app: AppHandle, payload: Value) -> Result<Value, Connection
 }
 
 #[tauri::command]
+pub async fn ai_key_save(service: String, key: String) -> Result<(), String> {
+    crate::persistence::secrets::set_api_key(&service, &key).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn ai_key_get(service: String) -> Result<Option<String>, String> {
+    crate::persistence::secrets::get_api_key(&service).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn connection_commit(app: AppHandle) -> Result<(), ConnectionTestErr> {
     call_sidecar(&app, "connection.commit", json!({})).await?;
     Ok(())

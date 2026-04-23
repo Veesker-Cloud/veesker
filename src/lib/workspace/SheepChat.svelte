@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { aiChat, type AiMessage, type AiContext } from "$lib/workspace";
-  import { tick } from "svelte";
+  import { aiChat, aiKeySave, aiKeyGet, type AiMessage, type AiContext } from "$lib/workspace";
+  import { tick, onMount } from "svelte";
 
   type Props = {
     context: AiContext;
@@ -14,8 +14,12 @@
   let toolsInUse = $state<string[]>([]);
   let error = $state<string | null>(null);
   let showSettings = $state(false);
-  let apiKey = $state(localStorage.getItem("veesker_anthropic_key") ?? "");
+  let apiKey = $state("");
   let messagesEl = $state<HTMLDivElement | null>(null);
+
+  onMount(async () => {
+    apiKey = (await aiKeyGet("anthropic")) ?? "";
+  });
 
   const TOOL_LABELS: Record<string, string> = {
     describe_object: "describing object",
@@ -24,8 +28,8 @@
     list_objects: "listing objects",
   };
 
-  function saveKey() {
-    localStorage.setItem("veesker_anthropic_key", apiKey);
+  async function saveKey() {
+    await aiKeySave("anthropic", apiKey);
     showSettings = false;
   }
 
@@ -65,19 +69,25 @@
     }
   }
 
+  function escapeHtml(s: string): string {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
   // Simple markdown: code blocks, inline code, bold, newlines
+  // Code blocks are extracted first so surrounding text can be safely HTML-escaped.
   function renderMarkdown(text: string): string {
-    // Fenced code blocks
+    const blocks: string[] = [];
     text = text.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
-      const escaped = code.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      return `<pre class="md-code" data-lang="${lang || 'sql'}"><code>${escaped.trimEnd()}</code></pre>`;
+      const ph = `\x00CODE${blocks.length}\x00`;
+      blocks.push(`<pre class="md-code" data-lang="${escapeHtml(lang || 'sql')}"><code>${escapeHtml(code).trimEnd()}</code></pre>`);
+      return ph;
     });
-    // Inline code
-    text = text.replace(/`([^`]+)`/g, '<code class="md-inline">$1</code>');
-    // Bold
-    text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-    // Newlines (outside pre blocks — simple approach)
+    text = escapeHtml(text);
+    text = text.replace(/`([^`\x00]+)`/g, '<code class="md-inline">$1</code>');
+    text = text.replace(/\*\*([^*\x00]+)\*\*/g, '<strong>$1</strong>');
     text = text.replace(/\n/g, '<br>');
+    text = text.replace(/\x00CODE(\d+)\x00/g, (_, i) => blocks[Number(i)]);
     return text;
   }
 
@@ -129,13 +139,13 @@
         type="password"
         placeholder="sk-ant-… (leave empty to use ANTHROPIC_API_KEY env var)"
         bind:value={apiKey}
-        onkeydown={(e) => e.key === "Enter" && saveKey()}
+        onkeydown={(e) => e.key === "Enter" && void saveKey()}
       />
       <div class="settings-row">
         <span class="settings-hint">
-          {apiKey ? "Stored in browser localStorage" : "Will use ANTHROPIC_API_KEY from environment"}
+          {apiKey ? "Stored in OS keychain" : "Will use ANTHROPIC_API_KEY from environment"}
         </span>
-        <button class="save-btn" onclick={saveKey}>Save</button>
+        <button class="save-btn" onclick={() => void saveKey()}>Save</button>
       </div>
     </div>
   {/if}

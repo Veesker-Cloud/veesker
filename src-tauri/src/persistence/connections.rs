@@ -72,12 +72,9 @@ impl TryFrom<ConnectionRow> for ConnectionMeta {
 #[serde(rename_all = "camelCase")]
 pub struct ConnectionFull {
     pub meta: ConnectionMeta,
-    pub password: String,
-    pub password_missing: bool,
+    pub password_set: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub wallet_password: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub wallet_password_missing: Option<bool>,
+    pub wallet_password_set: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -219,80 +216,68 @@ impl ConnectionService {
             let conn = self.lock()?;
             store::get(&conn, id)?.ok_or_else(ConnectionError::not_found)?
         };
-        let id_for_secret = row.id.clone();
+        let row_id = row.id.clone();
         let auth = row.auth_type.clone();
         let meta = ConnectionMeta::try_from(row)?;
 
-        let (password, password_missing) = match secrets::get_password(&id_for_secret) {
-            Ok(p) => (p, false),
-            Err(e) if secrets::is_missing(&e) => (String::new(), true),
+        let password_set = match secrets::get_password(&row_id) {
+            Ok(_) => true,
+            Err(e) if secrets::is_missing(&e) => false,
             Err(e) => return Err(e.into()),
         };
 
-        let (wallet_password, wallet_password_missing) = match auth {
-            AuthType::Basic => (None, None),
-            AuthType::Wallet => match secrets::get_wallet_password(&id_for_secret) {
-                Ok(p) => (Some(p), Some(false)),
-                Err(e) if secrets::is_missing(&e) => (Some(String::new()), Some(true)),
+        let wallet_password_set = match auth {
+            AuthType::Basic => None,
+            AuthType::Wallet => Some(match secrets::get_wallet_password(&row_id) {
+                Ok(_) => true,
+                Err(e) if secrets::is_missing(&e) => false,
                 Err(e) => return Err(e.into()),
-            },
+            }),
         };
 
         Ok(ConnectionFull {
             meta,
-            password,
-            password_missing,
-            wallet_password,
-            wallet_password_missing,
+            password_set,
+            wallet_password_set,
         })
     }
 
     /// Build the sidecar JSON-RPC params for opening an Oracle session
-    /// for the saved connection identified by `id`. Pulls password (and
-    /// wallet password / wallet dir for wallet auth) from the keychain
-    /// + on-disk wallet root.
+    /// for the saved connection identified by `id`. Reads passwords directly
+    /// from the OS keychain — they are never stored in `ConnectionFull`.
     pub fn sidecar_params(&self, id: &str) -> Result<serde_json::Value, ConnectionError> {
         use super::connection_config::{basic_params, wallet_params};
-        let full = self.get(id)?;
-        if full.password_missing {
-            return Err(ConnectionError::invalid(
+        let row = {
+            let conn = self.lock()?;
+            store::get(&conn, id)?.ok_or_else(ConnectionError::not_found)?
+        };
+        let row_id = row.id.clone();
+        let auth = row.auth_type.clone();
+        let meta = ConnectionMeta::try_from(row)?;
+
+        let password = match secrets::get_password(&row_id) {
+            Ok(p) => p,
+            Err(e) if secrets::is_missing(&e) => return Err(ConnectionError::invalid(
                 "user password missing from keychain — edit the connection and re-enter the password",
-            ));
-        }
-        if full.wallet_password_missing.unwrap_or(false) {
-            return Err(ConnectionError::invalid(
-                "wallet password missing from keychain — edit the connection and re-enter the wallet password",
-            ));
-        }
-        match full.meta {
-            ConnectionMeta::Basic {
-                host,
-                port,
-                service_name,
-                username,
-                ..
-            } => Ok(basic_params(
-                &host,
-                port,
-                &service_name,
-                &username,
-                &full.password,
             )),
-            ConnectionMeta::Wallet {
-                connect_alias,
-                username,
-                id: meta_id,
-                ..
-            } => {
+            Err(e) => return Err(e.into()),
+        };
+
+        match meta {
+            ConnectionMeta::Basic { host, port, service_name, username, .. } => {
+                Ok(basic_params(&host, port, &service_name, &username, &password))
+            }
+            ConnectionMeta::Wallet { connect_alias, username, id: meta_id, .. } => {
+                let wallet_password = match secrets::get_wallet_password(&row_id) {
+                    Ok(p) => p,
+                    Err(e) if secrets::is_missing(&e) => return Err(ConnectionError::invalid(
+                        "wallet password missing from keychain — edit the connection and re-enter the wallet password",
+                    )),
+                    Err(e) => return Err(e.into()),
+                };
+                let _ = auth;
                 let dir = self.wallet_dir(&meta_id);
-                let wpw = full.wallet_password.as_deref().unwrap_or("");
-                Ok(wallet_params(
-                    &dir,
-                    wpw,
-                    &connect_alias,
-                    &username,
-                    &full.password,
-                ))
+                Ok(wallet_params(&dir, &wallet_password, &connect_alias, &username, &password))
             }
         }
     }
@@ -318,7 +303,7 @@ impl ConnectionService {
                 if username.trim().is_empty() {
                     return Err(ConnectionError::invalid("username is required"));
                 }
-                if password.is_empty() {
+                if password.is_empty() && id.is_none() {
                     return Err(ConnectionError::invalid("password is required"));
                 }
                 let row = self.assemble_basic_row(
@@ -331,7 +316,9 @@ impl ConnectionService {
                     &now,
                 )?;
                 self.persist_row(&row, id.is_some())?;
-                secrets::set_password(&row.id, &password)?;
+                if !password.is_empty() {
+                    secrets::set_password(&row.id, &password)?;
+                }
                 ConnectionMeta::try_from(row)
             }
             ConnectionInput::Wallet {
@@ -349,10 +336,10 @@ impl ConnectionService {
                 if username.trim().is_empty() {
                     return Err(ConnectionError::invalid("username is required"));
                 }
-                if password.is_empty() {
+                if password.is_empty() && id.is_none() {
                     return Err(ConnectionError::invalid("password is required"));
                 }
-                if wallet_password.is_empty() {
+                if wallet_password.is_empty() && id.is_none() {
                     return Err(ConnectionError::invalid("wallet password is required"));
                 }
                 if connect_alias.trim().is_empty() {
@@ -407,8 +394,12 @@ impl ConnectionService {
                 }
 
                 self.persist_row(&row, id.is_some())?;
-                secrets::set_password(&row.id, &password)?;
-                secrets::set_wallet_password(&row.id, &wallet_password)?;
+                if !password.is_empty() {
+                    secrets::set_password(&row.id, &password)?;
+                }
+                if !wallet_password.is_empty() {
+                    secrets::set_wallet_password(&row.id, &wallet_password)?;
+                }
                 ConnectionMeta::try_from(row)
             }
         }

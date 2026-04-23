@@ -21,7 +21,7 @@
       loadError = res.error.message;
       return;
     }
-    const { meta, password, passwordMissing: pmiss, walletPassword, walletPasswordMissing: wmiss } = res.data;
+    const { meta, passwordSet, walletPasswordSet } = res.data;
     if (meta.authType === "basic") {
       initial = {
         authType: "basic",
@@ -31,21 +31,21 @@
         port: meta.port,
         serviceName: meta.serviceName,
         username: meta.username,
-        password,
+        password: "",
       };
     } else {
       initial = {
         authType: "wallet",
         id: meta.id,
         name: meta.name,
-        walletPassword: walletPassword ?? "",
+        walletPassword: "",
         connectAlias: meta.connectAlias,
         username: meta.username,
-        password,
+        password: "",
       };
-      walletPasswordMissing = wmiss ?? false;
+      walletPasswordMissing = !(walletPasswordSet ?? false);
     }
-    passwordMissing = pmiss;
+    passwordMissing = !passwordSet;
   });
 
   async function onSave(input: ConnectionInput) {
