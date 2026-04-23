@@ -99,15 +99,15 @@
   <div class="scatter-wrap">
     <svg width={W} height={H} viewBox="0 0 {W} {H}" class="scatter-svg">
       <!-- Grid -->
-      <line x1={PAD} y1={PAD} x2={PAD} y2={H - PAD} stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
-      <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
-      <text x={W / 2} y={H - 6} font-size="9" fill="rgba(255,255,255,0.25)" text-anchor="middle" font-family="JetBrains Mono, monospace">PC1</text>
-      <text x={8} y={H / 2} font-size="9" fill="rgba(255,255,255,0.25)" text-anchor="middle" font-family="JetBrains Mono, monospace" transform="rotate(-90,8,{H/2})">PC2</text>
+      <line x1={PAD} y1={PAD} x2={PAD} y2={H - PAD} stroke="rgba(26,22,18,0.08)" stroke-width="1"/>
+      <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke="rgba(26,22,18,0.08)" stroke-width="1"/>
+      <text x={W / 2} y={H - 6} font-size="9" fill="rgba(26,22,18,0.3)" text-anchor="middle" font-family="JetBrains Mono, monospace">PC1</text>
+      <text x={8} y={H / 2} font-size="9" fill="rgba(26,22,18,0.3)" text-anchor="middle" font-family="JetBrains Mono, monospace" transform="rotate(-90,8,{H/2})">PC2</text>
 
       <!-- Query point -->
       {#if points.query}
-        <circle cx={points.query.x} cy={points.query.y} r="8" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.5"/>
-        <text x={points.query.x} y={points.query.y + 4} text-anchor="middle" font-size="9" fill="rgba(255,255,255,0.7)" font-weight="bold">Q</text>
+        <circle cx={points.query.x} cy={points.query.y} r="9" fill="rgba(124,58,237,0.12)" stroke="#7c3aed" stroke-width="1.5"/>
+        <text x={points.query.x} y={points.query.y + 4} text-anchor="middle" font-size="9" fill="#7c3aed" font-weight="bold">Q</text>
       {/if}
 
       <!-- Result dots -->
@@ -116,7 +116,7 @@
           cx={dot.x} cy={dot.y} r={hoveredIdx === i ? 7 : 5}
           fill={simColor(dot.sim)}
           fill-opacity="0.85"
-          stroke={hoveredIdx === i ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.2)"}
+          stroke={hoveredIdx === i ? "rgba(26,22,18,0.6)" : "rgba(26,22,18,0.15)"}
           stroke-width={hoveredIdx === i ? 1.5 : 1}
           style="cursor:pointer;transition:r 0.1s"
           onmouseenter={() => hoveredIdx = i}
@@ -142,7 +142,7 @@
     <div class="scatter-legend">
       <span class="legend-dot" style="background: rgb(179,175,50)"></span> high
       <span class="legend-dot" style="background: rgb(255,87,50); margin-left:0.5rem"></span> low
-      {#if points.query}<span style="margin-left:0.75rem; opacity:0.5">○ = query</span>{/if}
+      {#if points.query}<span style="margin-left:0.75rem; color:#7c3aed; opacity:0.8">⬤ Q = sua busca</span>{/if}
     </div>
   </div>
 {/if}
@@ -157,7 +157,7 @@
   }
   .scatter-svg { display: block; max-width: 100%; }
   .scatter-loading {
-    color: rgba(255,255,255,0.3);
+    color: rgba(26,22,18,0.35);
     font-size: 11px;
     padding: 2rem 1rem;
     text-align: center;
@@ -167,7 +167,7 @@
     align-items: center;
     gap: 0.3rem;
     font-size: 10px;
-    color: rgba(255,255,255,0.35);
+    color: rgba(26,22,18,0.4);
     font-family: "JetBrains Mono", monospace;
   }
   .legend-dot {
@@ -177,18 +177,19 @@
     border-radius: 50%;
   }
   .dot-tip {
-    background: rgba(16,14,11,0.95);
-    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,252,245,0.97);
+    border: 1px solid rgba(26,22,18,0.12);
     border-radius: 5px;
     padding: 5px 7px;
     font-size: 10px;
-    color: rgba(255,255,255,0.8);
+    color: rgba(26,22,18,0.8);
     font-family: "Inter", sans-serif;
     pointer-events: none;
     max-width: 160px;
+    box-shadow: 0 2px 8px rgba(26,22,18,0.1);
   }
   .tip-score {
-    color: rgba(255,200,100,0.9);
+    color: #7c3aed;
     font-weight: 600;
     margin-bottom: 2px;
     font-family: "JetBrains Mono", monospace;
@@ -198,10 +199,10 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: 9.5px;
-    color: rgba(255,255,255,0.6);
+    color: rgba(26,22,18,0.65);
   }
   .tip-col {
-    color: rgba(255,255,255,0.35);
+    color: rgba(26,22,18,0.35);
     margin-right: 3px;
   }
 </style>
