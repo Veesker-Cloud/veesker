@@ -125,9 +125,13 @@
           aria-label="Result {i+1} similarity {dot.sim.toFixed(3)}"
         />
         {#if hoveredIdx === i}
-          {@const tx = dot.x + (dot.x > W * 0.7 ? -6 : 10)}
-          {@const ty = dot.y + (dot.y > H * 0.7 ? -8 : 4)}
-          <foreignObject x={tx} y={ty - 14} width="160" height="80">
+          {@const tipW = 162}
+          {@const tipH = 82}
+          {@const rawTx = dot.x + (dot.x > W * 0.7 ? -(tipW + 6) : 10)}
+          {@const rawTy = dot.y + (dot.y > H * 0.7 ? -(tipH + 4) : 4)}
+          {@const tx = Math.max(PAD, Math.min(rawTx, W - tipW - 2))}
+          {@const ty = Math.max(PAD, Math.min(rawTy, H - tipH - 2))}
+          <foreignObject x={tx} y={ty} width={tipW} height={tipH}>
             <div class="dot-tip">
               <div class="tip-score">sim {dot.sim.toFixed(3)}</div>
               {#each dot.cols.slice(0, 3) as col, ci}
