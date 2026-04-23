@@ -43,7 +43,7 @@ export async function openFile(): Promise<{ path: string; content: string } | nu
 export async function saveBlob(
   defaultName: string,
   content: string,
-  ext: "csv" | "json"
+  ext: "csv" | "json" | "sql"
 ): Promise<string | null> {
   const path = await save({
     defaultPath: `${defaultName}.${ext}`,

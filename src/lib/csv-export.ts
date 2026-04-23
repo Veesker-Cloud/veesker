@@ -32,3 +32,25 @@ function quoteField(s: string): string {
   }
   return s;
 }
+
+export function toInsertSql(tableName: string, columns: string[], rows: unknown[][]): string {
+  if (rows.length === 0) return "";
+  const colList = columns.map((c) => `"${c}"`).join(", ");
+  const lines: string[] = [];
+  for (const row of rows) {
+    const values = row.map(insertValue).join(", ");
+    lines.push(`INSERT INTO "${tableName}" (${colList}) VALUES (${values});`);
+  }
+  return lines.join("\n") + "\n";
+}
+
+function insertValue(v: unknown): string {
+  if (v === null || v === undefined) return "NULL";
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  if (v instanceof Date) {
+    const iso = v.toISOString();
+    if (iso.endsWith("T00:00:00.000Z")) return `TO_DATE('${iso.slice(0, 10)}','YYYY-MM-DD')`;
+    return `TIMESTAMP '${iso.replace("T", " ").slice(0, 19)}'`;
+  }
+  return `'${String(v).replace(/'/g, "''")}'`;
+}
