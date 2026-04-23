@@ -21,3 +21,4 @@ src-tauri/gen/
 src-tauri/binaries/veesker-sidecar-*
 !src-tauri/binaries/.gitkeep
 .superpowers/
+.superpowers/
