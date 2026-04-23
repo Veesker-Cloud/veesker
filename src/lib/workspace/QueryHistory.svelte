@@ -193,7 +193,7 @@
   .history-panel {
     width: 220px;
     flex-shrink: 0;
-    border-right: 1px solid rgba(26, 22, 18, 0.1);
+    border-right: 1px solid var(--border);
     background: var(--bg-surface);
     display: flex;
     flex-direction: column;
@@ -205,7 +205,7 @@
     flex-direction: column;
     gap: 4px;
     padding: 6px 8px;
-    border-bottom: 1px solid rgba(26, 22, 18, 0.1);
+    border-bottom: 1px solid var(--border);
     flex-shrink: 0;
   }
 
@@ -230,7 +230,7 @@
     font-family: "Inter", -apple-system, system-ui, sans-serif;
     font-size: 11px;
     padding: 3px 6px;
-    border: 1px solid rgba(26, 22, 18, 0.15);
+    border: 1px solid var(--border);
     border-radius: 3px;
     background: var(--bg-surface-raised);
     color: var(--text-primary);
