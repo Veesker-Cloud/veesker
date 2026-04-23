@@ -269,15 +269,15 @@
     display: flex;
     flex-direction: column;
     height: 100%;
-    background: #f9f5ed;
+    background: var(--bg-surface);
     font-family: "Inter", -apple-system, system-ui, sans-serif;
     font-size: 12px;
-    color: #1a1612;
+    color: var(--text-primary);
     position: relative;
   }
   .placeholder, .ok {
     padding: 1rem;
-    color: rgba(26, 22, 18, 0.55);
+    color: var(--text-secondary);
     font-size: 12px;
   }
   .ok { color: #2e6b2e; }
@@ -338,8 +338,8 @@
     color: #7a2a14;
   }
   .banner-cancelled {
-    background: rgba(26, 22, 18, 0.05);
-    color: rgba(26, 22, 18, 0.6);
+    background: var(--bg-surface-alt);
+    color: var(--text-secondary);
     border-bottom: 1px solid rgba(26, 22, 18, 0.12);
     font-family: "Space Grotesk", sans-serif;
     font-size: 12px;
@@ -363,7 +363,7 @@
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: rgba(26, 22, 18, 0.7);
+    color: var(--text-secondary);
     white-space: nowrap;
     min-width: 80px;
     cursor: pointer;
@@ -396,9 +396,9 @@
     min-width: 80px;
   }
   tbody td.numeric { text-align: right; }
-  tbody tr:nth-child(even) { background: rgba(26, 22, 18, 0.02); }
+  tbody tr:nth-child(even) { background: var(--row-alt); }
   td.null-cell {
-    color: rgba(26, 22, 18, 0.4);
+    color: var(--text-muted);
     font-style: italic;
   }
   .resize-handle {
@@ -412,9 +412,9 @@
   .footer {
     border-top: 1px solid rgba(26, 22, 18, 0.08);
     padding: 0.4rem 0.8rem;
-    color: rgba(26, 22, 18, 0.55);
+    color: var(--text-secondary);
     font-size: 11px;
-    background: #fff;
+    background: var(--bg-surface-raised);
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -429,14 +429,14 @@
     font-size: 10.5px;
     font-family: "Space Grotesk", sans-serif;
     cursor: pointer;
-    color: rgba(26,22,18,0.7);
+    color: var(--text-secondary);
   }
-  .export-btn:hover { background: rgba(26,22,18,0.06); }
+  .export-btn:hover { background: var(--row-hover); }
   .export-menu {
     position: absolute;
     bottom: calc(100% + 4px);
     left: 0;
-    background: #fff;
+    background: var(--bg-surface-raised);
     border: 1px solid rgba(26,22,18,0.15);
     border-radius: 4px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.12);
@@ -454,9 +454,9 @@
     font-size: 12px;
     font-family: "Space Grotesk", sans-serif;
     cursor: pointer;
-    color: #1a1612;
+    color: var(--text-primary);
   }
-  .export-menu button:hover { background: rgba(26,22,18,0.06); }
+  .export-menu button:hover { background: var(--row-hover); }
   .spinner {
     display: inline-block;
     width: 12px; height: 12px;
