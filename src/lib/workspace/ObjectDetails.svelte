@@ -1317,7 +1317,7 @@
     align-items: center;
     gap: 0.3rem;
     background: transparent;
-    border: 1px solid rgba(26,22,18,0.15);
+    border: 1px solid var(--border-strong);
     color: var(--text-secondary);
     font-family: "Space Grotesk", sans-serif;
     font-size: 11px;
@@ -1416,7 +1416,7 @@
   }
   .spinner {
     width: 13px; height: 13px;
-    border: 2px solid rgba(26,22,18,0.1);
+    border: 2px solid var(--border);
     border-top-color: #b33e1f;
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
@@ -1578,7 +1578,7 @@
     font-size: 11.5px;
     font-family: "Inter", sans-serif;
     background: var(--bg-surface-raised);
-    border: 1px solid rgba(26,22,18,0.15);
+    border: 1px solid var(--border-strong);
     border-radius: 4px;
     padding: 2px 6px;
     color: var(--text-primary);
@@ -1589,7 +1589,7 @@
     font-size: 11.5px;
     font-family: "JetBrains Mono", monospace;
     background: var(--bg-surface-raised);
-    border: 1px solid rgba(26,22,18,0.15);
+    border: 1px solid var(--border-strong);
     border-radius: 4px;
     padding: 2px 6px;
     color: var(--text-primary);
@@ -1637,7 +1637,7 @@
     font-size: 11.5px;
     font-family: "JetBrains Mono", monospace;
     background: var(--bg-surface-raised);
-    border: 1px solid rgba(26,22,18,0.15);
+    border: 1px solid var(--border-strong);
     border-radius: 4px;
     padding: 3px 8px;
     color: var(--text-primary);
@@ -1665,7 +1665,7 @@
     font-weight: 600;
     padding: 0.25rem 0.6rem;
     border-radius: 20px;
-    border: 1.5px solid rgba(26,22,18,0.18);
+    border: 1.5px solid var(--border-strong);
     background: var(--row-hover);
     color: var(--text-muted);
     cursor: pointer;
@@ -1741,7 +1741,7 @@
   .vec-view-tabs {
     display: flex;
     gap: 0;
-    border-bottom: 1px solid rgba(26,22,18,0.07);
+    border-bottom: 1px solid var(--border);
     flex-shrink: 0;
   }
   .vec-view-tab {
@@ -1814,7 +1814,7 @@
     gap: 0.4rem;
     padding: 0.3rem 0.4rem;
     background: var(--row-alt);
-    border: 1px solid rgba(26,22,18,0.07);
+    border: 1px solid var(--border);
     border-radius: 4px;
     font-size: 11px;
   }
@@ -1841,7 +1841,7 @@
 
   /* ── Generate embeddings panel ──────────────────────────────── */
   .vec-gen-strip {
-    border-bottom: 1px solid rgba(26,22,18,0.06);
+    border-bottom: 1px solid var(--border);
     flex-shrink: 0;
   }
   .vec-gen-toggle {
@@ -1879,7 +1879,7 @@
   }
   .vec-gen-panel {
     background: var(--bg-surface-alt);
-    border-bottom: 1px solid rgba(26,22,18,0.06);
+    border-bottom: 1px solid var(--border);
     padding: 0.5rem 0.7rem;
     display: flex;
     flex-direction: column;
@@ -1953,7 +1953,7 @@
   }
   .vec-gen-again-btn {
     background: var(--row-hover);
-    border: 1px solid rgba(26,22,18,0.1);
+    border: 1px solid var(--border);
     color: var(--text-muted);
     font-size: 10px;
     padding: 0.15rem 0.5rem;
@@ -1976,7 +1976,7 @@
     font-family: "Inter", sans-serif;
     font-size: 12.5px;
     background: var(--bg-surface-raised);
-    border: 1px solid rgba(26,22,18,0.15);
+    border: 1px solid var(--border-strong);
     border-radius: 6px;
     padding: 0.45rem 0.65rem;
     resize: none;
@@ -2151,7 +2151,7 @@
 
   /* ── Related tab ──────────────────────────────────────────── */
   .rel-section {
-    border-bottom: 1px solid rgba(26,22,18,0.06);
+    border-bottom: 1px solid var(--border);
   }
   .rel-section:last-child { border-bottom: none; }
   .rel-header {
@@ -2160,7 +2160,7 @@
     gap: 0.4rem;
     padding: 0.6rem 1.25rem;
     background: var(--row-alt);
-    border-bottom: 1px solid rgba(26,22,18,0.05);
+    border-bottom: 1px solid var(--border);
     font-family: "Space Grotesk", sans-serif;
     font-size: 11px;
     font-weight: 600;
@@ -2214,7 +2214,7 @@
     color: var(--text-muted);
     padding: 0.3rem 1.25rem;
     white-space: nowrap;
-    border-bottom: 1px solid rgba(26,22,18,0.05);
+    border-bottom: 1px solid var(--border);
   }
   .rel-table td {
     padding: 0.3rem 1.25rem;
@@ -2233,7 +2233,7 @@
     letter-spacing: 0.05em;
     color: var(--text-muted);
     background: var(--bg-surface-alt);
-    border: 1px solid rgba(26,22,18,0.1);
+    border: 1px solid var(--border);
     border-radius: 3px;
     padding: 1px 5px;
     white-space: nowrap;
@@ -2364,11 +2364,11 @@
     flex-wrap: wrap;
     gap: 0.35rem;
     padding: 0.75rem 1.25rem;
-    border-top: 1px solid rgba(26,22,18,0.05);
+    border-top: 1px solid var(--border);
   }
   .rel-empty-btn {
     background: transparent;
-    border: 1px dashed rgba(26,22,18,0.15);
+    border: 1px dashed var(--border-strong);
     color: var(--text-muted);
     font-family: "Space Grotesk", sans-serif;
     font-size: 10.5px;
@@ -2378,7 +2378,7 @@
     transition: all 0.1s;
   }
   .rel-empty-btn:hover {
-    border-color: rgba(26,22,18,0.3);
+    border-color: var(--border-strong);
     color: var(--text-secondary);
     background: var(--row-alt);
   }
@@ -2438,7 +2438,7 @@
   }
   .spinner-xs {
     width: 9px; height: 9px;
-    border: 1.5px solid rgba(26,22,18,0.12);
+    border: 1.5px solid var(--border-strong);
     border-top-color: #b33e1f;
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
