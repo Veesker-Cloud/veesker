@@ -2,7 +2,7 @@
   import type { SqlTab } from "$lib/stores/sql-editor.svelte";
   import { activeResult } from "$lib/stores/sql-editor.svelte";
   import CancelOverlay from "./CancelOverlay.svelte";
-  import { toCsv, toJson } from "$lib/csv-export";
+  import { toCsv, toJson, toInsertSql } from "$lib/csv-export";
   import { saveBlob } from "$lib/sql-files";
 
   type Props = { tab: SqlTab | null; onCancel: () => void };
@@ -154,6 +154,22 @@
     const tabTitle = tab?.title ?? "export";
     await saveBlob(tabTitle, content, "json");
   }
+
+  function detectTableName(): string {
+    const sql = tab?.sql ?? "";
+    const m = sql.match(/\bFROM\s+["']?([\w.]+)["']?/i);
+    if (m) return m[1].split(".").pop()?.toUpperCase() ?? "EXPORT";
+    return (tab?.title ?? "EXPORT").replace(/\s+/g, "_").toUpperCase();
+  }
+
+  async function exportInsert() {
+    exportMenuOpen = false;
+    if (!ar?.result) return;
+    const cols = ar.result.columns.map((c) => c.name);
+    const tableName = detectTableName();
+    const content = toInsertSql(tableName, cols, sortedRows);
+    await saveBlob(tab?.title ?? "export", content, "sql");
+  }
 </script>
 
 <section class="grid">
@@ -255,6 +271,7 @@
             <div class="export-menu">
               <button onclick={exportCsv}>CSV</button>
               <button onclick={exportJson}>JSON</button>
+              <button onclick={exportInsert}>INSERT SQL</button>
             </div>
           {/if}
         </div>
