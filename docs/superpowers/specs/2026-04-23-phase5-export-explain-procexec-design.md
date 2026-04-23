@@ -156,7 +156,7 @@ export { state as explainPlanState };
 
 ### Result area integration
 
-When Explain Plan is active for a tab, the result area shows `ExplainPlan` component instead of `ResultGrid`. The tab result type gains an `"explain"` status alongside `"ok"` / `"error"` / `"cancelled"`.
+When Explain Plan is active for a tab, the result area shows `ExplainPlan` component instead of `ResultGrid`. The tab result type gains an `"explain"` status alongside `"ok"` / `"error"` / `"cancelled"`. A "← Results" button in the `ExplainPlan` header allows the user to switch back to the last query result for that tab without re-running the query.
 
 ---
 
