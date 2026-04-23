@@ -221,6 +221,7 @@
           class="txn-btn commit-btn"
           title="Commit transaction"
           aria-label="Commit"
+          disabled={!sqlEditor.pendingTx}
           onclick={() => void sqlEditor.commit().catch(e => { window.alert("Commit failed: " + String(e)); })}
         >
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
@@ -233,6 +234,7 @@
           class="txn-btn rollback-btn"
           title="Rollback transaction"
           aria-label="Rollback"
+          disabled={!sqlEditor.pendingTx}
           onclick={() => void sqlEditor.rollback().catch(e => { window.alert("Rollback failed: " + String(e)); })}
         >
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
@@ -480,9 +482,10 @@
     transition: background 0.1s, color 0.1s;
   }
   .commit-btn { color: #7ec96a; }
-  .commit-btn:hover { background: rgba(126,201,106,0.12); color: #7ec96a; }
+  .commit-btn:hover:not(:disabled) { background: rgba(126,201,106,0.12); color: #7ec96a; }
   .rollback-btn { color: #f5a08a; }
-  .rollback-btn:hover { background: rgba(245,160,138,0.12); color: #f5a08a; }
+  .rollback-btn:hover:not(:disabled) { background: rgba(245,160,138,0.12); color: #f5a08a; }
+  .txn-btn:disabled { opacity: 0.28; cursor: default; }
   .plus, .collapse, .history-toggle {
     background: transparent;
     border: none;

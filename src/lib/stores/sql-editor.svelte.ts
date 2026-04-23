@@ -716,5 +716,6 @@ export const sqlEditor = {
     _logCollapsed = false;
     _connectionId = null;
     _pendingTx = false;
+    _editorExpanded = false;
   },
 };

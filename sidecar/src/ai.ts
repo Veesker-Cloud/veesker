@@ -116,7 +116,7 @@ async function executeTool(name: string, input: Record<string, string>): Promise
     }
     case "list_objects": {
       const items = await objectsList({ owner: input.schema, kind: input.kind as any });
-      return JSON.stringify((items as any[]).map((o) => o.name), null, 2);
+      return JSON.stringify(items.objects.map((o) => o.name), null, 2);
     }
     default:
       return `Unknown tool: ${name}`;
@@ -130,7 +130,9 @@ function buildSystem(ctx: AiContext): string {
     ctxLines.push(`Selected object: ${ctx.selectedKind ?? "OBJECT"} ${ctx.selectedOwner}.${ctx.selectedName}`);
   }
   if (ctx.activeSql?.trim()) {
-    ctxLines.push(`Active SQL in editor:\n\`\`\`sql\n${ctx.activeSql.slice(0, 800)}\n\`\`\``);
+    // Strip triple-backtick sequences that could break the code fence
+    const safeSql = ctx.activeSql.slice(0, 800).replace(/`{3,}/g, "~~~");
+    ctxLines.push(`Active SQL in editor:\n\`\`\`sql\n${safeSql}\n\`\`\``);
   }
 
   return `You are Veesker's Oracle database assistant — a knowledgeable, concise expert with the persona of a cyberpunk sheep mascot. You help developers understand Oracle schemas, debug queries, write PL/SQL, optimise performance, and give design insights.

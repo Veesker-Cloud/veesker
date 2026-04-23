@@ -483,6 +483,9 @@ async function executeSingleStatement(
 }
 
 export async function queryExecute(p: { sql: string; requestId?: string; splitMulti?: boolean }): Promise<QueryResult | MultiQueryResult> {
+  if (_running !== null) {
+    throw new RpcCodedError(ORACLE_ERR, "Another query is already running on this connection");
+  }
   // Assign or generate a requestId so cancellation can be matched.
   const requestId = p.requestId ?? crypto.randomUUID();
   _running = { requestId, cancelled: false };
@@ -1111,7 +1114,7 @@ export async function vectorSimilaritySearch(p: {
        ORDER BY VECTOR_DISTANCE(t.${qCol}, TO_VECTOR(:vecStr), ${metric})
        FETCH FIRST ${limit} ROWS ONLY`;
 
-    const res = await conn.execute<unknown[]>(sql, { vecStr: { val: vecStr, type: oracledb.STRING, maxSize: 16000 } }, {
+    const res = await conn.execute<unknown[]>(sql, { vecStr: { val: vecStr, type: oracledb.STRING, maxSize: Math.max(16000, vecStr.length + 100) } }, {
       outFormat: oracledb.OUT_FORMAT_ARRAY,
       fetchTypeHandler: (meta: { name: string }) => {
         if (meta.name === "VEC_STR__") return { type: oracledb.STRING };
@@ -1257,7 +1260,7 @@ export async function vectorDropIndex(p: {
   return withActiveSession(async (conn) => {
     const qOwner = quoteIdent(p.owner);
     const qIdx   = quoteIdent(p.indexName);
-    await conn.execute(`DROP INDEX ${qOwner}.${qIdx}`);
+    await conn.execute(`DROP INDEX ${qIdx}`);
     await conn.commit();
     return { dropped: true };
   });
@@ -1320,7 +1323,7 @@ export async function embedBatch(p: {
         const vecStr = `[${vector.map(n => n.toFixed(8)).join(",")}]`;
         await conn.execute(
           `UPDATE ${qOwner}.${qTable} SET ${qVec} = TO_VECTOR(:v) WHERE ROWID = CHARTOROWID(:rowid)`,
-          { v: { val: vecStr, type: oracledb.STRING, maxSize: 16000 }, rowid }
+          { v: { val: vecStr, type: oracledb.STRING, maxSize: Math.max(16000, vecStr.length + 100) }, rowid }
         );
         embedded++;
       } catch {

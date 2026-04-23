@@ -11,7 +11,6 @@
   let messages = $state<AiMessage[]>([]);
   let input = $state("");
   let loading = $state(false);
-  let toolsInUse = $state<string[]>([]);
   let error = $state<string | null>(null);
   let showSettings = $state(false);
   let apiKey = $state("");
@@ -20,13 +19,6 @@
   onMount(async () => {
     apiKey = (await aiKeyGet("anthropic")) ?? "";
   });
-
-  const TOOL_LABELS: Record<string, string> = {
-    describe_object: "describing object",
-    run_query: "running query",
-    get_ddl: "fetching DDL",
-    list_objects: "listing objects",
-  };
 
   async function saveKey() {
     await aiKeySave("anthropic", apiKey);
@@ -48,11 +40,9 @@
     await scrollToBottom();
 
     loading = true;
-    toolsInUse = [];
 
     const res = await aiChat(apiKey, messages, context);
     loading = false;
-    toolsInUse = [];
 
     if (res.ok) {
       messages = [...messages, { role: "assistant", content: res.data.content }];
@@ -184,14 +174,7 @@
         <div class="msg assistant">
           <img src="/veesker-sheep.png" class="msg-avatar" alt="AI" />
           <div class="bubble ai-bubble thinking">
-            {#if toolsInUse.length > 0}
-              <span class="tool-indicator">
-                <span class="tool-spinner"></span>
-                {TOOL_LABELS[toolsInUse[toolsInUse.length - 1]] ?? "thinking"}…
-              </span>
-            {:else}
-              <span class="dots"><span></span><span></span><span></span></span>
-            {/if}
+            <span class="dots"><span></span><span></span><span></span></span>
           </div>
         </div>
       {/if}
@@ -462,22 +445,6 @@
     40% { transform: scale(1); opacity: 1; }
   }
 
-  .tool-indicator {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    font-size: 11px;
-    color: rgba(255,255,255,0.5);
-    font-style: italic;
-  }
-  .tool-spinner {
-    width: 9px; height: 9px;
-    border: 1.5px solid rgba(255,255,255,0.15);
-    border-top-color: rgba(179,62,31,0.9);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-    flex-shrink: 0;
-  }
   @keyframes spin { to { transform: rotate(360deg); } }
 
   .error-msg {
