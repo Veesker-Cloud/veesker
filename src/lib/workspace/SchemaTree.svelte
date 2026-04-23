@@ -22,12 +22,26 @@
   let { schemas, selected, onToggle, onSelect, onRetry, onRefresh, refreshing = false }: Props = $props();
 
   let search = $state("");
+  let hiddenKinds = $state<Set<ObjectKind>>(new Set());
 
   const KIND_LABELS: Record<ObjectKind, string> = {
     TABLE: "Tables", VIEW: "Views", SEQUENCE: "Sequences",
     PROCEDURE: "Procedures", FUNCTION: "Functions",
     PACKAGE: "Packages", TRIGGER: "Triggers", TYPE: "Types",
   };
+
+  const KIND_SHORT: Record<ObjectKind, string> = {
+    TABLE: "Tbl", VIEW: "View", SEQUENCE: "Seq",
+    PROCEDURE: "Proc", FUNCTION: "Func",
+    PACKAGE: "Pkg", TRIGGER: "Trig", TYPE: "Type",
+  };
+
+  function toggleKind(kind: ObjectKind) {
+    const next = new Set(hiddenKinds);
+    if (next.has(kind)) next.delete(kind);
+    else next.add(kind);
+    hiddenKinds = next;
+  }
 
   const KIND_ORDER: ObjectKind[] = [
     "TABLE", "VIEW", "SEQUENCE",
@@ -126,6 +140,23 @@
     {/if}
   </div>
 
+  <!-- Type filter pills -->
+  <div class="kind-pills">
+    {#each KIND_ORDER as kind}
+      <button
+        class="kind-pill"
+        class:off={hiddenKinds.has(kind)}
+        style="--kc:{KIND_COLOR[kind]}"
+        onclick={() => toggleKind(kind)}
+        title={KIND_LABELS[kind]}
+        aria-pressed={!hiddenKinds.has(kind)}
+      >
+        <span class="pill-dot" aria-hidden="true"></span>
+        {KIND_SHORT[kind]}
+      </button>
+    {/each}
+  </div>
+
   {#each schemas as s (s.name)}
     {#if schemaVisible(s)}
     <div class="schema">
@@ -151,7 +182,7 @@
         {@const passThrough = schemaNameMatches(s)}
         <div class="kinds">
           {#each KIND_ORDER as kind}
-            {#if s.kinds[kind] !== undefined}
+            {#if s.kinds[kind] !== undefined && !hiddenKinds.has(kind)}
               {@const loadable = s.kinds[kind]!}
               {@const filtered = loadable.kind === "ok" ? filteredObjects(loadable.value, passThrough) : []}
               {#if kindVisible(loadable, passThrough)}
@@ -285,6 +316,48 @@
   .refresh-btn:hover { color: rgba(255,255,255,0.75); background: rgba(255,255,255,0.07); }
   .refresh-btn:disabled { opacity: 0.4; cursor: default; }
   .refresh-btn.spinning svg { animation: spin 0.8s linear infinite; }
+
+  /* ── Kind filter pills ───────────────────────────────────── */
+  .kind-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    padding: 0 0.6rem 0.5rem;
+  }
+  .kind-pill {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid color-mix(in srgb, var(--kc) 40%, transparent);
+    background: color-mix(in srgb, var(--kc) 12%, transparent);
+    color: color-mix(in srgb, var(--kc) 80%, rgba(255,255,255,0.6));
+    font-size: 10px;
+    font-family: "Inter", sans-serif;
+    cursor: pointer;
+    transition: opacity 0.12s, background 0.12s, border-color 0.12s;
+    user-select: none;
+    line-height: 1.4;
+  }
+  .kind-pill:hover {
+    background: color-mix(in srgb, var(--kc) 22%, transparent);
+    border-color: color-mix(in srgb, var(--kc) 60%, transparent);
+  }
+  .kind-pill.off {
+    background: transparent;
+    border-color: rgba(255,255,255,0.08);
+    color: rgba(255,255,255,0.25);
+  }
+  .kind-pill.off .pill-dot { background: rgba(255,255,255,0.15); }
+  .pill-dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--kc);
+    flex-shrink: 0;
+    transition: background 0.12s;
+  }
 
   /* ── Schema row ───────────────────────────────────────────── */
   .schema { margin-bottom: 0.15rem; }
