@@ -27,6 +27,7 @@ import {
   vectorDropIndex,
   embedCountPending,
   embedBatch,
+  explainPlan,
 } from "./oracle";
 import { aiChat } from "./ai";
 
@@ -61,6 +62,7 @@ const handlers: HandlerMap = {
   "embed.count_pending": (params) => embedCountPending(params as any),
   "embed.batch": (params) => embedBatch(params as any),
   "ai.chat": (params) => aiChat(params as any),
+  "explain.plan": (params) => explainPlan(params as any),
   ping: async () => ({ pong: true }),
 };
 
