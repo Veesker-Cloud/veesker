@@ -38,6 +38,26 @@ pub fn delete_wallet_password(id: &str) -> keyring::Result<()> {
     delete_account(&wallet_account(id))
 }
 
+fn api_key_account(service: &str) -> String {
+    format!("apikey:{service}")
+}
+
+pub fn set_api_key(service: &str, key: &str) -> keyring::Result<()> {
+    entry(&api_key_account(service))?.set_password(key)
+}
+
+pub fn get_api_key(service: &str) -> keyring::Result<Option<String>> {
+    match entry(&api_key_account(service))?.get_password() {
+        Ok(k) => Ok(Some(k)),
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
+pub fn delete_api_key(service: &str) -> keyring::Result<()> {
+    delete_account(&api_key_account(service))
+}
+
 fn delete_account(account: &str) -> keyring::Result<()> {
     match entry(account)?.delete_credential() {
         Ok(()) => Ok(()),

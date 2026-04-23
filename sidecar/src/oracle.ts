@@ -1,5 +1,13 @@
 import oracledb from "oracledb";
 
+/** Validate and quote an Oracle identifier for use in double-quoted SQL interpolation. */
+function quoteIdent(name: string): string {
+  if (!/^[A-Za-z0-9_$#]{1,128}$/.test(name)) {
+    throw new Error(`Invalid Oracle identifier: ${JSON.stringify(name)}`);
+  }
+  return `"${name}"`;
+}
+
 export type ConnectionTestParams =
   | {
       authType: "basic";
@@ -975,7 +983,7 @@ export async function tableCountRows(p: {
 }): Promise<{ count: number }> {
   return withActiveSession(async (conn) => {
     const res = await conn.execute<[number]>(
-      `SELECT COUNT(*) FROM "${p.owner}"."${p.name}"`,
+      `SELECT COUNT(*) FROM ${quoteIdent(p.owner)}.${quoteIdent(p.name)}`,
       [],
       { outFormat: oracledb.OUT_FORMAT_ARRAY }
     );
@@ -1081,16 +1089,20 @@ export async function vectorSimilaritySearch(p: {
     );
     const dataCols = (colRes.rows ?? []).map((r) => r.COLUMN_NAME);
     const colList = dataCols.length > 0
-      ? dataCols.map((c) => `t."${c}"`).join(", ")
+      ? dataCols.map((c) => `t.${quoteIdent(c)}`).join(", ")
       : "t.ROWID";
+
+    const qOwner = quoteIdent(p.owner);
+    const qTable = quoteIdent(p.tableName);
+    const qCol   = quoteIdent(p.columnName);
 
     // Use explicit STRING type with maxSize — default maxSize truncates large vectors.
     const sql = `
       SELECT ${colList},
-             VECTOR_DISTANCE(t."${p.columnName}", TO_VECTOR(:vecStr), ${metric}) AS VD_SCORE
-        FROM "${p.owner}"."${p.tableName}" t
-       WHERE t."${p.columnName}" IS NOT NULL
-       ORDER BY VECTOR_DISTANCE(t."${p.columnName}", TO_VECTOR(:vecStr), ${metric})
+             VECTOR_DISTANCE(t.${qCol}, TO_VECTOR(:vecStr), ${metric}) AS VD_SCORE
+        FROM ${qOwner}.${qTable} t
+       WHERE t.${qCol} IS NOT NULL
+       ORDER BY VECTOR_DISTANCE(t.${qCol}, TO_VECTOR(:vecStr), ${metric})
        FETCH FIRST ${limit} ROWS ONLY`;
 
     const res = await conn.execute<unknown[]>(sql, { vecStr: { val: vecStr, type: oracledb.STRING, maxSize: 16000 } }, {

@@ -20,7 +20,7 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self' asset: https://asset.localhost; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: asset: https://asset.localhost blob:; connect-src ipc: http://ipc.localhost https://api.anthropic.com http://localhost:*; frame-src 'none'; object-src 'none'"
     }
   },
   "bundle": {

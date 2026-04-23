@@ -24,10 +24,8 @@ export type ConnectionMeta =
 
 export type ConnectionFull = {
   meta: ConnectionMeta;
-  password: string;
-  passwordMissing: boolean;
-  walletPassword?: string;
-  walletPasswordMissing?: boolean;
+  passwordSet: boolean;
+  walletPasswordSet?: boolean;
 };
 
 export type ConnectionInput =

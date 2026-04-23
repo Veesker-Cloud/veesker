@@ -218,3 +218,11 @@ export async function aiChat(
     return { ok: false, error: err as WorkspaceError };
   }
 }
+
+export async function aiKeySave(service: string, key: string): Promise<void> {
+  await invoke("ai_key_save", { service, key });
+}
+
+export async function aiKeyGet(service: string): Promise<string | null> {
+  return invoke<string | null>("ai_key_get", { service });
+}
