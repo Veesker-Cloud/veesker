@@ -262,55 +262,55 @@
     display: flex; flex-direction: column; gap: 0.35rem;
     font-family: "Inter", sans-serif; font-size: 12px; font-weight: 600;
     text-transform: uppercase; letter-spacing: 0.08em;
-    color: rgba(26, 22, 18, 0.55);
+    color: var(--text-secondary);
   }
   input, select {
     font-family: "Inter", sans-serif; font-size: 14px; font-weight: 400;
     text-transform: none; letter-spacing: normal;
-    color: #1a1612; background: #fff;
-    border: 1px solid rgba(26, 22, 18, 0.15);
+    color: var(--text-primary); background: var(--bg-surface-raised);
+    border: 1px solid var(--border-strong);
     border-radius: 6px; padding: 0.6rem 0.75rem;
   }
   input:focus, select:focus { outline: none; border-color: #b33e1f; }
   .row { display: grid; grid-template-columns: 1fr 2fr; gap: 1rem; }
   .auth-toggle, .auth-fixed {
     display: flex; flex-direction: row; gap: 1rem;
-    padding: 0.75rem 1rem; background: #fff;
-    border: 1px solid rgba(26, 22, 18, 0.1); border-radius: 6px;
-    font-family: "Inter", sans-serif; font-size: 13px; color: #1a1612;
+    padding: 0.75rem 1rem; background: var(--bg-surface-raised);
+    border: 1px solid var(--border); border-radius: 6px;
+    font-family: "Inter", sans-serif; font-size: 13px; color: var(--text-primary);
     text-transform: none; letter-spacing: normal; font-weight: 400;
   }
   .radio { flex-direction: row; align-items: center; gap: 0.4rem;
     text-transform: none; letter-spacing: normal; font-weight: 400; font-size: 13px;
-    color: #1a1612;
+    color: var(--text-primary);
   }
   .radio input { margin: 0; }
   .wallet-pick { display: flex; flex-direction: column; gap: 0.5rem;
-    padding: 0.75rem 1rem; background: #fff;
-    border: 1px dashed rgba(26, 22, 18, 0.25); border-radius: 6px;
+    padding: 0.75rem 1rem; background: var(--bg-surface-raised);
+    border: 1px dashed var(--border-strong); border-radius: 6px;
   }
   .wallet-label {
     font-family: "Inter", sans-serif; font-size: 12px; font-weight: 600;
     text-transform: uppercase; letter-spacing: 0.08em;
-    color: rgba(26, 22, 18, 0.55);
+    color: var(--text-secondary);
   }
   .wallet-row { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
   .path-mono {
     font-family: "JetBrains Mono", "SF Mono", monospace;
-    font-size: 12px; color: rgba(26, 22, 18, 0.7);
+    font-size: 12px; color: var(--text-primary);
     word-break: break-all;
   }
-  .muted { color: rgba(26, 22, 18, 0.55); font-size: 13px; }
+  .muted { color: var(--text-secondary); font-size: 13px; }
   .err { color: #7a2a14; font-size: 13px; }
   .actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
   button {
     flex: 1; font-family: "Space Grotesk", sans-serif; font-size: 14px;
-    font-weight: 500; letter-spacing: 0.04em; color: #f6f1e8;
-    background: #1a1612; border: none; border-radius: 6px;
+    font-weight: 500; letter-spacing: 0.04em; color: var(--bg-surface);
+    background: var(--text-primary); border: none; border-radius: 6px;
     padding: 0.85rem 1rem; cursor: pointer;
   }
-  button.ghost { color: #1a1612; background: transparent;
-    border: 1px solid rgba(26, 22, 18, 0.2);
+  button.ghost { color: var(--text-primary); background: transparent;
+    border: 1px solid var(--border-strong);
   }
   button:disabled { opacity: 0.5; cursor: progress; }
   button:hover:not(:disabled) {
