@@ -145,7 +145,7 @@
     <div class="scatter-legend">
       <span class="legend-dot" style="background: rgb(179,175,50)"></span> high
       <span class="legend-dot" style="background: rgb(255,87,50); margin-left:0.5rem"></span> low
-      {#if points.query}<span style="margin-left:0.75rem; color:#7c3aed; opacity:0.8">⬤ Q = sua busca</span>{/if}
+      {#if points.query}<span style="margin-left:0.75rem; color:#7c3aed; opacity:0.8">⬤ Q = your search</span>{/if}
     </div>
   </div>
 {/if}
