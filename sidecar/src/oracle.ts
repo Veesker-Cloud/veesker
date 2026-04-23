@@ -1355,8 +1355,9 @@ export type ExplainNode = {
 export async function explainPlan(p: { sql: string }): Promise<{ nodes: ExplainNode[] }> {
   return withActiveSession(async (conn) => {
     const sid = `V${Date.now()}${Math.random().toString(36).slice(2, 7)}`.slice(0, 30);
-    // EXPLAIN PLAN FOR requires the target SQL as literal text — bind variables are not supported by Oracle for this statement.
-    await conn.execute(`EXPLAIN PLAN SET STATEMENT_ID = :sid FOR ${p.sql}`, { sid });
+    // EXPLAIN PLAN requires STATEMENT_ID as a string literal — Oracle does not accept a bind variable here (ORA-01780).
+    // sid is generated internally so direct interpolation is safe.
+    await conn.execute(`EXPLAIN PLAN SET STATEMENT_ID = '${sid}' FOR ${p.sql}`);
     let res: oracledb.Result<{
       ID: number;
       PARENT_ID: number | null;
