@@ -177,6 +177,7 @@ pub fn run() {
             commands::ai_key_get,
             commands::connection_commit,
             commands::connection_rollback,
+            commands::explain_plan_get,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

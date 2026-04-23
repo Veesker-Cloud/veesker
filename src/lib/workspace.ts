@@ -254,3 +254,20 @@ export const embedBatch = (
   call<{ embedded: number; errors: number }>("embed_batch", {
     payload: { owner, tableName, textColumn, vectorColumn, batchSize, embed },
   });
+
+export type ExplainNode = {
+  id: number;
+  parentId: number | null;
+  operation: string;
+  options: string | null;
+  objectName: string | null;
+  objectOwner: string | null;
+  cost: number | null;
+  cardinality: number | null;
+  bytes: number | null;
+  accessPredicates: string | null;
+  filterPredicates: string | null;
+};
+
+export const explainPlanGet = (sql: string) =>
+  call<{ nodes: ExplainNode[] }>("explain_plan_get", { sql });

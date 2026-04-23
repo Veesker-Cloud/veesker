@@ -670,3 +670,9 @@ pub async fn object_dataflow_get(
         message: format!("decode object.dataflow: {e}"),
     })
 }
+
+#[tauri::command]
+pub async fn explain_plan_get(app: AppHandle, sql: String) -> Result<Value, ConnectionTestErr> {
+    let res = call_sidecar(&app, "explain.plan", json!({ "sql": sql })).await?;
+    Ok(res)
+}

@@ -1335,3 +1335,73 @@ export async function embedBatch(p: {
     return { embedded, errors };
   });
 }
+
+// ── Explain Plan ──────────────────────────────────────────────────────────────
+
+export type ExplainNode = {
+  id: number;
+  parentId: number | null;
+  operation: string;
+  options: string | null;
+  objectName: string | null;
+  objectOwner: string | null;
+  cost: number | null;
+  cardinality: number | null;
+  bytes: number | null;
+  accessPredicates: string | null;
+  filterPredicates: string | null;
+};
+
+export async function explainPlan(p: { sql: string }): Promise<{ nodes: ExplainNode[] }> {
+  return withActiveSession(async (conn) => {
+    const sid = `V${Date.now()}`;
+    await conn.execute(`EXPLAIN PLAN SET STATEMENT_ID = :sid FOR ${p.sql}`, { sid });
+    const res = await conn.execute<{
+      ID: number;
+      PARENT_ID: number | null;
+      OPERATION: string;
+      OPTIONS: string | null;
+      OBJECT_NAME: string | null;
+      OBJECT_OWNER: string | null;
+      COST: number | null;
+      CARDINALITY: number | null;
+      BYTES: number | null;
+      ACCESS_PREDICATES: string | null;
+      FILTER_PREDICATES: string | null;
+    }>(
+      `SELECT id               AS ID,
+              parent_id        AS PARENT_ID,
+              operation        AS OPERATION,
+              options          AS OPTIONS,
+              object_name      AS OBJECT_NAME,
+              object_owner     AS OBJECT_OWNER,
+              cost             AS COST,
+              cardinality      AS CARDINALITY,
+              bytes            AS BYTES,
+              access_predicates  AS ACCESS_PREDICATES,
+              filter_predicates  AS FILTER_PREDICATES
+         FROM plan_table
+        WHERE statement_id = :sid
+        START WITH id = 0
+        CONNECT BY PRIOR id = parent_id
+        ORDER SIBLINGS BY id`,
+      { sid },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT }
+    );
+    await conn.execute(`DELETE FROM plan_table WHERE statement_id = :sid`, { sid });
+    const nodes: ExplainNode[] = (res.rows ?? []).map((r) => ({
+      id: r.ID,
+      parentId: r.PARENT_ID ?? null,
+      operation: r.OPERATION,
+      options: r.OPTIONS ?? null,
+      objectName: r.OBJECT_NAME ?? null,
+      objectOwner: r.OBJECT_OWNER ?? null,
+      cost: r.COST ?? null,
+      cardinality: r.CARDINALITY ?? null,
+      bytes: r.BYTES ?? null,
+      accessPredicates: r.ACCESS_PREDICATES ?? null,
+      filterPredicates: r.FILTER_PREDICATES ?? null,
+    }));
+    return { nodes };
+  });
+}
