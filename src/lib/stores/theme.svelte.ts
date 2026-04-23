@@ -23,6 +23,6 @@ export const theme = {
     _theme = "light";
     try {
       if (typeof window !== "undefined") localStorage.removeItem("veesker_theme");
-    } catch { /* */ }
+    } catch { /* restricted environment */ }
   },
 };
