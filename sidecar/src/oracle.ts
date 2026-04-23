@@ -1354,9 +1354,10 @@ export type ExplainNode = {
 
 export async function explainPlan(p: { sql: string }): Promise<{ nodes: ExplainNode[] }> {
   return withActiveSession(async (conn) => {
-    const sid = `V${Date.now()}`;
+    const sid = `V${Date.now()}${Math.random().toString(36).slice(2, 7)}`.slice(0, 30);
+    // EXPLAIN PLAN FOR requires the target SQL as literal text — bind variables are not supported by Oracle for this statement.
     await conn.execute(`EXPLAIN PLAN SET STATEMENT_ID = :sid FOR ${p.sql}`, { sid });
-    const res = await conn.execute<{
+    let res: oracledb.Result<{
       ID: number;
       PARENT_ID: number | null;
       OPERATION: string;
@@ -1368,28 +1369,44 @@ export async function explainPlan(p: { sql: string }): Promise<{ nodes: ExplainN
       BYTES: number | null;
       ACCESS_PREDICATES: string | null;
       FILTER_PREDICATES: string | null;
-    }>(
-      `SELECT id               AS ID,
-              parent_id        AS PARENT_ID,
-              operation        AS OPERATION,
-              options          AS OPTIONS,
-              object_name      AS OBJECT_NAME,
-              object_owner     AS OBJECT_OWNER,
-              cost             AS COST,
-              cardinality      AS CARDINALITY,
-              bytes            AS BYTES,
-              access_predicates  AS ACCESS_PREDICATES,
-              filter_predicates  AS FILTER_PREDICATES
-         FROM plan_table
-        WHERE statement_id = :sid
-        START WITH id = 0
-        CONNECT BY PRIOR id = parent_id
-        ORDER SIBLINGS BY id`,
-      { sid },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT }
-    );
-    await conn.execute(`DELETE FROM plan_table WHERE statement_id = :sid`, { sid });
-    const nodes: ExplainNode[] = (res.rows ?? []).map((r) => ({
+    }>;
+    try {
+      res = await conn.execute<{
+        ID: number;
+        PARENT_ID: number | null;
+        OPERATION: string;
+        OPTIONS: string | null;
+        OBJECT_NAME: string | null;
+        OBJECT_OWNER: string | null;
+        COST: number | null;
+        CARDINALITY: number | null;
+        BYTES: number | null;
+        ACCESS_PREDICATES: string | null;
+        FILTER_PREDICATES: string | null;
+      }>(
+        `SELECT id               AS ID,
+                parent_id        AS PARENT_ID,
+                operation        AS OPERATION,
+                options          AS OPTIONS,
+                object_name      AS OBJECT_NAME,
+                object_owner     AS OBJECT_OWNER,
+                cost             AS COST,
+                cardinality      AS CARDINALITY,
+                bytes            AS BYTES,
+                access_predicates  AS ACCESS_PREDICATES,
+                filter_predicates  AS FILTER_PREDICATES
+           FROM plan_table
+          WHERE statement_id = :sid
+          START WITH id = 0
+          CONNECT BY PRIOR id = parent_id
+          ORDER SIBLINGS BY id`,
+        { sid },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+      );
+    } finally {
+      await conn.execute(`DELETE FROM plan_table WHERE statement_id = :sid`, { sid });
+    }
+    const nodes: ExplainNode[] = (res!.rows ?? []).map((r) => ({
       id: r.ID,
       parentId: r.PARENT_ID ?? null,
       operation: r.OPERATION,
