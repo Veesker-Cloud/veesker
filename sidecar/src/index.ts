@@ -32,6 +32,7 @@ import {
   procExecute,
 } from "./oracle";
 import { aiChat } from "./ai";
+import { chartConfigure, chartReset } from "./chart";
 
 const handlers: HandlerMap = {
   "connection.test": (params) => connectionTest(params as any),
@@ -67,6 +68,8 @@ const handlers: HandlerMap = {
   "explain.plan": (params) => explainPlan(params as any),
   "proc.describe": (params) => procDescribe(params as any),
   "proc.execute": (params) => procExecute(params as any),
+  "chart.configure": (params) => chartConfigure(params as any),
+  "chart.reset":     (params) => chartReset(params as any),
   ping: async () => ({ pong: true }),
 };
 
