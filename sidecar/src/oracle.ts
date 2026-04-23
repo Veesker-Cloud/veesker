@@ -1432,36 +1432,40 @@ export type ProcParam = {
   dataType: string;
 };
 
+async function _procDescribeConn(conn: oracledb.Connection, owner: string, name: string): Promise<ProcParam[]> {
+  // ALL_ARGUMENTS without subprogram_id filtering merges overloaded overloads — standalone procedures only.
+  const res = await conn.execute<{
+    NAME: string;
+    POSITION: number;
+    DIRECTION: string;
+    DATA_TYPE: string;
+  }>(
+    `SELECT argument_name AS NAME,
+            position      AS POSITION,
+            in_out        AS DIRECTION,
+            data_type     AS DATA_TYPE
+       FROM all_arguments
+      WHERE owner       = :owner
+        AND object_name = :name
+        AND data_level  = 0
+      ORDER BY position`,
+    { owner: owner.toUpperCase(), name: name.toUpperCase() },
+    { outFormat: oracledb.OUT_FORMAT_OBJECT }
+  );
+  return (res.rows ?? []).map((r) => ({
+    name: r.NAME ?? "RETURN",
+    position: r.POSITION,
+    direction: (r.DIRECTION as ProcParam["direction"]) ?? "IN",
+    dataType: r.DATA_TYPE ?? "VARCHAR2",
+  }));
+}
+
 export async function procDescribe(p: {
   owner: string;
   name: string;
 }): Promise<{ params: ProcParam[] }> {
   return withActiveSession(async (conn) => {
-    const res = await conn.execute<{
-      NAME: string;
-      POSITION: number;
-      DIRECTION: string;
-      DATA_TYPE: string;
-    }>(
-      `SELECT argument_name AS NAME,
-              position      AS POSITION,
-              in_out        AS DIRECTION,
-              data_type     AS DATA_TYPE
-         FROM all_arguments
-        WHERE owner       = :owner
-          AND object_name = :name
-          AND data_level  = 0
-        ORDER BY position`,
-      { owner: p.owner.toUpperCase(), name: p.name.toUpperCase() },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT }
-    );
-    const params: ProcParam[] = (res.rows ?? []).map((r) => ({
-      name: r.NAME ?? `RETURN`,
-      position: r.POSITION,
-      direction: (r.DIRECTION as ProcParam["direction"]) ?? "IN",
-      dataType: r.DATA_TYPE ?? "VARCHAR2",
-    }));
-    return { params };
+    return { params: await _procDescribeConn(conn, p.owner, p.name) };
   });
 }
 
@@ -1492,7 +1496,7 @@ export async function procExecute(p: {
   params: { name: string; value: string }[];
 }): Promise<ProcExecuteResult> {
   return withActiveSession(async (conn) => {
-    const { params: paramMeta } = await procDescribe({ owner: p.owner, name: p.name });
+    const paramMeta = await _procDescribeConn(conn, p.owner, p.name);
 
     const binds: Record<string, oracledb.BindDefinition> = {};
     const callArgs: string[] = [];
@@ -1569,6 +1573,8 @@ export async function procExecute(p: {
           }
           await rs.close();
           refCursors.push({ name: pm.name, columns, rows });
+        } else {
+          refCursors.push({ name: pm.name, columns: [], rows: [] });
         }
       }
     }
