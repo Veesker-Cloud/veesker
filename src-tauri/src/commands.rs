@@ -692,3 +692,15 @@ pub async fn proc_execute(app: AppHandle, payload: Value) -> Result<Value, Conne
     let res = call_sidecar(&app, "proc.execute", payload).await?;
     Ok(res)
 }
+
+#[tauri::command]
+pub async fn chart_configure(app: AppHandle, payload: Value) -> Result<Value, ConnectionTestErr> {
+    let res = call_sidecar(&app, "chart.configure", payload).await?;
+    Ok(res)
+}
+
+#[tauri::command]
+pub async fn chart_reset(app: AppHandle, session_id: String) -> Result<Value, ConnectionTestErr> {
+    let res = call_sidecar(&app, "chart.reset", json!({ "sessionId": session_id })).await?;
+    Ok(res)
+}

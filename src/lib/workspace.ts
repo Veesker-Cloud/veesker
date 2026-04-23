@@ -293,3 +293,37 @@ export const procExecuteRun = (payload: {
   name: string;
   params: { name: string; value: string }[];
 }) => call<ProcExecuteResult>("proc_execute", { payload });
+
+// ── Chart Reports ────────────────────────────────────────────────────────────
+
+export type ChartType = "bar" | "bar-h" | "line" | "pie" | "kpi" | "table";
+export type ChartAggregation = "none" | "sum" | "avg" | "count" | "max" | "min";
+
+export type ChartConfig = {
+  type: ChartType | null;
+  xColumn: string | null;
+  yColumns: string[];
+  aggregation: ChartAggregation;
+  title: string | null;
+};
+
+export type PreviewData = {
+  labels: string[];
+  datasets: { label: string; data: number[] }[];
+};
+
+export type ChartConfigureResult = {
+  config: ChartConfig;
+  previewData: PreviewData | null;
+  ready: boolean;
+};
+
+export const chartConfigureRpc = (payload: {
+  sessionId: string;
+  patch: Partial<ChartConfig>;
+  columns: { name: string; dataType: string }[];
+  rows: unknown[][];
+}) => call<ChartConfigureResult>("chart_configure", { payload });
+
+export const chartResetRpc = (sessionId: string) =>
+  call<{ ok: true }>("chart_reset", { sessionId });
