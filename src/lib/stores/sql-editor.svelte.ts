@@ -785,6 +785,7 @@ export async function runExplain(sql: string): Promise<void> {
 export function setActiveResult(tabId: string, resultId: string): void {
   const tab = _tabs.find((t) => t.id === tabId);
   if (!tab) return;
+  if (!tab.results.some((r) => r.id === resultId)) return;
   tab.activeResultId = resultId;
   _tabs = [..._tabs];
 }
