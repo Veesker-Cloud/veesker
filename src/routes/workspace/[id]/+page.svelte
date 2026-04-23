@@ -575,8 +575,8 @@
   }
   .fatal button {
     align-self: flex-start;
-    background: #1a1612;
-    color: #f6f1e8;
+    background: var(--text-primary);
+    color: var(--bg-surface);
     border: none;
     padding: 0.55rem 0.9rem;
     border-radius: 4px;
