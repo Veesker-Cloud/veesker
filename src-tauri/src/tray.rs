@@ -1,4 +1,7 @@
 use std::sync::Mutex;
+use tauri::{AppHandle, Manager};
+use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem};
+use crate::persistence::connections::{ConnectionMeta, ConnectionService};
 
 // ── Public state types ─────────────────────────────────────────────────────
 
@@ -55,6 +58,75 @@ pub fn composite_icon(base_png: &[u8], state: &TrayState) -> tauri::image::Image
     let (width, height) = img.dimensions();
     let rgba_pixels = img.into_raw();
     tauri::image::Image::new_owned(rgba_pixels, width, height)
+}
+
+/// Builds the right-click context menu.
+/// `active_name` is the display name of the currently connected connection, if any.
+pub fn build_tray_menu(
+    app: &AppHandle,
+    active_name: Option<&str>,
+) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
+    let connections = app
+        .state::<ConnectionService>()
+        .list()
+        .unwrap_or_default();
+
+    let connections_label =
+        MenuItemBuilder::with_id("connections_label", "CONNECTIONS")
+            .enabled(false)
+            .build(app)?;
+
+    let mut conn_items: Vec<tauri::menu::MenuItem<tauri::Wry>> = Vec::new();
+
+    if connections.is_empty() {
+        let empty = MenuItemBuilder::with_id("no_connections", "Nenhuma conexão cadastrada")
+            .enabled(false)
+            .build(app)?;
+        conn_items.push(empty);
+    } else {
+        for meta in &connections {
+            let (id, name) = match meta {
+                ConnectionMeta::Basic { id, name, .. } => (id.as_str(), name.as_str()),
+                ConnectionMeta::Wallet { id, name, .. } => (id.as_str(), name.as_str()),
+            };
+            let is_active = active_name.map(|n| n == name).unwrap_or(false);
+            let (indicator, action_label, item_id) = if is_active {
+                ("●", "Desconectar", format!("disconnect_{id}"))
+            } else {
+                ("○", "Abrir →", format!("connect_{id}"))
+            };
+            let label = format!("{indicator} {name}    {action_label}");
+            let item = MenuItemBuilder::with_id(item_id, label).build(app)?;
+            conn_items.push(item);
+        }
+    }
+
+    let actions_label =
+        MenuItemBuilder::with_id("actions_label", "ACTIONS")
+            .enabled(false)
+            .build(app)?;
+    let new_query = MenuItemBuilder::with_id("new_query", "Nova Query").build(app)?;
+    let schema_browser = MenuItemBuilder::with_id("schema_browser", "Schema Browser").build(app)?;
+    let open_app = MenuItemBuilder::with_id("open_app", "Abrir Veesker").build(app)?;
+    let quit = MenuItemBuilder::with_id("quit", "Sair").build(app)?;
+    let sep1 = PredefinedMenuItem::separator(app)?;
+    let sep2 = PredefinedMenuItem::separator(app)?;
+    let sep3 = PredefinedMenuItem::separator(app)?;
+
+    let mut builder = MenuBuilder::new(app).item(&connections_label);
+    for item in &conn_items {
+        builder = builder.item(item);
+    }
+    builder
+        .item(&sep1)
+        .item(&actions_label)
+        .item(&new_query)
+        .item(&schema_browser)
+        .item(&sep2)
+        .item(&open_app)
+        .item(&sep3)
+        .item(&quit)
+        .build()
 }
 
 #[cfg(test)]
