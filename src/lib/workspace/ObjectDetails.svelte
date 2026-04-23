@@ -1581,7 +1581,7 @@
     border: 1px solid rgba(26,22,18,0.15);
     border-radius: 4px;
     padding: 2px 6px;
-    color: rgba(26,22,18,0.8);
+    color: var(--text-primary);
     cursor: pointer;
   }
   .vec-limit {
@@ -1592,7 +1592,7 @@
     border: 1px solid rgba(26,22,18,0.15);
     border-radius: 4px;
     padding: 2px 6px;
-    color: rgba(26,22,18,0.8);
+    color: var(--text-primary);
     text-align: center;
   }
   .vec-cfg-btn {
@@ -1640,7 +1640,7 @@
     border: 1px solid rgba(26,22,18,0.15);
     border-radius: 4px;
     padding: 3px 8px;
-    color: rgba(26,22,18,0.85);
+    color: var(--text-primary);
     outline: none;
   }
   .vec-model-input:focus, .vec-url-input:focus {
@@ -1725,7 +1725,7 @@
     gap: 0.4rem;
     background: #7c3aed;
     border: none;
-    color: #fff;
+    color: var(--bg-surface);
     font-family: "Space Grotesk", sans-serif;
     font-size: 12px;
     font-weight: 600;
@@ -1795,7 +1795,7 @@
     color: #b33e1f;
   }
   .vec-create-form {
-    background: rgba(26,22,18,0.03);
+    background: var(--bg-surface-alt);
     border: 1px solid var(--border);
     border-radius: 5px;
     padding: 0.5rem 0.6rem;
@@ -1878,7 +1878,7 @@
     margin-left: 2px;
   }
   .vec-gen-panel {
-    background: rgba(26,22,18,0.03);
+    background: var(--bg-surface-alt);
     border-bottom: 1px solid rgba(26,22,18,0.06);
     padding: 0.5rem 0.7rem;
     display: flex;
@@ -1916,7 +1916,7 @@
   .gen-progress-bar-wrap {
     flex: 1;
     height: 4px;
-    background: rgba(26,22,18,0.08);
+    background: var(--bg-surface-alt);
     border-radius: 2px;
     overflow: hidden;
   }
@@ -1981,7 +1981,7 @@
     padding: 0.45rem 0.65rem;
     resize: none;
     outline: none;
-    color: rgba(26,22,18,0.85);
+    color: var(--text-primary);
     transition: border-color 0.12s;
     line-height: 1.45;
   }
@@ -1993,7 +1993,7 @@
     gap: 0.35rem;
     background: #7c3aed;
     border: none;
-    color: #fff;
+    color: var(--bg-surface);
     font-family: "Space Grotesk", sans-serif;
     font-size: 12px;
     font-weight: 600;
@@ -2009,7 +2009,7 @@
   .vec-spinner {
     width: 11px; height: 11px;
     border: 1.5px solid rgba(255,255,255,0.3);
-    border-top-color: #fff;
+    border-top-color: var(--bg-surface);
     border-radius: 50%;
     animation: spin 0.7s linear infinite;
     flex-shrink: 0;

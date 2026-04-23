@@ -221,6 +221,6 @@
   }
   .row.err .summary { color: #b33e1f; }
   .dbms-output { padding: 2px 0 4px 24px; display: flex; flex-direction: column; gap: 1px; }
-  .dbms-line { font-family: monospace; font-size: 11px; color: #3a3028; white-space: pre-wrap; }
+  .dbms-line { font-family: monospace; font-size: 11px; color: var(--text-secondary); white-space: pre-wrap; }
   .dbms-toggle { background: none; border: none; color: var(--text-muted); font-size: 11px; cursor: pointer; padding: 0; text-align: left; }
 </style>
