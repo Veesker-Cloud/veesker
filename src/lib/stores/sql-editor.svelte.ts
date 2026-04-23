@@ -792,7 +792,10 @@ export function setActiveResult(tabId: string, resultId: string): void {
 
 export function addProcResults(result: ProcExecuteResult): void {
   const tab = _tabs.find((t) => t.id === _activeId);
-  if (!tab) return;
+  if (!tab) {
+    console.warn("addProcResults: no active tab to attach results to");
+    return;
+  }
 
   const logLines: string[] = [
     ...result.outParams.map((p) => `OUT ${p.name} = ${p.value}`),

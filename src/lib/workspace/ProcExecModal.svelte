@@ -49,7 +49,16 @@
 </script>
 
 <dialog class="modal" open onclick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-  <div class="modal-box" role="document" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()}>
+  <div
+    class="modal-box"
+    role="document"
+    onkeydown={(e) => {
+      if (e.key === "Escape") { onClose(); return; }
+      if (e.key === "Enter" && !executing && !loading) { void execute(); return; }
+      e.stopPropagation();
+    }}
+    onclick={(e) => e.stopPropagation()}
+  >
     <div class="modal-header">
       <span class="modal-title">Execute: {owner}.{name} ({objectType})</span>
       <button class="modal-close" onclick={onClose} aria-label="Close">×</button>
@@ -57,8 +66,6 @@
     <div class="modal-body">
       {#if loading}
         <p class="hint">Loading parameters…</p>
-      {:else if execError}
-        <p class="err">{execError}</p>
       {:else if params.length === 0}
         <p class="hint">No parameters — ready to execute.</p>
       {:else}
@@ -81,6 +88,9 @@
             </div>
           {/each}
         </div>
+      {/if}
+      {#if execError}
+        <p class="err">{execError}</p>
       {/if}
     </div>
     <div class="modal-footer">
