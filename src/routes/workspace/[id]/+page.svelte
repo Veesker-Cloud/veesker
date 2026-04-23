@@ -515,7 +515,7 @@
   :global(body) {
     margin: 0;
     background: #18140f;
-    color: #1a1612;
+    color: var(--text-primary);
     font-family: "Inter", -apple-system, system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
@@ -529,7 +529,7 @@
     display: flex;
     flex: 1;
     min-height: 0;
-    background: #faf7f2;
+    background: var(--bg-page);
     overflow: hidden;
     transition: flex 0.18s ease;
   }
@@ -586,7 +586,7 @@
   .loading {
     max-width: 480px;
     margin: 4rem auto;
-    color: rgba(26, 22, 18, 0.5);
+    color: var(--text-muted);
     font-size: 13px;
   }
 </style>
