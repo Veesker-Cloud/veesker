@@ -168,3 +168,11 @@ pub async fn ensure(app: &AppHandle) -> Result<(), String> {
     }
     Ok(())
 }
+
+/// Public helper so tray and other non-command modules can call the sidecar.
+pub async fn call_raw(app: &AppHandle, method: &str, params: serde_json::Value) -> Result<serde_json::Value, RpcError> {
+    ensure(app).await.map_err(|msg| RpcError { code: -32003, message: msg, data: None })?;
+    let state = app.state::<SidecarState>();
+    let guard = state.0.lock().await;
+    guard.as_ref().expect("sidecar ensured").call(method, params).await
+}

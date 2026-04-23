@@ -129,6 +129,36 @@ pub fn build_tray_menu(
         .build()
 }
 
+pub const BASE_ICON: &[u8] = include_bytes!("../icons/32x32.png");
+
+/// Recomputes the tray icon and menu based on current state.
+/// Call this after any connection state change.
+pub async fn update_tray(app: &AppHandle, state: TrayState) {
+    let active_name = app
+        .state::<ActiveConnection>()
+        .0
+        .lock()
+        .await
+        .clone();
+
+    let icon = composite_icon(BASE_ICON, &state);
+
+    let menu = match build_tray_menu(app, active_name.as_deref()) {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("tray: failed to build menu: {e}");
+            return;
+        }
+    };
+
+    let handle = app.state::<TrayHandle>();
+    let guard = handle.0.lock().unwrap();
+    if let Some(tray) = guard.as_ref() {
+        let _ = tray.set_icon(Some(icon));
+        let _ = tray.set_menu(Some(menu));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
