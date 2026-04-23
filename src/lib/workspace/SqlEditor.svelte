@@ -6,6 +6,7 @@
   import { oneDark } from "@codemirror/theme-one-dark";
   import { basicSetup } from "codemirror";
   import { lintGutter, setDiagnostics } from "@codemirror/lint";
+  import { showMinimap } from "@replit/codemirror-minimap";
   import type { CompileError } from "$lib/workspace";
 
   type Props = {
@@ -86,6 +87,11 @@
           sql({ dialect: PLSQL }),
           oneDark,
           lintGutter(),
+          showMinimap.of({
+            create: () => ({ dom: document.createElement("div") }),
+            displayText: "characters",
+            showOverlay: "always",
+          }),
           EditorView.updateListener.of((u) => {
             if (u.docChanged) onChange(u.state.doc.toString());
           }),
