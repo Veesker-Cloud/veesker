@@ -178,6 +178,8 @@ pub fn run() {
             commands::connection_commit,
             commands::connection_rollback,
             commands::explain_plan_get,
+            commands::proc_describe,
+            commands::proc_execute,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

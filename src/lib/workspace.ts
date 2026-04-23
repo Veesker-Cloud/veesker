@@ -271,3 +271,25 @@ export type ExplainNode = {
 
 export const explainPlanGet = (sql: string) =>
   call<{ nodes: ExplainNode[] }>("explain_plan_get", { sql });
+
+export type ProcParam = {
+  name: string;
+  position: number;
+  direction: "IN" | "OUT" | "IN/OUT";
+  dataType: string;
+};
+
+export type ProcExecuteResult = {
+  outParams: { name: string; value: string }[];
+  refCursors: { name: string; columns: Array<{ name: string; dataType: string }>; rows: unknown[][] }[];
+  dbmsOutput: string[];
+};
+
+export const procDescribeGet = (owner: string, name: string) =>
+  call<{ params: ProcParam[] }>("proc_describe", { owner, name });
+
+export const procExecuteRun = (payload: {
+  owner: string;
+  name: string;
+  params: { name: string; value: string }[];
+}) => call<ProcExecuteResult>("proc_execute", { payload });

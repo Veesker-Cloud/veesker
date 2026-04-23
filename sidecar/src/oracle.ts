@@ -1422,3 +1422,158 @@ export async function explainPlan(p: { sql: string }): Promise<{ nodes: ExplainN
     return { nodes };
   });
 }
+
+// ── Procedure / Function Execution ────────────────────────────────────────────
+
+export type ProcParam = {
+  name: string;
+  position: number;
+  direction: "IN" | "OUT" | "IN/OUT";
+  dataType: string;
+};
+
+export async function procDescribe(p: {
+  owner: string;
+  name: string;
+}): Promise<{ params: ProcParam[] }> {
+  return withActiveSession(async (conn) => {
+    const res = await conn.execute<{
+      NAME: string;
+      POSITION: number;
+      DIRECTION: string;
+      DATA_TYPE: string;
+    }>(
+      `SELECT argument_name AS NAME,
+              position      AS POSITION,
+              in_out        AS DIRECTION,
+              data_type     AS DATA_TYPE
+         FROM all_arguments
+        WHERE owner       = :owner
+          AND object_name = :name
+          AND data_level  = 0
+        ORDER BY position`,
+      { owner: p.owner.toUpperCase(), name: p.name.toUpperCase() },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT }
+    );
+    const params: ProcParam[] = (res.rows ?? []).map((r) => ({
+      name: r.NAME ?? `RETURN`,
+      position: r.POSITION,
+      direction: (r.DIRECTION as ProcParam["direction"]) ?? "IN",
+      dataType: r.DATA_TYPE ?? "VARCHAR2",
+    }));
+    return { params };
+  });
+}
+
+export type ProcExecuteResult = {
+  outParams: { name: string; value: string }[];
+  refCursors: { name: string; columns: QueryColumn[]; rows: QueryResultRow[] }[];
+  dbmsOutput: string[];
+};
+
+function oracleTypeFor(dataType: string): number {
+  const t = dataType.toUpperCase();
+  if (t.includes("NUMBER") || t.includes("INTEGER") || t.includes("FLOAT")) return oracledb.NUMBER;
+  if (t.includes("DATE") || t.includes("TIMESTAMP")) return oracledb.DATE;
+  return oracledb.STRING;
+}
+
+function convertInputValue(v: string, dataType: string): unknown {
+  if (!v || v.toUpperCase() === "NULL") return null;
+  const t = dataType.toUpperCase();
+  if (t.includes("NUMBER") || t.includes("INTEGER") || t.includes("FLOAT")) return Number(v);
+  if (t.includes("DATE") || t.includes("TIMESTAMP")) return new Date(v);
+  return v;
+}
+
+export async function procExecute(p: {
+  owner: string;
+  name: string;
+  params: { name: string; value: string }[];
+}): Promise<ProcExecuteResult> {
+  return withActiveSession(async (conn) => {
+    const { params: paramMeta } = await procDescribe({ owner: p.owner, name: p.name });
+
+    const binds: Record<string, oracledb.BindDefinition> = {};
+    const callArgs: string[] = [];
+
+    for (const pm of paramMeta) {
+      const isRefCursor = pm.dataType === "REF CURSOR";
+      if (pm.direction === "IN") {
+        const v = p.params.find((x) => x.name === pm.name);
+        binds[`i_${pm.name}`] = {
+          dir: oracledb.BIND_IN,
+          val: convertInputValue(v?.value ?? "", pm.dataType),
+        };
+        callArgs.push(`${pm.name} => :i_${pm.name}`);
+      } else if (pm.direction === "OUT" && !isRefCursor) {
+        binds[`o_${pm.name}`] = {
+          dir: oracledb.BIND_OUT,
+          type: oracleTypeFor(pm.dataType),
+          maxSize: 32767,
+        };
+        callArgs.push(`${pm.name} => :o_${pm.name}`);
+      } else if (pm.direction === "OUT" && isRefCursor) {
+        binds[`o_${pm.name}`] = { dir: oracledb.BIND_OUT, type: oracledb.CURSOR };
+        callArgs.push(`${pm.name} => :o_${pm.name}`);
+      } else if (pm.direction === "IN/OUT") {
+        const v = p.params.find((x) => x.name === pm.name);
+        binds[`io_${pm.name}`] = {
+          dir: oracledb.BIND_INOUT,
+          val: convertInputValue(v?.value ?? "", pm.dataType),
+          type: oracleTypeFor(pm.dataType),
+          maxSize: 32767,
+        };
+        callArgs.push(`${pm.name} => :io_${pm.name}`);
+      }
+    }
+
+    const callExpr = `${quoteIdent(p.owner)}.${quoteIdent(p.name)}(${callArgs.join(", ")})`;
+    const block = `BEGIN ${callExpr}; END;`;
+
+    await conn.execute(`BEGIN DBMS_OUTPUT.ENABLE(NULL); END;`);
+    const result = await conn.execute(block, binds, {
+      outFormat: oracledb.OUT_FORMAT_ARRAY,
+    });
+    const ob = (result.outBinds ?? {}) as Record<string, unknown>;
+
+    const outParams: { name: string; value: string }[] = [];
+    const refCursors: { name: string; columns: QueryColumn[]; rows: QueryResultRow[] }[] = [];
+
+    for (const pm of paramMeta) {
+      const isRefCursor = pm.dataType === "REF CURSOR";
+      if (pm.direction === "OUT" && !isRefCursor) {
+        const val = ob[`o_${pm.name}`];
+        outParams.push({
+          name: pm.name,
+          value: val === null || val === undefined ? "NULL" : String(val),
+        });
+      } else if (pm.direction === "IN/OUT") {
+        const val = ob[`io_${pm.name}`];
+        outParams.push({
+          name: pm.name,
+          value: val === null || val === undefined ? "NULL" : String(val),
+        });
+      } else if (pm.direction === "OUT" && isRefCursor) {
+        const rs = ob[`o_${pm.name}`] as oracledb.ResultSet<unknown[]> | null;
+        if (rs) {
+          const meta = (rs.metaData ?? []) as Array<{ name: string; fetchType?: number }>;
+          const columns: QueryColumn[] = meta.map((m) => ({
+            name: m.name,
+            dataType: formatColumnType(m as any),
+          }));
+          const rows: unknown[][] = [];
+          let row: unknown[] | undefined;
+          while ((row = (await rs.getRow()) as unknown[] | undefined)) {
+            rows.push(row.map(normalizeCell));
+          }
+          await rs.close();
+          refCursors.push({ name: pm.name, columns, rows });
+        }
+      }
+    }
+
+    const dbmsOutput = (await drainDbmsOutput(conn)) ?? [];
+    return { outParams, refCursors, dbmsOutput };
+  });
+}
