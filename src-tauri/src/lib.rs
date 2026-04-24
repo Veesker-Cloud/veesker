@@ -88,6 +88,7 @@ pub fn run() {
                     tauri::async_runtime::spawn(async move {
                         match id.as_str() {
                             "quit" => {
+                                let _ = crate::sidecar::call_raw(&app_clone, "debug.stop", serde_json::json!({})).await;
                                 let _ = crate::sidecar::call_raw(&app_clone, "workspace.close", serde_json::json!({})).await;
                                 app_clone.exit(0);
                             }
@@ -137,6 +138,7 @@ pub fn run() {
                             } else {
                                 let app3 = app2.clone();
                                 tauri::async_runtime::spawn(async move {
+                                    let _ = crate::sidecar::call_raw(&app3, "debug.stop", serde_json::json!({})).await;
                                     let _ = crate::sidecar::call_raw(&app3, "workspace.close", serde_json::json!({})).await;
                                     app3.exit(0);
                                 });

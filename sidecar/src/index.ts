@@ -126,7 +126,12 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error("sidecar fatal:", err);
-  process.exit(1);
-});
+main()
+  .then(() => process.exit(0))
+  .catch((err) => {
+    console.error("sidecar fatal:", err);
+    process.exit(1);
+  });
+
+process.on("SIGTERM", () => process.exit(0));
+process.on("SIGINT",  () => process.exit(0));
