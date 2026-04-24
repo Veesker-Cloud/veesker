@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::fs::OpenOptions;
+use std::io::Write as IoWrite;
 use tauri::AppHandle;
 use tauri::Manager;
 
@@ -399,11 +401,39 @@ pub async fn history_list(
     svc.history_list(&connection_id, limit, offset, search.as_deref())
 }
 
+fn write_audit_entry(app_data_dir: &std::path::Path, input: &HistorySaveInput) {
+    let audit_dir = app_data_dir.join("audit");
+    if std::fs::create_dir_all(&audit_dir).is_err() {
+        return;
+    }
+    let now = chrono::Utc::now();
+    let date = now.format("%Y-%m-%d").to_string();
+    let path = audit_dir.join(format!("{date}.jsonl"));
+    let entry = serde_json::json!({
+        "ts":           now.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+        "connectionId": input.connection_id,
+        "host":         input.host.as_deref().unwrap_or(""),
+        "username":     input.username.as_deref().unwrap_or(""),
+        "sql":          input.sql,
+        "success":      input.success,
+        "rowCount":     input.row_count,
+        "elapsedMs":    input.elapsed_ms,
+    });
+    let mut line = entry.to_string();
+    line.push('\n');
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&path) {
+        let _ = file.write_all(line.as_bytes());
+    }
+}
+
 #[tauri::command]
 pub async fn history_save(
     app: AppHandle,
     input: HistorySaveInput,
 ) -> Result<i64, ConnectionError> {
+    if let Ok(data_dir) = app.path().app_data_dir() {
+        write_audit_entry(&data_dir, &input);
+    }
     let svc = app.state::<ConnectionService>();
     svc.history_save(input)
 }

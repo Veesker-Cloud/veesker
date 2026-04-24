@@ -26,6 +26,8 @@ pub struct HistoryEntry {
     pub error_code: Option<i32>,
     pub error_message: Option<String>,
     pub executed_at: String,
+    pub username: Option<String>,
+    pub host: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -38,6 +40,16 @@ pub struct HistorySaveInput {
     pub elapsed_ms: i64,
     pub error_code: Option<i32>,
     pub error_message: Option<String>,
+    pub username: Option<String>,
+    pub host: Option<String>,
+}
+
+fn has_column_history(conn: &SqliteConnection, column: &str) -> rusqlite::Result<bool> {
+    let mut stmt = conn.prepare("PRAGMA table_info(query_history)")?;
+    let names: Vec<String> = stmt
+        .query_map([], |r| r.get::<_, String>(1))?
+        .collect::<rusqlite::Result<_>>()?;
+    Ok(names.iter().any(|n| n == column))
 }
 
 pub fn init_db_history(conn: &SqliteConnection) -> Result<(), HistoryError> {
@@ -60,6 +72,12 @@ pub fn init_db_history(conn: &SqliteConnection) -> Result<(), HistoryError> {
             ON query_history (connection_id, id DESC);
         "#,
     )?;
+    if !has_column_history(conn, "username")? {
+        conn.execute_batch(
+            "ALTER TABLE query_history ADD COLUMN username TEXT;
+             ALTER TABLE query_history ADD COLUMN host TEXT;",
+        )?;
+    }
     Ok(())
 }
 
@@ -73,8 +91,8 @@ pub fn insert(conn: &SqliteConnection, input: &HistorySaveInput) -> Result<i64, 
     let executed_at = Utc::now().to_rfc3339();
     conn.execute(
         "INSERT INTO query_history
-            (connection_id, sql, success, row_count, elapsed_ms, error_code, error_message, executed_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (connection_id, sql, success, row_count, elapsed_ms, error_code, error_message, executed_at, username, host)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         params![
             input.connection_id,
             input.sql,
@@ -84,6 +102,8 @@ pub fn insert(conn: &SqliteConnection, input: &HistorySaveInput) -> Result<i64, 
             input.error_code,
             input.error_message,
             executed_at,
+            input.username,
+            input.host,
         ],
     )?;
     Ok(conn.last_insert_rowid())
@@ -106,7 +126,7 @@ pub fn list(
             .replace('_', "\\_");
         let pattern = format!("%{}%", escaped);
         let mut stmt = conn.prepare(
-            "SELECT id, connection_id, sql, success, row_count, elapsed_ms, error_code, error_message, executed_at
+            "SELECT id, connection_id, sql, success, row_count, elapsed_ms, error_code, error_message, executed_at, username, host
              FROM query_history
              WHERE connection_id = ? AND sql LIKE ? ESCAPE '\\'
              ORDER BY id DESC
@@ -118,7 +138,7 @@ pub fn list(
         Ok(rows)
     } else {
         let mut stmt = conn.prepare(
-            "SELECT id, connection_id, sql, success, row_count, elapsed_ms, error_code, error_message, executed_at
+            "SELECT id, connection_id, sql, success, row_count, elapsed_ms, error_code, error_message, executed_at, username, host
              FROM query_history
              WHERE connection_id = ?
              ORDER BY id DESC
@@ -142,6 +162,8 @@ fn map_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<HistoryEntry> {
         error_code: row.get(6)?,
         error_message: row.get(7)?,
         executed_at: row.get(8)?,
+        username: row.get(9)?,
+        host: row.get(10)?,
     })
 }
 
@@ -173,6 +195,8 @@ mod tests {
             elapsed_ms: 100,
             error_code: None,
             error_message: None,
+            username: Some("testuser".into()),
+            host: Some("localhost".into()),
         }
     }
 
@@ -185,6 +209,8 @@ mod tests {
             elapsed_ms: 50,
             error_code: Some(-32013),
             error_message: Some("ORA-00942: table or view does not exist".into()),
+            username: None,
+            host: None,
         }
     }
 
