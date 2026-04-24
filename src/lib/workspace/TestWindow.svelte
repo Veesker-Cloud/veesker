@@ -56,6 +56,15 @@
     view.destroy();
     view = null;
     createEditor(source);
+    const currentObj = debugStore.editorObject;
+    for (const bp of debugStore.breakpoints) {
+      if (
+        bp.owner === currentObj?.owner &&
+        bp.objectName === currentObj?.objectName
+      ) {
+        view!.dispatch({ effects: toggleBreakpointEffect.of(bp.line) });
+      }
+    }
   });
 
   function createEditor(source: string) {
@@ -147,9 +156,9 @@
   }
 
   onMount(() => createEditor(debugStore.editorSource));
-  onDestroy(() => {
+  onDestroy(async () => {
     view?.destroy();
-    void debugStore.stop();
+    if (debugStore.status !== 'idle') await debugStore.stop();
   });
 
   function handleKeydown(e: KeyboardEvent) {
@@ -243,7 +252,7 @@
           <DebugCallStack
             frames={debugStore.callStack}
             currentFrame={debugStore.currentFrame}
-            onSelectFrame={() => {}}
+            disabled={true}
           />
         </div>
       {:else if activeTab === 'output'}

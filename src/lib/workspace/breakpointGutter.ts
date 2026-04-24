@@ -1,4 +1,4 @@
-import { gutter, GutterMarker } from "@codemirror/view";
+import { gutter, GutterMarker, EditorView } from "@codemirror/view";
 import { StateField, StateEffect, RangeSet } from "@codemirror/state";
 
 export const toggleBreakpointEffect = StateEffect.define<number>();
@@ -24,10 +24,9 @@ class BreakpointMarker extends GutterMarker {
   override toDOM() {
     const span = document.createElement("span");
     span.textContent = "●";
-    span.style.color = "#e74c3c";
+    span.className = "cm-bp-marker";
     span.style.fontSize = "10px";
     span.style.lineHeight = "1";
-    span.style.cursor = "pointer";
     return span;
   }
 }
@@ -60,6 +59,9 @@ export function breakpointGutter(onToggle: (line: number) => void) {
           return true;
         },
       },
+    }),
+    EditorView.baseTheme({
+      ".cm-bp-marker": { color: "var(--text-danger, #e74c3c)", cursor: "pointer" },
     }),
   ];
 }

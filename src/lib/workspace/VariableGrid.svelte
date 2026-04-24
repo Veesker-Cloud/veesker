@@ -55,6 +55,7 @@
     </thead>
     <tbody>
       {#each vars as v, i}
+        {@const live = liveValue(v.name)}
         <tr class="vg-row">
           <td class="vg-td-check">
             <input
@@ -97,8 +98,8 @@
             {/if}
           </td>
           <td class="vg-td vg-td-value">
-            {#if readonly && liveValue(v.name) !== null}
-              <span class="tw-live-val">{liveValue(v.name)}</span>
+            {#if readonly && live !== null}
+              <span class="tw-live-val">{live}</span>
             {:else if readonly}
               <span class="vg-value">{v.value ?? ''}</span>
             {:else if v.oracleType.toUpperCase() === 'BOOLEAN'}

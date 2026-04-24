@@ -16,6 +16,7 @@ import {
   debugContinueRpc,
   debugRunRpc,
   debugGetValuesRpc,
+  debugGetCallStackRpc,
   SESSION_LOST,
 } from "$lib/workspace";
 
@@ -95,6 +96,7 @@ class DebugStore {
     this.packageName = packageName;
     this.status = "idle";
     this.currentFrame = null;
+    this.callStack = [];
     this.liveVars = [];
     this.dbmsOutput = [];
     this.errorMessage = null;
@@ -247,11 +249,13 @@ class DebugStore {
     if (info.status === "completed") {
       this.status = "completed";
       this.currentFrame = null;
+      this.callStack = [];
       return;
     }
     if (info.status === "error") {
       this.status = "error";
       this.errorMessage = info.errorMessage ?? "Unknown error";
+      this.callStack = [];
       return;
     }
     this.status = "paused";
@@ -262,6 +266,9 @@ class DebugStore {
       const vals = await debugGetValuesRpc(varNames);
       if (vals.ok) this.liveVars = vals.data.variables;
     }
+
+    const stack = await debugGetCallStackRpc();
+    if (stack.ok) this.callStack = stack.data.frames;
 
     if (info.frame && this.editorObject) {
       const f = info.frame;
@@ -330,7 +337,9 @@ class DebugStore {
     await debugStopRpc();
     this.status = "idle";
     this.currentFrame = null;
+    this.callStack = [];
     this.liveVars = [];
+    this.errorMessage = null;
   }
 }
 
