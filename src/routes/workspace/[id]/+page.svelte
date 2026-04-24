@@ -9,6 +9,7 @@
   import CommandPalette from "$lib/workspace/CommandPalette.svelte";
   import SheepChat from "$lib/workspace/SheepChat.svelte";
   import { sqlEditor, addProcResults } from "$lib/stores/sql-editor.svelte";
+  import DashboardTab from "$lib/workspace/DashboardTab.svelte";
   import ProcExecModal from "$lib/workspace/ProcExecModal.svelte";
   import {
     workspaceOpen,
@@ -53,6 +54,7 @@
   let dataflowLoading = $state(false);
   let dataflowError = $state<string | null>(null);
   let related = $state<Loadable<TableRelated>>({ kind: "idle" });
+  let activeWsTab = $state<"schema" | "dashboard">("schema");
 
   // ── Panel resize (persisted) ─────────────────────────────────────────────────
   let schemaWidth = $state(Number(localStorage.getItem("veesker_schema_w") ?? 256));
@@ -460,28 +462,47 @@
         onpointerup={schemaResizer.onpointerup}
         onpointercancel={schemaResizer.onpointerup}
       ></div>
-      <ObjectDetails
-        {selected}
-        {details}
-        {related}
-        onRetry={onRetryDetails}
-        onReconnect={onReconnect}
-        sessionLost={sessionLost}
-        detailError={detailError}
-        dataflow={dataflow}
-        dataflowLoading={dataflowLoading}
-        dataflowError={dataflowError}
-        canGoBack={navHistory.length > 0}
-        backLabel={navHistory.length > 0 ? navHistory[navHistory.length - 1].name : undefined}
-        onBack={onBack}
-        onNavigateDataflow={(owner, objectType, name) => onSelect(owner, name, objectType as ObjectKind)}
-        onNavigate={(owner, kind, name) => onSelect(owner, name, kind as ObjectKind)}
-        onViewDdl={async (owner, kind, name) => {
-          const res = await objectDdlGet(owner, kind as any, name);
-          if (res.ok) sqlEditor.openWithDdl(`${owner}.${name}`, res.data);
-          else if (res.error.code === SESSION_LOST) sessionLost = true;
-        }}
-      />
+      <div class="main-panel">
+        <div class="ws-tab-bar">
+          <button
+            class="ws-tab"
+            class:active={activeWsTab === "schema"}
+            onclick={() => (activeWsTab = "schema")}
+          >Schema</button>
+          <button
+            class="ws-tab"
+            class:active={activeWsTab === "dashboard"}
+            onclick={() => (activeWsTab = "dashboard")}
+          >📊 Dashboard</button>
+        </div>
+        {#if activeWsTab === "schema"}
+          <ObjectDetails
+            {selected}
+            {details}
+            {related}
+            onRetry={onRetryDetails}
+            onReconnect={onReconnect}
+            sessionLost={sessionLost}
+            detailError={detailError}
+            dataflow={dataflow}
+            dataflowLoading={dataflowLoading}
+            dataflowError={dataflowError}
+            canGoBack={navHistory.length > 0}
+            backLabel={navHistory.length > 0 ? navHistory[navHistory.length - 1].name : undefined}
+            onBack={onBack}
+            onNavigateDataflow={(owner, objectType, name) => onSelect(owner, name, objectType as ObjectKind)}
+            onNavigate={(owner, kind, name) => onSelect(owner, name, kind as ObjectKind)}
+            onViewDdl={async (owner, kind, name) => {
+              const res = await objectDdlGet(owner, kind as any, name);
+              if (res.ok) sqlEditor.openWithDdl(`${owner}.${name}`, res.data);
+              else if (res.error.code === SESSION_LOST) sessionLost = true;
+            }}
+          />
+        {/if}
+        {#if activeWsTab === "dashboard"}
+          <DashboardTab />
+        {/if}
+      </div>
       {#if showChat}
         <div
           class="resize-handle"
@@ -614,5 +635,36 @@
     margin: 4rem auto;
     color: var(--text-muted);
     font-size: 13px;
+  }
+  .main-panel {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .ws-tab-bar {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    background: var(--bg-surface);
+  }
+  .ws-tab {
+    font-size: 11px;
+    padding: 5px 12px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    margin-bottom: -1px;
+  }
+  .ws-tab:hover {
+    color: var(--text-primary);
+  }
+  .ws-tab.active {
+    color: var(--text-primary);
+    border-bottom-color: rgba(179, 62, 31, 0.7);
   }
 </style>
