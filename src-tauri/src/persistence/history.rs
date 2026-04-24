@@ -73,10 +73,10 @@ pub fn init_db_history(conn: &SqliteConnection) -> Result<(), HistoryError> {
         "#,
     )?;
     if !has_column_history(conn, "username")? {
-        conn.execute_batch(
-            "ALTER TABLE query_history ADD COLUMN username TEXT;
-             ALTER TABLE query_history ADD COLUMN host TEXT;",
-        )?;
+        conn.execute_batch("ALTER TABLE query_history ADD COLUMN username TEXT;")?;
+    }
+    if !has_column_history(conn, "host")? {
+        conn.execute_batch("ALTER TABLE query_history ADD COLUMN host TEXT;")?;
     }
     Ok(())
 }
