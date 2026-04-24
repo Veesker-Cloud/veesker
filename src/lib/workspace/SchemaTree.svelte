@@ -62,7 +62,6 @@
     "PROCEDURE", "FUNCTION", "PACKAGE", "TRIGGER", "TYPE",
   ];
 
-  // Accent colors per object kind
   const KIND_COLOR: Record<ObjectKind, string> = {
     TABLE:     "#4a9eda",
     VIEW:      "#27ae60",
@@ -89,7 +88,6 @@
 
   const q = $derived(search.trim().toLowerCase());
 
-  // Returns whether the schema itself should be visible in search results
   function schemaVisible(s: SchemaNode): boolean {
     if (!q) return true;
     if (s.name.toLowerCase().includes(q)) return true;
@@ -103,8 +101,6 @@
     return false;
   }
 
-  // When schema name itself matches, show all objects unfiltered.
-  // When schema matched only via objects, filter objects by query.
   function schemaNameMatches(s: SchemaNode): boolean {
     return !q || s.name.toLowerCase().includes(q);
   }
@@ -322,7 +318,7 @@
     width: 100%;
     height: 100%;
     min-width: 0;
-    background: #18140f;
+    background: var(--bg-page);
     border-right: 1px solid rgba(255,255,255,0.06);
     overflow-y: auto;
     display: flex;
