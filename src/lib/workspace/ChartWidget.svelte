@@ -14,9 +14,21 @@
 
   let canvas = $state<HTMLCanvasElement | null>(null);
   let chart: any = null;
+  let lastType = "";
+  let lastLabelCount = -1;
+  let lastDatasetCount = -1;
+
+  let ChartClass: any = null;
+  const chartReady = import("chart.js").then(({ Chart, registerables }) => {
+    Chart.register(...registerables);
+    ChartClass = Chart;
+  });
 
   function destroyChart() {
     if (chart) { chart.destroy(); chart = null; }
+    lastType = "";
+    lastLabelCount = -1;
+    lastDatasetCount = -1;
   }
 
   function cssVar(name: string): string {
@@ -24,9 +36,24 @@
   }
 
   async function buildChart(c: HTMLCanvasElement, pd: PreviewData, type: string, w: number, h: number) {
+    await chartReady;
+    if (!c.isConnected) return;
+
+    if (
+      chart !== null &&
+      type === lastType &&
+      pd.labels.length === lastLabelCount &&
+      pd.datasets.length === lastDatasetCount
+    ) {
+      chart.data.labels = pd.labels;
+      for (let i = 0; i < pd.datasets.length; i++) {
+        chart.data.datasets[i].data = pd.datasets[i].data;
+      }
+      chart.update("none");
+      return;
+    }
+
     destroyChart();
-    const { Chart, registerables } = await import("chart.js");
-    Chart.register(...registerables);
     if (!c.isConnected) return;
 
     c.width  = w;
@@ -40,7 +67,7 @@
     const isDoughnut   = type === "pie";
     const chartType    = isDoughnut ? "doughnut" : "bar";
 
-    chart = new Chart(c, {
+    chart = new ChartClass(c, {
       type: type === "line" ? "line" : chartType,
       data: {
         labels: pd.labels,
@@ -70,6 +97,9 @@
         },
       },
     });
+    lastType = type;
+    lastLabelCount = pd.labels.length;
+    lastDatasetCount = pd.datasets.length;
   }
 
   $effect(() => {
