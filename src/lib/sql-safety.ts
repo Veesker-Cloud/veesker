@@ -11,7 +11,7 @@ type Rule = { pattern: RegExp; keyword: string; severity: Severity; description:
 const RULES: Rule[] = [
   { pattern: /\bCREATE\s+OR\s+REPLACE\b/i, keyword: "CREATE OR REPLACE", severity: "warning", description: "Overwrites existing object" },
   { pattern: /\bDROP\b/i,              keyword: "DROP",              severity: "critical",    description: "Removes object permanently" },
-  { pattern: /\bTRUNCATE\b/i,          keyword: "TRUNCATE",          severity: "critical",    description: "Removes all rows; cannot be rolled back" },
+  { pattern: /\bTRUNCATE\b/i,          keyword: "TRUNCATE",          severity: "critical",    description: "Removes all rows; not rollbackable in Oracle" },
   { pattern: /\bMERGE\b/i,             keyword: "MERGE",             severity: "destructive", description: "May update or delete rows" },
   { pattern: /\bDELETE\b/i,            keyword: "DELETE",            severity: "destructive", description: "Removes rows permanently" },
   { pattern: /\bUPDATE\b/i,            keyword: "UPDATE",            severity: "destructive", description: "Modifies existing data" },

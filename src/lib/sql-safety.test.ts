@@ -15,6 +15,7 @@ describe("detectDestructive", () => {
     expect(ops).toHaveLength(1);
     expect(ops[0].keyword).toBe("DELETE");
     expect(ops[0].severity).toBe("destructive");
+    expect(ops[0].description).toBe("Removes rows permanently");
   });
 
   it("detects UPDATE as destructive", () => {
@@ -22,6 +23,7 @@ describe("detectDestructive", () => {
     expect(ops).toHaveLength(1);
     expect(ops[0].keyword).toBe("UPDATE");
     expect(ops[0].severity).toBe("destructive");
+    expect(ops[0].description).toBe("Modifies existing data");
   });
 
   it("detects DROP as critical", () => {
@@ -29,6 +31,7 @@ describe("detectDestructive", () => {
     expect(ops).toHaveLength(1);
     expect(ops[0].keyword).toBe("DROP");
     expect(ops[0].severity).toBe("critical");
+    expect(ops[0].description).toBe("Removes object permanently");
   });
 
   it("detects TRUNCATE as critical", () => {
@@ -36,6 +39,7 @@ describe("detectDestructive", () => {
     expect(ops).toHaveLength(1);
     expect(ops[0].keyword).toBe("TRUNCATE");
     expect(ops[0].severity).toBe("critical");
+    expect(ops[0].description).toBe("Removes all rows; not rollbackable in Oracle");
   });
 
   it("detects ALTER as warning", () => {
@@ -43,12 +47,14 @@ describe("detectDestructive", () => {
     expect(ops).toHaveLength(1);
     expect(ops[0].keyword).toBe("ALTER");
     expect(ops[0].severity).toBe("warning");
+    expect(ops[0].description).toBe("Modifies object structure");
   });
 
   it("detects MERGE as destructive", () => {
     const ops = detectDestructive("MERGE INTO t USING s ON (t.id = s.id) WHEN MATCHED THEN UPDATE SET t.x = s.x");
     expect(ops).toHaveLength(1);
     expect(ops[0].keyword).toBe("MERGE");
+    expect(ops[0].description).toBe("May update or delete rows");
   });
 
   it("detects CREATE OR REPLACE as warning", () => {
@@ -56,6 +62,7 @@ describe("detectDestructive", () => {
     expect(ops).toHaveLength(1);
     expect(ops[0].keyword).toBe("CREATE OR REPLACE");
     expect(ops[0].severity).toBe("warning");
+    expect(ops[0].description).toBe("Overwrites existing object");
   });
 
   it("is case-insensitive", () => {
