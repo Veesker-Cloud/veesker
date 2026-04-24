@@ -222,10 +222,10 @@ export async function debugGetSource(
 
 // ── DebugSession ───────────────────────────────────────────────────────────
 
-// DBMS_DEBUG break_next_flags constants
-const BREAK_NEXT_LINE = 12;
-const BREAK_ANY_CALL  = 4;
-const BREAK_RETURN    = 8;
+// DBMS_DEBUG break_next_flags constants (from DBMS_DEBUG package spec)
+const BREAK_NEXT_LINE = 2;   // stop at next source line (step over)
+const BREAK_ANY_CALL  = 6;   // stop at next line AND enter any call (step into = 2|4)
+const BREAK_RETURN    = 8;   // stop when current subprogram returns (step out)
 
 // info_requested bitmask
 const INFO_RUNTIME_INFO = 44;
@@ -427,30 +427,49 @@ export class DebugSession {
   }
 
   async continueExecution(breakNextFlags: number): Promise<PauseInfo> {
-    await this.debugConn.execute(
+    const res = await this.debugConn.execute(
       `DECLARE
          r DBMS_DEBUG.RUNTIME_INFO;
          n PLS_INTEGER;
        BEGIN
          n := DBMS_DEBUG.CONTINUE(r, :flags, ${INFO_RUNTIME_INFO});
-         :retcode    := n;
-         :line       := r.Line#;
-         :reason     := r.Reason;
-         :terminated := r.Terminated;
-         :obj_name   := r.Program.Name;
-         :obj_owner  := r.Program.Owner;
+         :retcode      := n;
+         :line         := r.Line#;
+         :reason       := r.Reason;
+         :terminated   := r.Terminated;
+         :obj_name     := r.Program.Name;
+         :obj_owner    := r.Program.Owner;
+         :libunit_type := r.Program.LibunitType;
        END;`,
       {
-        flags:      breakNextFlags,
-        retcode:    { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
-        line:       { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
-        reason:     { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
-        terminated: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
-        obj_name:   { dir: oracledb.BIND_OUT, type: oracledb.STRING, maxSize: 128 },
-        obj_owner:  { dir: oracledb.BIND_OUT, type: oracledb.STRING, maxSize: 128 },
+        flags:        breakNextFlags,
+        retcode:      { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+        line:         { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+        reason:       { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+        terminated:   { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+        obj_name:     { dir: oracledb.BIND_OUT, type: oracledb.STRING, maxSize: 128 },
+        obj_owner:    { dir: oracledb.BIND_OUT, type: oracledb.STRING, maxSize: 128 },
+        libunit_type: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
       }
     );
-    return this.synchronize();
+    const ob = res.outBinds as any;
+    const terminated: number = ob.terminated ?? 0;
+    const reason: number = ob.reason ?? 0;
+
+    if (terminated || reason === REASON_FINISHED) {
+      return { status: "completed", frame: null, reason };
+    }
+
+    return {
+      status: "paused",
+      reason,
+      frame: {
+        owner:      (ob.obj_owner as string) ?? "",
+        objectName: (ob.obj_name as string) ?? "",
+        objectType: libunitTypeToString((ob.libunit_type as number) ?? 0),
+        line:       (ob.line as number) ?? 0,
+      },
+    };
   }
 
   async getValuesForVars(varNames: string[]): Promise<VarValue[]> {
