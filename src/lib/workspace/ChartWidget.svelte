@@ -1,14 +1,17 @@
 <script lang="ts">
   import type { ChartConfig, PreviewData } from "$lib/workspace";
 
+  const ROW_CAP = 500;
+
   type Props = {
     config: ChartConfig;
     previewData: PreviewData | null;
     columns?: { name: string; dataType: string }[];
     rows?: unknown[][];
+    totalRows?: number;
     compact?: boolean;
   };
-  let { config, previewData, columns = [], rows = [], compact = false }: Props = $props();
+  let { config, previewData, columns = [], rows = [], totalRows, compact = false }: Props = $props();
 
   const PALETTE = ["#4a9eda", "#8bc4a8", "#c3a66e", "#f5a08a", "#7aa8c4", "#a78bfa"];
 
@@ -136,6 +139,9 @@
     </div>
   {:else if config.type === "table"}
     <div class="table-wrap">
+      {#if totalRows !== undefined && totalRows > ROW_CAP}
+        <div class="cap-note">showing first {ROW_CAP} of {totalRows} rows</div>
+      {/if}
       <table>
         <thead>
           <tr>{#each columns as col}<th>{col.name}</th>{/each}</tr>
@@ -166,6 +172,7 @@
   .kpi-value { font-size: 18px; font-weight: 700; }
   .chart-widget.compact .kpi-value { font-size: 14px; }
   .table-wrap { overflow: auto; max-height: 180px; }
+  .cap-note { font-size: 9px; color: var(--text-muted); padding: 2px 6px 4px; font-style: italic; }
   table { width: 100%; border-collapse: collapse; font-size: 10px; color: var(--text-primary); }
   th { background: var(--bg-surface); color: var(--text-muted); padding: 3px 6px; text-align: left; font-weight: 600; position: sticky; top: 0; }
   td { padding: 3px 6px; border-bottom: 1px solid var(--border); }

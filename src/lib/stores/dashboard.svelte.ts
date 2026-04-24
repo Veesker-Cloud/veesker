@@ -7,15 +7,20 @@ export type DashboardChart = {
   sql: string;
   columns: { name: string; dataType: string }[];
   rows: unknown[][];
+  totalRows: number;
   addedAt: number;
 };
+
+const ROW_CAP = 500;
 
 class DashboardStore {
   charts = $state<DashboardChart[]>([]);
 
-  addChart(chart: Omit<DashboardChart, "id" | "addedAt">): void {
+  addChart(chart: Omit<DashboardChart, "id" | "addedAt" | "totalRows">): void {
     const id = crypto.randomUUID();
-    this.charts = [...this.charts, { ...chart, id, addedAt: Date.now() }];
+    const totalRows = chart.rows.length;
+    const rows = totalRows > ROW_CAP ? chart.rows.slice(0, ROW_CAP) : chart.rows;
+    this.charts = [...this.charts, { ...chart, rows, totalRows, id, addedAt: Date.now() }];
   }
 
   removeChart(id: string): void {

@@ -103,7 +103,7 @@
                 <span class="chart-cell-title">{chart.config.title}</span>
                 <button class="remove-btn" onclick={() => dashboard.removeChart(chart.id)} title="Remove">✕</button>
               </div>
-              <ChartWidget config={chart.config} previewData={chart.previewData} columns={chart.columns} rows={chart.rows} />
+              <ChartWidget config={chart.config} previewData={chart.previewData} columns={chart.columns} rows={chart.rows} totalRows={chart.totalRows} />
             </div>
           {/each}
         </div>
@@ -118,7 +118,7 @@
                 <span class="chart-cell-title">{main.config.title}</span>
                 <button class="remove-btn" onclick={() => dashboard.removeChart(main.id)} title="Remove">✕</button>
               </div>
-              <ChartWidget config={main.config} previewData={main.previewData} columns={main.columns} rows={main.rows} />
+              <ChartWidget config={main.config} previewData={main.previewData} columns={main.columns} rows={main.rows} totalRows={main.totalRows} />
             </div>
           {/if}
           {#if side}
@@ -127,7 +127,7 @@
                 <span class="chart-cell-title">{side.config.title}</span>
                 <button class="remove-btn" onclick={() => dashboard.removeChart(side.id)} title="Remove">✕</button>
               </div>
-              <ChartWidget config={side.config} previewData={side.previewData} columns={side.columns} rows={side.rows} />
+              <ChartWidget config={side.config} previewData={side.previewData} columns={side.columns} rows={side.rows} totalRows={side.totalRows} />
             </div>
           {/if}
         </div>
