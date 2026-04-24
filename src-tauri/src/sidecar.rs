@@ -145,11 +145,18 @@ impl Sidecar {
             });
         }
 
-        let resp = rx.await.map_err(|_| RpcError {
-            code: -32002,
-            message: "sidecar dropped response channel".into(),
-            data: None,
-        })?;
+        let resp = tokio::time::timeout(std::time::Duration::from_secs(120), rx)
+            .await
+            .map_err(|_| RpcError {
+                code: -32002,
+                message: "sidecar RPC timed out after 120s".into(),
+                data: None,
+            })?
+            .map_err(|_| RpcError {
+                code: -32002,
+                message: "sidecar dropped response channel".into(),
+                data: None,
+            })?;
 
         if let Some(err) = resp.error {
             return Err(err);

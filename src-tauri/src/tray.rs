@@ -79,7 +79,7 @@ pub fn build_tray_menu(
     let mut conn_items: Vec<tauri::menu::MenuItem<tauri::Wry>> = Vec::new();
 
     if connections.is_empty() {
-        let empty = MenuItemBuilder::with_id("no_connections", "Nenhuma conexão cadastrada")
+        let empty = MenuItemBuilder::with_id("no_connections", "No connections saved")
             .enabled(false)
             .build(app)?;
         conn_items.push(empty);
@@ -91,9 +91,9 @@ pub fn build_tray_menu(
             };
             let is_active = active_name.map(|n| n == name).unwrap_or(false);
             let (indicator, action_label, item_id) = if is_active {
-                ("●", "Desconectar", format!("disconnect_{id}"))
+                ("●", "Disconnect", format!("disconnect_{id}"))
             } else {
-                ("○", "Abrir →", format!("connect_{id}"))
+                ("○", "Open →", format!("connect_{id}"))
             };
             let label = format!("{indicator} {name}    {action_label}");
             let item = MenuItemBuilder::with_id(item_id, label).build(app)?;
@@ -105,10 +105,10 @@ pub fn build_tray_menu(
         MenuItemBuilder::with_id("actions_label", "ACTIONS")
             .enabled(false)
             .build(app)?;
-    let new_query = MenuItemBuilder::with_id("new_query", "Nova Query").build(app)?;
+    let new_query = MenuItemBuilder::with_id("new_query", "New Query").build(app)?;
     let schema_browser = MenuItemBuilder::with_id("schema_browser", "Schema Browser").build(app)?;
-    let open_app = MenuItemBuilder::with_id("open_app", "Abrir Veesker").build(app)?;
-    let quit = MenuItemBuilder::with_id("quit", "Sair").build(app)?;
+    let open_app = MenuItemBuilder::with_id("open_app", "Open Veesker").build(app)?;
+    let quit = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
     let sep1 = PredefinedMenuItem::separator(app)?;
     let sep2 = PredefinedMenuItem::separator(app)?;
     let sep3 = PredefinedMenuItem::separator(app)?;

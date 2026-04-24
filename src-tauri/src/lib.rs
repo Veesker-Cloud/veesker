@@ -87,7 +87,10 @@ pub fn run() {
                     let app_clone = app.clone();
                     tauri::async_runtime::spawn(async move {
                         match id.as_str() {
-                            "quit" => app_clone.exit(0),
+                            "quit" => {
+                                let _ = crate::sidecar::call_raw(&app_clone, "workspace.close", serde_json::json!({})).await;
+                                app_clone.exit(0);
+                            }
                             "open_app" | "new_query" | "schema_browser" => {
                                 if let Some(win) = app_clone.get_webview_window("main") {
                                     let _ = win.show();
@@ -120,11 +123,11 @@ pub fn run() {
                     let app2 = app_handle.clone();
                     app_handle
                         .dialog()
-                        .message("O app continuará rodando em segundo plano.")
-                        .title("Fechar o Veesker?")
+                        .message("The app will keep running in the background.")
+                        .title("Close Veesker?")
                         .buttons(MessageDialogButtons::OkCancelCustom(
-                            "Minimizar para o Tray".into(),
-                            "Encerrar".into(),
+                            "Minimize to Tray".into(),
+                            "Quit".into(),
                         ))
                         .show(move |minimize| {
                             if minimize {
@@ -132,7 +135,11 @@ pub fn run() {
                                     let _ = win.hide();
                                 }
                             } else {
-                                app2.exit(0);
+                                let app3 = app2.clone();
+                                tauri::async_runtime::spawn(async move {
+                                    let _ = crate::sidecar::call_raw(&app3, "workspace.close", serde_json::json!({})).await;
+                                    app3.exit(0);
+                                });
                             }
                         });
                 }

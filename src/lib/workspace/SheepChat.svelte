@@ -56,6 +56,11 @@
     showSettings = false;
   }
 
+  async function clearKey() {
+    await aiKeySave("anthropic", "");
+    apiKey = "";
+  }
+
   async function scrollToBottom() {
     await tick();
     if (messagesEl) messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -263,7 +268,7 @@
     text = text.replace(/`([^`\x00]+)`/g, '<code class="md-inline">$1</code>');
     text = text.replace(/\*\*([^*\x00]+)\*\*/g, '<strong>$1</strong>');
     text = text.replace(/\n/g, '<br>');
-    text = text.replace(/\x00CODE(\d+)\x00/g, (_, i) => blocks[Number(i)]);
+    text = text.replace(/\x00CODE(\d+)\x00/g, (_, i) => blocks[Number(i)] ?? "");
     return text;
   }
 
@@ -321,6 +326,9 @@
         <span class="settings-hint">
           {apiKey ? "Stored in OS keychain" : "Will use ANTHROPIC_API_KEY from environment"}
         </span>
+        {#if apiKey}
+          <button class="clear-btn" onclick={() => void clearKey()}>Clear</button>
+        {/if}
         <button class="save-btn" onclick={() => void saveKey()}>Save</button>
       </div>
     </div>
@@ -525,6 +533,19 @@
     flex-shrink: 0;
   }
   .save-btn:hover { background: #c94b28; }
+  .clear-btn {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.6);
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 0.25rem 0.7rem;
+    border-radius: 4px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .clear-btn:hover { background: rgba(255,255,255,0.14); color: rgba(255,255,255,0.85); }
 
   /* ── Messages ─────────────────────────────────────────────── */
   .messages {

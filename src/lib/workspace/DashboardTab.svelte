@@ -75,7 +75,7 @@
 
     document.body.appendChild(root);
     window.print();
-    setTimeout(() => document.body.removeChild(root), 1000);
+    setTimeout(() => root.remove(), 1000);
   }
 </script>
 

@@ -14,7 +14,7 @@ class DashboardStore {
   charts = $state<DashboardChart[]>([]);
 
   addChart(chart: Omit<DashboardChart, "id" | "addedAt">): void {
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const id = crypto.randomUUID();
     this.charts = [...this.charts, { ...chart, id, addedAt: Date.now() }];
   }
 

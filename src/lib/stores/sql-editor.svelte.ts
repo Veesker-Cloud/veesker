@@ -420,13 +420,17 @@ export const sqlEditor = {
     const sql = tab.sql;
     if (sql.trim() === "") return;
 
-    // Pre-flight: check splitter on the frontend first to catch errors early.
-    const { errors } = splitSql(sql);
+    // Pre-flight: check splitter on the frontend to show the error banner early.
+    // If there are splitter errors, warn but still send to sidecar — valid completed
+    // statements (those terminated before the error) will be executed normally.
+    const { statements: preflight, errors } = splitSql(sql);
     if (errors.length > 0) {
       tab.splitterError = errors.map((e) => `line ${e.line}: ${e.message}`).join("; ");
-      tab.results = [];
-      tab.activeResultId = null;
-      return;
+      if (preflight.length === 0) {
+        tab.results = [];
+        tab.activeResultId = null;
+        return;
+      }
     }
 
     { const _c = askConfirm(tab.sql); if (_c !== true && !(await _c)) return; }
@@ -588,9 +592,12 @@ export const sqlEditor = {
     if (tab === null) return;
 
     const { statements, errors } = splitSql(fullText);
-    if (errors.length > 0 || statements.length === 0) {
-      // Can't split — fall back to running whole buffer as single statement
+    if (statements.length === 0) {
+      // Nothing valid to run — fall back to running whole buffer as single statement
       return this.runActive();
+    }
+    if (errors.length > 0) {
+      tab.splitterError = errors.map((e) => `line ${e.line}: ${e.message}`).join("; ");
     }
 
     // Recover each statement's start/end character position in the original text
@@ -782,7 +789,7 @@ export const sqlEditor = {
   },
 
   reset(): void {
-    _tabs.splice(0, _tabs.length);
+    _tabs = [];
     _activeId = null;
     _drawerOpen = false;
     _queryCounter = 0;
@@ -843,7 +850,8 @@ export function addProcResults(result: ProcExecuteResult): void {
   let lastId: string | null = null;
 
   if (result.refCursors.length > 0) {
-    for (const rc of result.refCursors) {
+    for (let ri = 0; ri < result.refCursors.length; ri++) {
+      const rc = result.refCursors[ri];
       const id = crypto.randomUUID();
       tab.results = [
         ...tab.results,
@@ -855,7 +863,7 @@ export function addProcResults(result: ProcExecuteResult): void {
           result: { columns: rc.columns, rows: rc.rows, rowCount: rc.rows.length, elapsedMs: 0 },
           error: null,
           elapsedMs: 0,
-          dbmsOutput: logLines.length > 0 ? logLines : null,
+          dbmsOutput: ri === 0 && logLines.length > 0 ? logLines : null,
           compileErrors: null,
           explainNodes: null,
         },

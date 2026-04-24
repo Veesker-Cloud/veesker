@@ -1332,7 +1332,8 @@ export async function embedBatch(p: {
           { v: { val: vecStr, type: oracledb.STRING, maxSize: Math.max(16000, vecStr.length + 100) }, rowid }
         );
         embedded++;
-      } catch {
+      } catch (err) {
+        console.error(`[embedBatch] row ${rowid} failed:`, err);
         errors++;
       }
     }
