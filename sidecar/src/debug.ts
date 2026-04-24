@@ -44,6 +44,8 @@ export type PauseInfo = {
 
 const COMPLEX_TYPES = new Set([
   "RECORD", "TABLE", "VARRAY", "OBJECT", "REF",
+  "REF CURSOR", "CURSOR",   // SYS_REFCURSOR appears as "REF CURSOR" in ALL_ARGUMENTS
+  "CLOB", "BLOB", "NCLOB",  // LOBs can't be bound as scalars in anon blocks
 ]);
 
 function lowerBind(name: string): string {

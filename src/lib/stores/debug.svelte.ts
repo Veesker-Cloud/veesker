@@ -131,8 +131,9 @@ class DebugStore {
   private _buildBindVars(script: string, params: ParamDef[]): BindVar[] {
     const detected = extractBindNames(script);
     return detected.map((name) => {
+      const bare = name.replace(/^out_/i, "");
       const param = params.find(
-        (p) => p.name.toLowerCase() === name.toLowerCase(),
+        (p) => p.name.toLowerCase() === bare.toLowerCase(),
       );
       return {
         name,
