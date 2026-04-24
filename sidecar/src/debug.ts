@@ -409,30 +409,47 @@ export class DebugSession {
   // If Oracle SYNCHRONIZE doesn't return within `ms` milliseconds, the debugConn
   // is closed (which causes the blocking execute to reject), and we return "completed".
   async synchronizeWithTimeout(ms: number): Promise<PauseInfo> {
-    process.stderr.write(`[debug] SYNCHRONIZE started, timeout=${ms}ms\n`);
-    const completed: PauseInfo = { status: "completed", frame: null, reason: REASON_FINISHED };
+    process.stderr.write(`[debug] SYNCHRONIZE loop started, timeout=${ms}ms\n`);
+    const finished: PauseInfo = { status: "completed", frame: null, reason: REASON_FINISHED };
     let timer: ReturnType<typeof setTimeout> | null = null;
 
-    // Attach .catch so the synchronize() promise never becomes an unhandled rejection
-    // if the timeout fires first and closes the connection.
-    const syncPromise = this.synchronize().then((r) => {
-      process.stderr.write(`[debug] SYNCHRONIZE resolved: status=${r.status} reason=${r.reason} obj=${r.frame?.objectName ?? "null"} line=${r.frame?.line ?? "null"}\n`);
-      return r;
-    }).catch((err) => {
-      process.stderr.write(`[debug] SYNCHRONIZE rejected: ${String(err)}\n`);
-      return completed;
+    const runLoop = async (): Promise<PauseInfo> => {
+      // Initial SYNCHRONIZE — blocks until Oracle fires the first debug event.
+      let info = await this.synchronize();
+      process.stderr.write(`[debug] SYNCHRONIZE: status=${info.status} reason=${info.reason} frame=${JSON.stringify(info.frame)}\n`);
+
+      // Oracle fires unnamed events when the anonymous block enters the PL/SQL interpreter
+      // (obj=null, reason=REASON_BREAKPOINT). These are not the user's breakpoints —
+      // they are intermediate events that require CONTINUE(0) to advance execution into
+      // the actual stored procedure where the named breakpoints are set.
+      for (let i = 0; i < 10; i++) {
+        if (info.status !== "completed") break;       // "paused" = got a real named location
+        if (info.reason === REASON_FINISHED) break;   // program ran to normal completion
+        // Intermediate event: tell Oracle to resume until the next explicit breakpoint
+        process.stderr.write(`[debug] intermediate event reason=${info.reason} iter=${i + 1}, CONTINUE(0)\n`);
+        info = await this.continueExecution(0);
+        process.stderr.write(`[debug] CONTINUE(0): status=${info.status} reason=${info.reason} frame=${JSON.stringify(info.frame)}\n`);
+      }
+
+      return info;
+    };
+
+    const syncPromise = runLoop().catch((err) => {
+      process.stderr.write(`[debug] sync loop error: ${String(err)}\n`);
+      return finished;
     });
 
     const timeoutClose = new Promise<PauseInfo>((resolve) => {
       timer = setTimeout(() => {
         process.stderr.write(`[debug] SYNCHRONIZE timed out after ${ms}ms — closing debugConn\n`);
         this.debugConn.close().catch(() => {});
-        resolve(completed);
+        resolve(finished);
       }, ms);
     });
 
     const result = await Promise.race([syncPromise, timeoutClose]);
     if (timer !== null) clearTimeout(timer);
+    process.stderr.write(`[debug] sync loop final: ${JSON.stringify(result)}\n`);
     return result;
   }
 
@@ -616,17 +633,19 @@ export async function debugStart(p: DebugStartParams): Promise<PauseInfo> {
     throw e;
   }
 
-  // Set user-defined breakpoints; clean up session if any fail.
-  try {
-    for (const bp of p.breakpoints) {
-      process.stderr.write(`[debug] setting user bp: ${bp.objectName}:${bp.line}\n`);
+  // Set user-defined breakpoints. Failures are non-fatal (bad line numbers, non-debug
+  // compiled objects for specific lines) — skip failed ones and continue with valid ones.
+  let validUserBps = 0;
+  for (const bp of p.breakpoints) {
+    process.stderr.write(`[debug] setting user bp: ${bp.objectName}:${bp.line}\n`);
+    try {
       await session.setBreakpoint(bp.owner, bp.objectName, bp.objectType, bp.line);
+      validUserBps++;
+    } catch (e) {
+      process.stderr.write(`[debug] user bp ${bp.objectName}:${bp.line} skipped: ${String(e)}\n`);
     }
-  } catch (e) {
-    process.stderr.write(`[debug] user breakpoint FAILED: ${String(e)}\n`);
-    session.stop();
-    throw e;
   }
+  process.stderr.write(`[debug] user bps: ${validUserBps}/${p.breakpoints.length} set\n`);
 
   // Auto-set an entry breakpoint at line 1 of the target procedure.
   // DBMS_DEBUG never auto-pauses on entry — without at least one breakpoint the
@@ -642,10 +661,8 @@ export async function debugStart(p: DebugStartParams): Promise<PauseInfo> {
     process.stderr.write(`[debug] entry bp OK, bpId=${entryBpId}\n`);
   } catch (e) {
     process.stderr.write(`[debug] entry bp FAILED: ${String(e)}\n`);
-    // If there are no user breakpoints either, fail immediately with a helpful message.
-    // Without any breakpoint, startTarget runs to completion and SYNCHRONIZE blocks
-    // for the full timeout (30s) with no feedback.
-    if (p.breakpoints.length === 0) {
+    // If no valid breakpoints at all, fail immediately rather than hanging 30s silently.
+    if (validUserBps === 0) {
       session.stop();
       throw new RpcCodedError(
         ORACLE_ERR,
@@ -654,7 +671,7 @@ export async function debugStart(p: DebugStartParams): Promise<PauseInfo> {
         `Also ensure: GRANT DEBUG CONNECT SESSION TO ${p.owner}; GRANT DEBUG ANY PROCEDURE TO ${p.owner};`
       );
     }
-    // else: proceed with just the user-defined breakpoints
+    // else: proceed with just the valid user-defined breakpoints
   }
 
   // Fire target asynchronously, then SYNCHRONIZE waits for the entry breakpoint.
