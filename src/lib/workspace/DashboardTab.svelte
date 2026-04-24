@@ -1,16 +1,16 @@
 <script lang="ts">
-  import { dashboardState, removeChart, clearDashboard } from "$lib/stores/dashboard.svelte";
+  import { dashboard } from "$lib/stores/dashboard.svelte";
   import ChartWidget from "./ChartWidget.svelte";
 
-  const kpiCharts    = $derived(dashboardState.charts.filter((c) => c.config.type === "kpi"));
-  const nonKpiCharts = $derived(dashboardState.charts.filter((c) => c.config.type !== "kpi"));
+  const kpiCharts    = $derived(dashboard.charts.filter((c) => c.config.type === "kpi"));
+  const nonKpiCharts = $derived(dashboard.charts.filter((c) => c.config.type !== "kpi"));
 
   async function exportPdf() {
     const root = document.createElement("div");
     root.id = "pdf-print-root";
 
-    const firstTitle = dashboardState.charts[0]?.config.title ?? "Dashboard Report";
-    const firstSql   = dashboardState.charts[0]?.sql ?? "";
+    const firstTitle = dashboard.charts[0]?.config.title ?? "Dashboard Report";
+    const firstSql   = dashboard.charts[0]?.sql ?? "";
     const cover = document.createElement("div");
     cover.className = "pdf-cover";
     const coverH1 = document.createElement("h1");
@@ -28,7 +28,7 @@
     }
     root.appendChild(cover);
 
-    for (const chart of dashboardState.charts) {
+    for (const chart of dashboard.charts) {
       const section = document.createElement("div");
       section.className = "pdf-section";
 
@@ -83,13 +83,13 @@
   <div class="dash-header">
     <span class="dash-title">Dashboard</span>
     <div class="dash-actions">
-      {#if dashboardState.charts.length > 0}
-        <button class="dash-btn" onclick={clearDashboard}>Clear All</button>
+      {#if dashboard.charts.length > 0}
+        <button class="dash-btn" onclick={() => dashboard.clearDashboard()}>Clear All</button>
         <button class="dash-btn primary" onclick={() => void exportPdf()}>Export PDF</button>
       {/if}
     </div>
   </div>
-  {#if dashboardState.charts.length === 0}
+  {#if dashboard.charts.length === 0}
     <div class="dash-empty">
       <p>No charts yet. Run a query and click <strong>📊 Analyze</strong> to get started.</p>
     </div>
@@ -101,7 +101,7 @@
             <div class="chart-cell" data-chart-id={chart.id} style="flex:1">
               <div class="chart-cell-header">
                 <span class="chart-cell-title">{chart.config.title}</span>
-                <button class="remove-btn" onclick={() => removeChart(chart.id)} title="Remove">✕</button>
+                <button class="remove-btn" onclick={() => dashboard.removeChart(chart.id)} title="Remove">✕</button>
               </div>
               <ChartWidget config={chart.config} previewData={chart.previewData} columns={chart.columns} rows={chart.rows} />
             </div>
@@ -116,7 +116,7 @@
             <div class="chart-cell" data-chart-id={main.id} style="flex:2">
               <div class="chart-cell-header">
                 <span class="chart-cell-title">{main.config.title}</span>
-                <button class="remove-btn" onclick={() => removeChart(main.id)} title="Remove">✕</button>
+                <button class="remove-btn" onclick={() => dashboard.removeChart(main.id)} title="Remove">✕</button>
               </div>
               <ChartWidget config={main.config} previewData={main.previewData} columns={main.columns} rows={main.rows} />
             </div>
@@ -125,7 +125,7 @@
             <div class="chart-cell" data-chart-id={side.id} style="flex:1">
               <div class="chart-cell-header">
                 <span class="chart-cell-title">{side.config.title}</span>
-                <button class="remove-btn" onclick={() => removeChart(side.id)} title="Remove">✕</button>
+                <button class="remove-btn" onclick={() => dashboard.removeChart(side.id)} title="Remove">✕</button>
               </div>
               <ChartWidget config={side.config} previewData={side.previewData} columns={side.columns} rows={side.rows} />
             </div>

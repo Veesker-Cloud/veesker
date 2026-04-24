@@ -23,43 +23,45 @@
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || name;
   }
 
-  async function buildChart() {
-    if (!canvas || !previewData) return;
+  async function buildChart(c: HTMLCanvasElement, pd: PreviewData, type: string, w: number, h: number) {
     destroyChart();
-    const data = previewData;
     const { Chart, registerables } = await import("chart.js");
     Chart.register(...registerables);
+    if (!c.isConnected) return;
+
+    c.width  = w;
+    c.height = h;
 
     const colorPrimary = cssVar("--text-primary");
     const colorMuted   = cssVar("--text-muted");
     const colorBorder  = cssVar("--border");
 
-    const isHorizontal = config.type === "bar-h";
-    const isDoughnut   = config.type === "pie";
+    const isHorizontal = type === "bar-h";
+    const isDoughnut   = type === "pie";
     const chartType    = isDoughnut ? "doughnut" : "bar";
 
-    chart = new Chart(canvas, {
-      type: config.type === "line" ? "line" : chartType,
+    chart = new Chart(c, {
+      type: type === "line" ? "line" : chartType,
       data: {
-        labels: data.labels,
-        datasets: data.datasets.map((ds, i) => ({
+        labels: pd.labels,
+        datasets: pd.datasets.map((ds, i) => ({
           label: ds.label,
           data: ds.data,
           backgroundColor: isDoughnut
-            ? data.labels.map((_, j) => PALETTE[j % PALETTE.length])
+            ? pd.labels.map((_, j) => PALETTE[j % PALETTE.length])
             : PALETTE[i % PALETTE.length] + "cc",
           borderColor: PALETTE[i % PALETTE.length],
           borderWidth: 1.5,
-          fill: config.type === "line",
+          fill: type === "line",
           tension: 0.3,
         })),
       },
       options: {
-        responsive: true,
-        maintainAspectRatio: true,
+        responsive: false,
+        maintainAspectRatio: false,
         indexAxis: isHorizontal ? "y" : "x",
         plugins: {
-          legend: { display: data.datasets.length > 1 || isDoughnut, labels: { color: colorPrimary, font: { size: 10 } } },
+          legend: { display: pd.datasets.length > 1 || isDoughnut, labels: { color: colorPrimary, font: { size: 10 } } },
           title: { display: false },
         },
         scales: isDoughnut ? {} : {
@@ -71,10 +73,17 @@
   }
 
   $effect(() => {
-    if (config.type && config.type !== "kpi" && config.type !== "table" && previewData) {
-      void buildChart();
-    }
-    return destroyChart;
+    const c = canvas;
+    const type = config.type;
+    const pd = previewData;
+    if (!c || !type || type === "kpi" || type === "table" || !pd) return destroyChart;
+    let raf = requestAnimationFrame(() => {
+      const wrap = c.parentElement;
+      const w = (wrap?.offsetWidth  || 320);
+      const h = (wrap?.offsetHeight || (compact ? 130 : 200));
+      void buildChart(c, pd, type, w, h);
+    });
+    return () => { cancelAnimationFrame(raf); destroyChart(); };
   });
 
   function kpiValue(data: number[]): string {
@@ -109,15 +118,18 @@
       </table>
     </div>
   {:else}
-    <canvas bind:this={canvas}></canvas>
+    <div class="canvas-wrap">
+      <canvas bind:this={canvas}></canvas>
+    </div>
   {/if}
 </div>
 
 <style>
   .chart-widget { background: var(--bg-surface-alt); border-radius: 4px; padding: 8px; width: 100%; }
   .chart-widget.compact { max-height: 160px; overflow: hidden; }
-  canvas { width: 100% !important; max-height: 200px; }
-  .chart-widget.compact canvas { max-height: 130px; }
+  .canvas-wrap { position: relative; height: 200px; }
+  .chart-widget.compact .canvas-wrap { height: 130px; }
+  canvas { width: 100% !important; display: block; }
   .kpi-row { display: flex; gap: 8px; flex-wrap: wrap; }
   .kpi-card { flex: 1; min-width: 80px; background: var(--bg-surface); border-radius: 4px; padding: 8px; text-align: center; }
   .kpi-label { font-size: 9px; color: var(--text-muted); margin-bottom: 4px; }

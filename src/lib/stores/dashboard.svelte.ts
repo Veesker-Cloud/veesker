@@ -10,21 +10,21 @@ export type DashboardChart = {
   addedAt: number;
 };
 
-type DashboardState = { charts: DashboardChart[] };
+class DashboardStore {
+  charts = $state<DashboardChart[]>([]);
 
-let state = $state<DashboardState>({ charts: [] });
+  addChart(chart: Omit<DashboardChart, "id" | "addedAt">): void {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    this.charts = [...this.charts, { ...chart, id, addedAt: Date.now() }];
+  }
 
-export function addChart(chart: Omit<DashboardChart, "id" | "addedAt">): void {
-  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-  state.charts = [...state.charts, { ...chart, id, addedAt: Date.now() }];
+  removeChart(id: string): void {
+    this.charts = this.charts.filter((c) => c.id !== id);
+  }
+
+  clearDashboard(): void {
+    this.charts = [];
+  }
 }
 
-export function removeChart(id: string): void {
-  state.charts = state.charts.filter((c) => c.id !== id);
-}
-
-export function clearDashboard(): void {
-  state.charts = [];
-}
-
-export { state as dashboardState };
+export const dashboard = new DashboardStore();

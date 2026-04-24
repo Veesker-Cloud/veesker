@@ -1,35 +1,35 @@
 import { describe, expect, it, beforeEach } from "vitest";
-import { dashboardState, addChart, removeChart, clearDashboard } from "./dashboard.svelte";
+import { dashboard } from "./dashboard.svelte";
 import type { ChartConfig, PreviewData } from "$lib/workspace";
 
 const cfg: ChartConfig = { type: "bar", xColumn: "DEPT", yColumns: ["SALARY"], aggregation: "sum", title: "Test" };
 const pd: PreviewData  = { labels: ["IT"], datasets: [{ label: "SALARY", data: [5000] }] };
 
-beforeEach(() => clearDashboard());
+beforeEach(() => dashboard.clearDashboard());
 
 describe("dashboard store", () => {
   it("starts empty", () => {
-    expect(dashboardState.charts).toHaveLength(0);
+    expect(dashboard.charts).toHaveLength(0);
   });
 
   it("addChart appends a chart with generated id", () => {
-    addChart({ config: cfg, previewData: pd, sql: "SELECT 1", columns: [], rows: [] });
-    expect(dashboardState.charts).toHaveLength(1);
-    expect(dashboardState.charts[0].id).toBeTruthy();
-    expect(dashboardState.charts[0].config.title).toBe("Test");
+    dashboard.addChart({ config: cfg, previewData: pd, sql: "SELECT 1", columns: [], rows: [] });
+    expect(dashboard.charts).toHaveLength(1);
+    expect(dashboard.charts[0].id).toBeTruthy();
+    expect(dashboard.charts[0].config.title).toBe("Test");
   });
 
   it("removeChart removes by id", () => {
-    addChart({ config: cfg, previewData: pd, sql: "SELECT 1", columns: [], rows: [] });
-    const id = dashboardState.charts[0].id;
-    removeChart(id);
-    expect(dashboardState.charts).toHaveLength(0);
+    dashboard.addChart({ config: cfg, previewData: pd, sql: "SELECT 1", columns: [], rows: [] });
+    const id = dashboard.charts[0].id;
+    dashboard.removeChart(id);
+    expect(dashboard.charts).toHaveLength(0);
   });
 
   it("clearDashboard empties all charts", () => {
-    addChart({ config: cfg, previewData: pd, sql: "SELECT 1", columns: [], rows: [] });
-    addChart({ config: cfg, previewData: pd, sql: "SELECT 2", columns: [], rows: [] });
-    clearDashboard();
-    expect(dashboardState.charts).toHaveLength(0);
+    dashboard.addChart({ config: cfg, previewData: pd, sql: "SELECT 1", columns: [], rows: [] });
+    dashboard.addChart({ config: cfg, previewData: pd, sql: "SELECT 2", columns: [], rows: [] });
+    dashboard.clearDashboard();
+    expect(dashboard.charts).toHaveLength(0);
   });
 });

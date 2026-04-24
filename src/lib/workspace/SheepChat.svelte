@@ -1,6 +1,6 @@
 <script lang="ts">
   import { aiChat, aiKeySave, aiKeyGet, type AiMessage, type AiContext, chartConfigureRpc, chartResetRpc, type ChartConfig, type PreviewData } from "$lib/workspace";
-  import { addChart } from "$lib/stores/dashboard.svelte";
+  import { dashboard } from "$lib/stores/dashboard.svelte";
   import ChartWidget from "./ChartWidget.svelte";
   import { tick, onMount } from "svelte";
 
@@ -199,7 +199,7 @@
           pushAssistant("Something went wrong. Please try again.");
           return;
         }
-        addChart({ config: r.data.config, previewData: r.data.previewData, sql: payload.sql, columns: payload.columns, rows: payload.rows });
+        dashboard.addChart({ config: r.data.config, previewData: r.data.previewData, sql: payload.sql, columns: payload.columns, rows: payload.rows });
         analyzeStep = null;
         currentAnalyzePayload = null;
         pushAssistant("✅ Chart added to Dashboard! Switch to the **📊 Dashboard** tab to see it.\n\nWant to add another chart from this result? Just ask.");
@@ -352,7 +352,7 @@
           <div class="bubble" class:user-bubble={msg.role === "user"} class:ai-bubble={msg.role === "assistant"}>
             <!-- eslint-disable-next-line svelte/no-at-html-tags -->
             {@html renderMarkdown(msg.content)}
-            {#if msg.role === "assistant" && msg.chartPreview}
+            {#if msg.role === "assistant" && msg.chartPreview && msg.chartPreview.previewData !== null}
               <div class="msg-chart-preview">
                 <ChartWidget config={msg.chartPreview.config} previewData={msg.chartPreview.previewData} compact={true} />
               </div>
@@ -612,10 +612,13 @@
     background: rgba(255,255,255,0.07);
     color: rgba(255,255,255,0.85);
     border-bottom-left-radius: 3px;
+    flex: 1;
+    min-width: 0;
   }
   .thinking {
     padding: 0.6rem 0.85rem;
   }
+  .msg-chart-preview { margin-top: 8px; }
 
   /* Typing dots */
   .dots {
