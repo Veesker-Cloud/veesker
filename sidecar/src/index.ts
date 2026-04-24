@@ -33,6 +33,21 @@ import {
 } from "./oracle";
 import { aiChat } from "./ai";
 import { chartConfigure, chartReset } from "./chart";
+import {
+  debugOpen,
+  debugGetSource,
+  debugStart,
+  debugStop,
+  debugStepInto,
+  debugStepOver,
+  debugStepOut,
+  debugContinue,
+  debugSetBreakpoint,
+  debugRemoveBreakpoint,
+  debugGetValues,
+  debugGetCallStack,
+  debugRun,
+} from "./debug";
 
 const handlers: HandlerMap = {
   "connection.test": (params) => connectionTest(params as any),
@@ -70,6 +85,19 @@ const handlers: HandlerMap = {
   "proc.execute": (params) => procExecute(params as any),
   "chart.configure": (params) => chartConfigure(params as any),
   "chart.reset":     (params) => chartReset(params as any),
+  "debug.open":              (params) => debugOpen(params as any),
+  "debug.get_source":        (params) => debugGetSource(params as any),
+  "debug.start":             (params) => debugStart(params as any),
+  "debug.stop":              () => debugStop(),
+  "debug.step_into":         () => debugStepInto(),
+  "debug.step_over":         () => debugStepOver(),
+  "debug.step_out":          () => debugStepOut(),
+  "debug.continue":          () => debugContinue(),
+  "debug.set_breakpoint":    (params) => debugSetBreakpoint(params as any),
+  "debug.remove_breakpoint": (params) => debugRemoveBreakpoint(params as any),
+  "debug.get_values":        (params) => debugGetValues(params as any),
+  "debug.get_call_stack":    () => debugGetCallStack(),
+  "debug.run":               (params) => debugRun(params as any),
   ping: async () => ({ pong: true }),
 };
 

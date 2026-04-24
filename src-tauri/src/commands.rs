@@ -734,3 +734,83 @@ pub async fn chart_reset(app: AppHandle, session_id: String) -> Result<Value, Co
     let res = call_sidecar(&app, "chart.reset", json!({ "sessionId": session_id })).await?;
     Ok(res)
 }
+
+// ── PL/SQL Debugger ────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn debug_open(app: AppHandle, payload: Value) -> Result<Value, ConnectionTestErr> {
+    let res = call_sidecar(&app, "debug.open", payload).await?;
+    Ok(res)
+}
+
+#[tauri::command]
+pub async fn debug_get_source(app: AppHandle, payload: Value) -> Result<Value, ConnectionTestErr> {
+    let res = call_sidecar(&app, "debug.get_source", payload).await?;
+    Ok(res)
+}
+
+#[tauri::command]
+pub async fn debug_start(app: AppHandle, payload: Value) -> Result<Value, ConnectionTestErr> {
+    let res = call_sidecar(&app, "debug.start", payload).await?;
+    Ok(res)
+}
+
+#[tauri::command]
+pub async fn debug_stop(app: AppHandle) -> Result<Value, ConnectionTestErr> {
+    let res = call_sidecar(&app, "debug.stop", serde_json::json!({})).await?;
+    Ok(res)
+}
+
+#[tauri::command]
+pub async fn debug_step_into(app: AppHandle) -> Result<Value, ConnectionTestErr> {
+    let res = call_sidecar(&app, "debug.step_into", serde_json::json!({})).await?;
+    Ok(res)
+}
+
+#[tauri::command]
+pub async fn debug_step_over(app: AppHandle) -> Result<Value, ConnectionTestErr> {
+    let res = call_sidecar(&app, "debug.step_over", serde_json::json!({})).await?;
+    Ok(res)
+}
+
+#[tauri::command]
+pub async fn debug_step_out(app: AppHandle) -> Result<Value, ConnectionTestErr> {
+    let res = call_sidecar(&app, "debug.step_out", serde_json::json!({})).await?;
+    Ok(res)
+}
+
+#[tauri::command]
+pub async fn debug_continue(app: AppHandle) -> Result<Value, ConnectionTestErr> {
+    let res = call_sidecar(&app, "debug.continue", serde_json::json!({})).await?;
+    Ok(res)
+}
+
+#[tauri::command]
+pub async fn debug_set_breakpoint(app: AppHandle, payload: Value) -> Result<Value, ConnectionTestErr> {
+    let res = call_sidecar(&app, "debug.set_breakpoint", payload).await?;
+    Ok(res)
+}
+
+#[tauri::command]
+pub async fn debug_remove_breakpoint(app: AppHandle, payload: Value) -> Result<Value, ConnectionTestErr> {
+    let res = call_sidecar(&app, "debug.remove_breakpoint", payload).await?;
+    Ok(res)
+}
+
+#[tauri::command]
+pub async fn debug_get_values(app: AppHandle, payload: Value) -> Result<Value, ConnectionTestErr> {
+    let res = call_sidecar(&app, "debug.get_values", payload).await?;
+    Ok(res)
+}
+
+#[tauri::command]
+pub async fn debug_get_call_stack(app: AppHandle) -> Result<Value, ConnectionTestErr> {
+    let res = call_sidecar(&app, "debug.get_call_stack", serde_json::json!({})).await?;
+    Ok(res)
+}
+
+#[tauri::command]
+pub async fn debug_run(app: AppHandle, payload: Value) -> Result<Value, ConnectionTestErr> {
+    let res = call_sidecar(&app, "debug.run", payload).await?;
+    Ok(res)
+}

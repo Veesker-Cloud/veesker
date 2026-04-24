@@ -182,6 +182,19 @@ pub fn run() {
             commands::proc_execute,
             commands::chart_configure,
             commands::chart_reset,
+            commands::debug_open,
+            commands::debug_get_source,
+            commands::debug_start,
+            commands::debug_stop,
+            commands::debug_step_into,
+            commands::debug_step_over,
+            commands::debug_step_out,
+            commands::debug_continue,
+            commands::debug_set_breakpoint,
+            commands::debug_remove_breakpoint,
+            commands::debug_get_values,
+            commands::debug_get_call_stack,
+            commands::debug_run,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
