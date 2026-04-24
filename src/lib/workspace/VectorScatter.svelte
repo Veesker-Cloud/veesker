@@ -46,7 +46,7 @@
     return scores1.map((s1, i) => [s1, scores2[i]] as [number, number]);
   }
 
-  const points = $derived.by(() => {
+  const projectedPoints = $derived.by(() => {
     const { vectors, queryVector, scores, rows, columns } = result;
     if (!vectors || vectors.length === 0) return null;
 
@@ -93,7 +93,7 @@
   }
 </script>
 
-{#if !points}
+{#if !projectedPoints}
   <div class="scatter-loading">No vector data — enable "Include vectors" before searching</div>
 {:else}
   <div class="scatter-wrap">
@@ -105,13 +105,13 @@
       <text x={8} y={H / 2} font-size="9" style="fill: var(--text-muted)" text-anchor="middle" font-family="JetBrains Mono, monospace" transform="rotate(-90,8,{H/2})">PC2</text>
 
       <!-- Query point -->
-      {#if points.query}
-        <circle cx={points.query.x} cy={points.query.y} r="9" fill="rgba(124,58,237,0.12)" stroke="#7c3aed" stroke-width="1.5"/>
-        <text x={points.query.x} y={points.query.y + 4} text-anchor="middle" font-size="9" fill="#7c3aed" font-weight="bold">Q</text>
+      {#if projectedPoints.query}
+        <circle cx={projectedPoints.query.x} cy={projectedPoints.query.y} r="9" fill="rgba(124,58,237,0.12)" stroke="#7c3aed" stroke-width="1.5"/>
+        <text x={projectedPoints.query.x} y={projectedPoints.query.y + 4} text-anchor="middle" font-size="9" fill="#7c3aed" font-weight="bold">Q</text>
       {/if}
 
       <!-- Result dots -->
-      {#each points.dots as dot, i}
+      {#each projectedPoints.dots as dot, i}
         <circle
           cx={dot.x} cy={dot.y} r={hoveredIdx === i ? 7 : 5}
           fill={simColor(dot.sim)}
@@ -145,7 +145,7 @@
     <div class="scatter-legend">
       <span class="legend-dot" style="background: rgb(179,175,50)"></span> high
       <span class="legend-dot" style="background: rgb(255,87,50); margin-left:0.5rem"></span> low
-      {#if points.query}<span style="margin-left:0.75rem; color:#7c3aed; opacity:0.8">⬤ Q = your search</span>{/if}
+      {#if projectedPoints.query}<span style="margin-left:0.75rem; color:#7c3aed; opacity:0.8">⬤ Q = your search</span>{/if}
     </div>
   </div>
 {/if}
