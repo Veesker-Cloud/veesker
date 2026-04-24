@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import { EditorState, Prec } from "@codemirror/state";
+  import { EditorState, Compartment, Prec } from "@codemirror/state";
   import { EditorView, keymap } from "@codemirror/view";
   import { sql, PLSQL } from "@codemirror/lang-sql";
   import { oneDark } from "@codemirror/theme-one-dark";
@@ -20,11 +20,13 @@
     onSaveAs: () => void;
     onExplain: (sql: string) => void;
     compileErrors?: CompileError[] | null;
+    completionSchema?: Record<string, string[]>;
   };
-  let { value, onChange, onRunCursor, onRunAll, onSave, onSaveAs, onExplain, compileErrors = null }: Props = $props();
+  let { value, onChange, onRunCursor, onRunAll, onSave, onSaveAs, onExplain, compileErrors = null, completionSchema }: Props = $props();
 
   let host: HTMLDivElement | undefined = $state();
   let view: EditorView | null = null;
+  const sqlLangCompartment = new Compartment();
 
   export function gotoLine(n: number): void {
     if (!view) return;
@@ -97,7 +99,7 @@
             ])
           ),
           basicSetup,
-          sql({ dialect: PLSQL }),
+          sqlLangCompartment.of(sql({ dialect: PLSQL })),
           oneDark,
           lintGutter(),
           showMinimap.of({
@@ -143,6 +145,15 @@
       };
     });
     view.dispatch(setDiagnostics(view.state, diagnostics));
+  });
+
+  $effect(() => {
+    if (!view || !completionSchema) return;
+    view.dispatch({
+      effects: sqlLangCompartment.reconfigure(
+        sql({ dialect: PLSQL, schema: completionSchema })
+      ),
+    });
   });
 </script>
 

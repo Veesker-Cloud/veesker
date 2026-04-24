@@ -22,6 +22,24 @@ describe("SqlEditor", () => {
     expect(container.textContent).toContain("SELECT * FROM dual");
   });
 
+  it("accepts completionSchema prop without crashing", async () => {
+    const schema: Record<string, string[]> = { EMPLOYEES: [], DEPARTMENTS: [] };
+    const { container } = render(SqlEditor, {
+      props: {
+        value: "SELECT 1 FROM DUAL",
+        onChange: noop,
+        onRunCursor: noop,
+        onRunAll: noop,
+        onSave: noop,
+        onSaveAs: noop,
+        onExplain: explainNoop,
+        completionSchema: schema,
+      },
+    });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(container.querySelector(".cm-editor")).not.toBeNull();
+  });
+
   // flaky in jsdom — verified manually in Task 11 smoke test
   it.skip("calls onRunCursor when Mod-Enter is triggered", async () => {
     const onRunCursor = vi.fn();
