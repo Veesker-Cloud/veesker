@@ -583,7 +583,7 @@ export async function debugStart(p: DebugStartParams): Promise<PauseInfo> {
     throw e;
   }
 
-  // Set user-defined breakpoints
+  // Set user-defined breakpoints; clean up session if any fail.
   try {
     for (const bp of p.breakpoints) {
       await session.setBreakpoint(bp.owner, bp.objectName, bp.objectType, bp.line);
@@ -607,7 +607,12 @@ export async function debugStart(p: DebugStartParams): Promise<PauseInfo> {
     // If SET_BREAKPOINT fails (object not compiled for debug), proceed without it
   }
 
-  await session.enableOutput();
+  try {
+    await session.enableOutput();
+  } catch (e) {
+    session.stop();
+    throw e;
+  }
 
   // Fire target asynchronously, then SYNCHRONIZE waits for the entry breakpoint.
   session.startTarget(p.script, p.binds);
