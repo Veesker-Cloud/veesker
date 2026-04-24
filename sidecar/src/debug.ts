@@ -1,5 +1,6 @@
 import oracledb from "oracledb";
-import { withActiveSession } from "./oracle";
+import { withActiveSession, buildConnection } from "./oracle";
+import { getSessionParams } from "./state";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -211,4 +212,219 @@ export async function debugGetSource(
     );
     return { lines: (res.rows ?? []).map((r) => r.TEXT) };
   });
+}
+
+// ── DebugSession ───────────────────────────────────────────────────────────
+
+// DBMS_DEBUG break_next_flags constants
+const BREAK_NEXT_LINE = 12;
+const BREAK_ANY_CALL  = 4;
+const BREAK_RETURN    = 8;
+
+// info_requested bitmask
+const INFO_RUNTIME_INFO = 44;
+
+// DBMS_DEBUG reason codes
+export const REASON_BREAKPOINT = 2;
+export const REASON_STEP       = 4;
+export const REASON_EXCEPTION  = 8;
+export const REASON_FINISHED   = 16;
+
+// DBMS_DEBUG LibunitType values
+const LIBUNIT_PROCEDURE    = 12;
+const LIBUNIT_FUNCTION     = 8;
+const LIBUNIT_PACKAGE_BODY = 9;
+const LIBUNIT_TRIGGER      = 11;
+const NAMESPACE_PLSQL      = 1;
+
+function libunitForType(objectType: string): number {
+  switch (objectType.toUpperCase()) {
+    case "PROCEDURE":    return LIBUNIT_PROCEDURE;
+    case "FUNCTION":     return LIBUNIT_FUNCTION;
+    case "PACKAGE BODY":
+    case "PACKAGE":      return LIBUNIT_PACKAGE_BODY;
+    case "TRIGGER":      return LIBUNIT_TRIGGER;
+    default:             return LIBUNIT_PROCEDURE;
+  }
+}
+
+let _debugSession: DebugSession | null = null;
+
+export function getDebugSession(): DebugSession | null {
+  return _debugSession;
+}
+
+export class DebugSession {
+  private targetConn: oracledb.Connection;
+  private debugConn: oracledb.Connection;
+  private breakpoints = new Map<number, DebugBreakpoint>();
+  private nextBpId = 1;
+  private _targetExecution: Promise<any> | null = null;
+
+  private constructor(
+    targetConn: oracledb.Connection,
+    debugConn: oracledb.Connection
+  ) {
+    this.targetConn = targetConn;
+    this.debugConn = debugConn;
+  }
+
+  static async create(): Promise<DebugSession> {
+    const p = getSessionParams() as any;
+    const target = await buildConnection(p);
+    const debug  = await buildConnection(p);
+    const session = new DebugSession(target, debug);
+    _debugSession = session;
+    return session;
+  }
+
+  async initialize(): Promise<string> {
+    const res = await this.targetConn.execute(
+      `BEGIN :sid := DBMS_DEBUG.INITIALIZE(diagnostics => 0); END;`,
+      { sid: { dir: oracledb.BIND_OUT, type: oracledb.STRING, maxSize: 100 } }
+    );
+    const sid = (res.outBinds as any).sid as string;
+    await this.debugConn.execute(
+      `BEGIN DBMS_DEBUG.ATTACH_SESSION(:sid, 0); END;`,
+      { sid }
+    );
+    return sid;
+  }
+
+  async setBreakpoint(
+    owner: string,
+    objectName: string,
+    objectType: string,
+    line: number
+  ): Promise<number> {
+    await this.debugConn.execute(
+      `DECLARE
+         prog DBMS_DEBUG.PROGRAM_INFO;
+         n    PLS_INTEGER;
+         bp   PLS_INTEGER := 0;
+       BEGIN
+         prog.Namespace   := ${NAMESPACE_PLSQL};
+         prog.Name        := UPPER(:obj_name);
+         prog.Owner       := UPPER(:obj_owner);
+         prog.LibunitType := :libunit_type;
+         n := DBMS_DEBUG.SET_BREAKPOINT(prog, :line_num, bp, 0, 0);
+         :retcode := n;
+         :bpnum   := bp;
+       END;`,
+      {
+        obj_name:     objectName,
+        obj_owner:    owner,
+        libunit_type: libunitForType(objectType),
+        line_num:     line,
+        retcode:      { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+        bpnum:        { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+      }
+    );
+    const id = this.nextBpId++;
+    this.breakpoints.set(id, { id, owner, objectName, objectType, line });
+    return id;
+  }
+
+  async removeBreakpoint(bpId: number): Promise<void> {
+    const bp = this.breakpoints.get(bpId);
+    if (!bp) return;
+    try {
+      await this.debugConn.execute(
+        `BEGIN DBMS_DEBUG.DELETE_BREAKPOINT(:bpnum); END;`,
+        { bpnum: bpId }
+      );
+    } catch {
+      // best-effort
+    }
+    this.breakpoints.delete(bpId);
+  }
+
+  startTarget(script: string, binds: Record<string, unknown>): void {
+    this._targetExecution = this.targetConn
+      .execute(script, binds)
+      .catch(() => {
+        // target errors surface via SYNCHRONIZE reason codes
+      });
+  }
+
+  async synchronize(): Promise<PauseInfo> {
+    const res = await this.debugConn.execute(
+      `DECLARE
+         r DBMS_DEBUG.RUNTIME_INFO;
+         n PLS_INTEGER;
+       BEGIN
+         n := DBMS_DEBUG.SYNCHRONIZE(r, ${INFO_RUNTIME_INFO}, 30);
+         :retcode    := n;
+         :line       := r.Line#;
+         :reason     := r.Reason;
+         :terminated := r.Terminated;
+         :obj_name   := r.Program.Name;
+         :obj_owner  := r.Program.Owner;
+       END;`,
+      {
+        retcode:    { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+        line:       { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+        reason:     { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+        terminated: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+        obj_name:   { dir: oracledb.BIND_OUT, type: oracledb.STRING, maxSize: 128 },
+        obj_owner:  { dir: oracledb.BIND_OUT, type: oracledb.STRING, maxSize: 128 },
+      }
+    );
+    const b = res.outBinds as any;
+    const terminated: number = b.terminated ?? 0;
+    const reason: number = b.reason ?? 0;
+
+    if (terminated || reason === REASON_FINISHED) {
+      return { status: "completed", frame: null, reason };
+    }
+
+    return {
+      status: "paused",
+      reason,
+      frame: {
+        owner:      (b.obj_owner as string) ?? "",
+        objectName: (b.obj_name as string) ?? "",
+        objectType: "PACKAGE BODY",
+        line:       (b.line as number) ?? 0,
+      },
+    };
+  }
+
+  async continueExecution(breakNextFlags: number): Promise<PauseInfo> {
+    await this.debugConn.execute(
+      `DECLARE
+         r DBMS_DEBUG.RUNTIME_INFO;
+         n PLS_INTEGER;
+       BEGIN
+         n := DBMS_DEBUG.CONTINUE(r, :flags, ${INFO_RUNTIME_INFO});
+         :retcode    := n;
+         :line       := r.Line#;
+         :reason     := r.Reason;
+         :terminated := r.Terminated;
+         :obj_name   := r.Program.Name;
+         :obj_owner  := r.Program.Owner;
+       END;`,
+      {
+        flags:      breakNextFlags,
+        retcode:    { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+        line:       { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+        reason:     { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+        terminated: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+        obj_name:   { dir: oracledb.BIND_OUT, type: oracledb.STRING, maxSize: 128 },
+        obj_owner:  { dir: oracledb.BIND_OUT, type: oracledb.STRING, maxSize: 128 },
+      }
+    );
+    return this.synchronize();
+  }
+
+  async stop(): Promise<void> {
+    try {
+      await this.targetConn.execute(`BEGIN DBMS_DEBUG.OFF; END;`);
+    } catch {
+      // best-effort
+    }
+    try { await this.targetConn.close(); } catch {}
+    try { await this.debugConn.close(); } catch {}
+    _debugSession = null;
+  }
 }
