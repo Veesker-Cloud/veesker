@@ -19,13 +19,20 @@
     setCurrentLineEffect,
   } from "./currentLineDecoration";
 
-  type Tab = "script" | "output" | "callstack";
+  type Tab = "script" | "output" | "stats";
 
   let { onClose }: { onClose: () => void } = $props();
 
   let editorHost: HTMLDivElement | undefined = $state();
   let view: EditorView | null = null;
   let activeTab = $state<Tab>("script");
+
+  function handleToggleBreakpoint() {
+    if (!view) return;
+    const line = view.state.doc.lineAt(view.state.selection.main.head).number;
+    debugStore.toggleBreakpoint(line);
+    view.dispatch({ effects: toggleBreakpointEffect.of(line) });
+  }
 
   $effect(() => {
     const line = debugStore.currentFrame?.line ?? null;
@@ -65,7 +72,9 @@
           currentLineDecoration,
           EditorView.updateListener.of((update) => {
             if (update.docChanged && debugStore.status === "idle") {
-              debugStore.script = update.state.doc.toString();
+              const content = update.state.doc.toString();
+              debugStore.script = content;
+              debugStore.syncBindVars(content);
             }
           }),
           Prec.highest(
@@ -173,10 +182,10 @@
         </button>
         <button
           class="tw-tab"
-          class:tw-tab-active={activeTab === 'callstack'}
-          onclick={() => (activeTab = 'callstack')}
+          class:tw-tab-active={activeTab === 'stats'}
+          onclick={() => (activeTab = 'stats')}
         >
-          Call Stack
+          Statistics
         </button>
       </div>
       <div class="tw-object-info">
@@ -213,6 +222,7 @@
       onStepOut={() => void debugStore.stepOut()}
       onContinue={() => void debugStore.continue_()}
       onStop={() => void debugStore.stop()}
+      onToggleBreakpoint={handleToggleBreakpoint}
     />
 
     {#if debugStore.errorMessage}
@@ -226,6 +236,14 @@
           <VariableGrid
             bind:vars={debugStore.bindVars}
             readonly={debugStore.status === 'running' || debugStore.status === 'paused'}
+            liveVars={debugStore.liveVars}
+          />
+        </div>
+        <div class="tw-callstack-wrap">
+          <DebugCallStack
+            frames={debugStore.callStack}
+            currentFrame={debugStore.currentFrame}
+            onSelectFrame={() => {}}
           />
         </div>
       {:else if activeTab === 'output'}
@@ -239,13 +257,7 @@
           {/if}
         </div>
       {:else}
-        <div class="tw-callstack-wrap">
-          <DebugCallStack
-            frames={debugStore.callStack}
-            currentFrame={debugStore.currentFrame}
-            onSelectFrame={() => {}}
-          />
-        </div>
+        <p class="tw-placeholder">Statistics coming soon.</p>
       {/if}
     </div>
   </div>
@@ -299,5 +311,6 @@
   .tw-output { flex: 1; padding: 12px; overflow: auto; font-family: monospace; font-size: 12px; color: var(--text-primary); }
   .tw-output-empty { color: var(--text-muted); }
   .tw-output-line { white-space: pre-wrap; }
-  .tw-callstack-wrap { flex: 1; overflow: auto; }
+  .tw-callstack-wrap { max-height: 160px; overflow: auto; border-top: 1px solid var(--border); flex-shrink: 0; }
+  .tw-placeholder { color: var(--text-muted); font-size: 12px; padding: 16px; margin: 0; }
 </style>

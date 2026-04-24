@@ -10,6 +10,7 @@
     onStepOut,
     onContinue,
     onStop,
+    onToggleBreakpoint,
   }: {
     status: DebugStatus;
     onRun: () => void;
@@ -19,6 +20,7 @@
     onStepOut: () => void;
     onContinue: () => void;
     onStop: () => void;
+    onToggleBreakpoint: () => void;
   } = $props();
 
   const idle = $derived(
@@ -45,6 +47,7 @@
   <button class="btn" title="Continue (F5)" disabled={!paused} onclick={onContinue}>▶▶</button>
   <div class="sep"></div>
   <button class="btn btn-stop" title="Stop (Shift+F5)" disabled={idle} onclick={onStop}>■</button>
+  <button class="btn btn-bp" title="Toggle Breakpoint (Ctrl+B)" onclick={onToggleBreakpoint}>●</button>
   <div
     class="status"
     class:status-paused={paused}
@@ -70,6 +73,7 @@
   .btn:disabled { opacity: 0.3; cursor: default; }
   .btn-debug { color: #27ae60; }
   .btn-stop  { color: #e74c3c; }
+  .btn-bp    { color: #e74c3c; }
   .sep { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
   .status { margin-left: 12px; font-size: 11px; color: var(--text-muted); font-family: monospace; }
   .status-paused { color: #f1c40f; }

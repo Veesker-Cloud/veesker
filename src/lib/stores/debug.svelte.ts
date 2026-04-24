@@ -15,7 +15,23 @@ import {
   debugStepOutRpc,
   debugContinueRpc,
   debugRunRpc,
+  debugGetValuesRpc,
+  SESSION_LOST,
 } from "$lib/workspace";
+
+function extractBindNames(script: string): string[] {
+  const bindPattern = /:([a-zA-Z_][a-zA-Z0-9_]*)/g;
+  const seen = new Set<string>();
+  const names: string[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = bindPattern.exec(script)) !== null) {
+    const name = m[1];
+    if (seen.has(name)) continue;
+    seen.add(name);
+    names.push(name);
+  }
+  return names;
+}
 
 export type DebugStatus =
   | "idle"
@@ -111,25 +127,32 @@ class DebugStore {
   }
 
   private _buildBindVars(script: string, params: ParamDef[]): BindVar[] {
-    const bindPattern = /:([a-zA-Z_][a-zA-Z0-9_]*)/g;
-    const seen = new Set<string>();
-    const vars: BindVar[] = [];
-    let m: RegExpExecArray | null;
-    while ((m = bindPattern.exec(script)) !== null) {
-      const name = m[1];
-      if (seen.has(name)) continue;
-      seen.add(name);
+    const detected = extractBindNames(script);
+    return detected.map((name) => {
       const param = params.find(
         (p) => p.name.toLowerCase() === name.toLowerCase(),
       );
-      vars.push({
+      return {
         name,
         oracleType: param?.dataType ?? "VARCHAR2",
         value: "",
         enabled: true,
-      });
-    }
-    return vars;
+      };
+    });
+  }
+
+  syncBindVars(newScript: string) {
+    const detected = extractBindNames(newScript);
+    const existing = new Map(this.bindVars.map((v) => [v.name, v]));
+    this.bindVars = detected.map(
+      (name) =>
+        existing.get(name) ?? {
+          name,
+          oracleType: "VARCHAR2",
+          value: "",
+          enabled: true,
+        },
+    );
   }
 
   toggleBreakpoint(line: number) {
@@ -165,6 +188,7 @@ class DebugStore {
   }
 
   private _buildBindsForExecution(): Record<string, unknown> {
+    // TODO: wrap DATE binds with TO_DATE in the generated block
     const result: Record<string, unknown> = {};
     for (const v of this.bindVars) {
       if (!v.enabled) continue;
@@ -212,6 +236,7 @@ class DebugStore {
     if (!res.ok) {
       this.status = "error";
       this.errorMessage = res.error.message;
+      if (res.error.code === SESSION_LOST) await this.stop();
       return;
     }
 
@@ -231,6 +256,12 @@ class DebugStore {
     }
     this.status = "paused";
     this.currentFrame = info.frame;
+
+    const varNames = this.bindVars.map((v) => v.name);
+    if (varNames.length > 0) {
+      const vals = await debugGetValuesRpc(varNames);
+      if (vals.ok) this.liveVars = vals.data.variables;
+    }
 
     if (info.frame && this.editorObject) {
       const f = info.frame;
@@ -257,38 +288,42 @@ class DebugStore {
 
   async stepInto() {
     const res = await debugStepIntoRpc();
-    if (res.ok) await this._applyPauseInfo(res.data);
-    else {
-      this.status = "error";
+    if (!res.ok) {
       this.errorMessage = res.error.message;
+      if (res.error.code === SESSION_LOST) await this.stop();
+      return;
     }
+    await this._applyPauseInfo(res.data);
   }
 
   async stepOver() {
     const res = await debugStepOverRpc();
-    if (res.ok) await this._applyPauseInfo(res.data);
-    else {
-      this.status = "error";
+    if (!res.ok) {
       this.errorMessage = res.error.message;
+      if (res.error.code === SESSION_LOST) await this.stop();
+      return;
     }
+    await this._applyPauseInfo(res.data);
   }
 
   async stepOut() {
     const res = await debugStepOutRpc();
-    if (res.ok) await this._applyPauseInfo(res.data);
-    else {
-      this.status = "error";
+    if (!res.ok) {
       this.errorMessage = res.error.message;
+      if (res.error.code === SESSION_LOST) await this.stop();
+      return;
     }
+    await this._applyPauseInfo(res.data);
   }
 
   async continue_() {
     const res = await debugContinueRpc();
-    if (res.ok) await this._applyPauseInfo(res.data);
-    else {
-      this.status = "error";
+    if (!res.ok) {
       this.errorMessage = res.error.message;
+      if (res.error.code === SESSION_LOST) await this.stop();
+      return;
     }
+    await this._applyPauseInfo(res.data);
   }
 
   async stop() {
