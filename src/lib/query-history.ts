@@ -21,6 +21,8 @@ export type HistorySaveInput = {
   elapsedMs: number;
   errorCode: number | null;
   errorMessage: string | null;
+  username: string | null;
+  host: string | null;
 };
 
 export async function historyList(

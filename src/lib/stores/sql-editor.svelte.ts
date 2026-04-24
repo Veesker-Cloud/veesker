@@ -71,6 +71,8 @@ let _activeId = $state<string | null>(null);
 let _drawerOpen = $state(false);
 let _queryCounter = $state(0);
 let _connectionId: string | null = null;
+let _connectionUsername: string | null = null;
+let _connectionHost: string | null = null;
 let _pendingTx = $state(false);
 let _editorExpanded = $state(false);
 
@@ -194,6 +196,8 @@ function pushHistory(sql: string, r: TabResult): void {
     elapsedMs: r.elapsedMs,
     errorCode: r.status === "error" && r.error !== null ? r.error.code : null,
     errorMessage: r.status === "error" && r.error !== null ? r.error.message : null,
+    username: _connectionUsername,
+    host: _connectionHost,
   }).catch((e) => console.warn("history save failed:", e));
 }
 
@@ -205,7 +209,11 @@ export const sqlEditor = {
     return _activeId === null ? null : findTab(_activeId);
   },
   get connectionId() { return _connectionId; },
-  setConnectionId(id: string | null): void { _connectionId = id; },
+  setConnectionContext(id: string | null, username: string | null, host: string | null): void {
+    _connectionId = id;
+    _connectionUsername = username;
+    _connectionHost = host;
+  },
   get pendingTx() { return _pendingTx; },
   clearPendingTx(): void { _pendingTx = false; },
 
@@ -753,6 +761,8 @@ export const sqlEditor = {
     _queryCounter = 0;
     _logCollapsed = false;
     _connectionId = null;
+    _connectionUsername = null;
+    _connectionHost = null;
     _pendingTx = false;
     _editorExpanded = false;
   },

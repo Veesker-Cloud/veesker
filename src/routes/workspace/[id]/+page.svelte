@@ -281,7 +281,8 @@
       return;
     }
     meta = metaRes.data.meta;
-    sqlEditor.setConnectionId(meta.id);
+    const hostOrAlias = meta.authType === "basic" ? meta.host : meta.connectAlias;
+    sqlEditor.setConnectionContext(meta.id, meta.username, hostOrAlias);
 
     const openRes = await workspaceOpen(id);
     if (!openRes.ok) {
