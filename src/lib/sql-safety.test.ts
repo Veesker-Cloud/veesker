@@ -50,11 +50,21 @@ describe("detectDestructive", () => {
     expect(ops[0].description).toBe("Modifies object structure");
   });
 
-  it("detects MERGE as destructive", () => {
+  it("detects MERGE as destructive (UPDATE inside WHEN MATCHED is also reported)", () => {
     const ops = detectDestructive("MERGE INTO t USING s ON (t.id = s.id) WHEN MATCHED THEN UPDATE SET t.x = s.x");
-    expect(ops).toHaveLength(1);
-    expect(ops[0].keyword).toBe("MERGE");
-    expect(ops[0].description).toBe("May update or delete rows");
+    const keywords = ops.map((o) => o.keyword);
+    expect(keywords).toContain("MERGE");
+    const merge = ops.find((o) => o.keyword === "MERGE")!;
+    expect(merge.description).toBe("May update or delete rows");
+  });
+
+  it("reports both MERGE and a standalone UPDATE in a multi-statement script", () => {
+    const ops = detectDestructive(
+      "MERGE INTO t USING s ON (t.id = s.id) WHEN MATCHED THEN UPDATE SET t.x = s.x;\nUPDATE employees SET salary = 0;"
+    );
+    const keywords = ops.map((o) => o.keyword);
+    expect(keywords).toContain("MERGE");
+    expect(keywords).toContain("UPDATE");
   });
 
   it("detects CREATE OR REPLACE as warning", () => {
