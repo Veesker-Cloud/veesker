@@ -232,13 +232,15 @@ export const REASON_STEP       = 4;
 export const REASON_EXCEPTION  = 8;
 export const REASON_FINISHED   = 16;
 
-// DBMS_DEBUG LibunitType values
+// punit.type constants for DBMS_DEBUG.SET_BREAKPOINT — these differ from
+// the LibunitType integers returned by SYNCHRONIZE (separate Oracle enum families)
 const LIBUNIT_PROCEDURE    = 12;
 const LIBUNIT_FUNCTION     = 8;
 const LIBUNIT_PACKAGE_BODY = 9;
 const LIBUNIT_TRIGGER      = 11;
 const NAMESPACE_PLSQL      = 1;
 
+// Maps RUNTIME_INFO.Program.LibunitType (from SYNCHRONIZE) to an object-type string.
 function libunitTypeToString(n: number): string {
   switch (n) {
     case 1: return "PROCEDURE";
@@ -252,6 +254,7 @@ function libunitTypeToString(n: number): string {
   }
 }
 
+// Maps an object-type string to a punit.type integer for DBMS_DEBUG.SET_BREAKPOINT.
 function libunitForType(objectType: string): number {
   switch (objectType.toUpperCase()) {
     case "PROCEDURE":    return LIBUNIT_PROCEDURE;
