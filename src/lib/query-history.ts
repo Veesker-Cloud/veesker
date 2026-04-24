@@ -11,6 +11,8 @@ export type HistoryEntry = {
   errorCode: number | null;
   errorMessage: string | null;
   executedAt: string;
+  username: string | null;
+  host: string | null;
 };
 
 export type HistorySaveInput = {
