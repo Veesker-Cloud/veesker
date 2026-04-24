@@ -432,10 +432,13 @@ export class DebugSession {
     this.breakpoints.delete(bpId);
   }
 
-  startTarget(script: string, binds: Record<string, unknown>): void {
+  startTarget(script: string, binds: Record<string, unknown>, cursorBinds: string[] = []): void {
+    const cursorSet = new Set(cursorBinds);
     const execBinds: Record<string, unknown> = {};
     for (const [key, val] of Object.entries(binds)) {
-      if (key.startsWith("out_")) {
+      if (cursorSet.has(key)) {
+        execBinds[key] = { dir: oracledb.BIND_OUT, type: oracledb.CURSOR };
+      } else if (key.startsWith("out_")) {
         execBinds[key] = { dir: oracledb.BIND_OUT, type: oracledb.STRING, maxSize: 32767 };
       } else {
         execBinds[key] = val ?? null;
@@ -443,8 +446,9 @@ export class DebugSession {
     }
     this._targetExecution = this.targetConn
       .execute(script, execBinds)
-      .catch(() => {
-        // target errors surface via SYNCHRONIZE reason codes
+      .catch((err) => {
+        process.stderr.write(`[debug] target execute error: ${String(err)}\n`);
+        return null;
       });
   }
 
@@ -647,6 +651,7 @@ export class DebugSession {
 export type DebugStartParams = {
   script: string;
   binds: Record<string, unknown>;
+  cursorBinds?: string[];
   breakpoints: Array<{ owner: string; objectName: string; objectType: string; line: number }>;
   // Object to auto-breakpoint on entry (required for first pause)
   owner: string;
@@ -719,7 +724,7 @@ export async function debugStart(p: DebugStartParams): Promise<PauseInfo> {
 
   // Fire target asynchronously, then SYNCHRONIZE waits for the entry breakpoint.
   process.stderr.write("[debug] firing startTarget\n");
-  session.startTarget(p.script, p.binds);
+  session.startTarget(p.script, p.binds, p.cursorBinds ?? []);
 
   try {
     const result = await session.synchronizeWithTimeout(30_000);

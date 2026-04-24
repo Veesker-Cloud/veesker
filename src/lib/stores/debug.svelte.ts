@@ -256,6 +256,7 @@ class DebugStore {
     const res = await debugStartRpc({
       script: this.script,
       binds: this._buildBindsForExecution(),
+      cursorBinds: this.cursorBindNames,
       breakpoints: bpRefs,
       owner: this.owner,
       objectName: this.objectName,
