@@ -10,6 +10,7 @@
   import DebugToolbar from "./DebugToolbar.svelte";
   import VariableGrid from "./VariableGrid.svelte";
   import DebugCallStack from "./DebugCallStack.svelte";
+  import DebugLocals from "./DebugLocals.svelte";
   import {
     breakpointGutter,
     toggleBreakpointEffect,
@@ -18,6 +19,7 @@
     currentLineDecoration,
     setCurrentLineEffect,
   } from "./currentLineDecoration";
+  import { debugHoverTooltip } from "./debugHover";
 
   type Tab = "script" | "output" | "stats";
 
@@ -79,6 +81,7 @@
           oneDark,
           breakpointGutter((line) => debugStore.toggleBreakpoint(line)),
           currentLineDecoration,
+          debugHoverTooltip,
           EditorView.updateListener.of((update) => {
             if (update.docChanged && debugStore.status === "idle") {
               const content = update.state.doc.toString();
@@ -254,12 +257,19 @@
       <!-- Script pane always mounted so CodeMirror view persists across tab switches -->
       <div class="tw-script-pane" class:tw-pane-hidden={activeTab !== 'script'}>
         <div class="tw-editor-wrap" bind:this={editorHost}></div>
-        <div class="tw-vars">
-          <VariableGrid
-            bind:vars={debugStore.bindVars}
-            readonly={debugStore.status === 'running' || debugStore.status === 'paused'}
-            liveVars={debugStore.liveVars}
-          />
+        <div class="tw-vars-row">
+          <div class="tw-vars">
+            <VariableGrid
+              bind:vars={debugStore.bindVars}
+              readonly={debugStore.status === 'running' || debugStore.status === 'paused'}
+              liveVars={debugStore.liveVars}
+            />
+          </div>
+          {#if debugStore.status === 'paused'}
+            <div class="tw-locals">
+              <DebugLocals locals={debugStore.localVars} />
+            </div>
+          {/if}
         </div>
         <div class="tw-callstack-wrap">
           <DebugCallStack
@@ -346,7 +356,19 @@
   .tw-pane-hidden { display: none; }
   .tw-editor-wrap { flex: 1; overflow: auto; min-height: 0; }
   .tw-editor-wrap :global(.cm-editor) { height: 100%; }
-  .tw-vars { height: 200px; border-top: 1px solid var(--border); flex-shrink: 0; overflow: auto; }
+  .tw-vars-row {
+    display: flex; height: 200px; border-top: 1px solid var(--border); flex-shrink: 0; min-height: 0;
+  }
+  .tw-vars { flex: 1; overflow: auto; min-width: 0; }
+  .tw-locals { width: 320px; border-left: 1px solid var(--border); flex-shrink: 0; overflow: auto; }
+  .tw-editor-wrap :global(.cm-debug-hover) {
+    background: var(--bg-surface-alt); border: 1px solid var(--border); border-radius: 4px;
+    padding: 4px 8px; font-family: monospace; font-size: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+  .tw-editor-wrap :global(.cm-debug-hover-name) { color: #7dcfff; }
+  .tw-editor-wrap :global(.cm-debug-hover-sep)  { color: var(--text-muted); }
+  .tw-editor-wrap :global(.cm-debug-hover-value) { color: var(--text-primary); }
   .tw-output { flex: 1; padding: 12px; overflow: auto; font-family: monospace; font-size: 12px; color: var(--text-primary); }
   .tw-output-empty { color: var(--text-muted); }
   .tw-output-line { white-space: pre-wrap; }
