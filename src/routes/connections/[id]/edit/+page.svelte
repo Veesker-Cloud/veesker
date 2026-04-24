@@ -51,8 +51,9 @@
   async function onSave(input: ConnectionInput) {
     const res = await saveConnection(input);
     if (!res.ok) return { ok: false as const, message: res.error.message };
+    const id = res.data.id;
     await goto("/");
-    return { ok: true as const };
+    return { ok: true as const, id };
   }
 
   function onCancel() {

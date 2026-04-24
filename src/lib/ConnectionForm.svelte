@@ -6,6 +6,7 @@
     type ConnectionInput,
   } from "$lib/connections";
   import { testConnection } from "$lib/connection";
+  import SecurityDisclaimerModal from "$lib/workspace/SecurityDisclaimerModal.svelte";
 
   type TestState =
     | { kind: "idle" }
@@ -38,7 +39,7 @@
     passwordMissing?: boolean;
     walletPasswordMissing?: boolean;
     isEdit?: boolean;
-    onSave: (input: ConnectionInput) => Promise<{ ok: true } | { ok: false; message: string }>;
+    onSave: (input: ConnectionInput) => Promise<{ ok: true; id: string } | { ok: false; message: string }>;
     onCancel: () => void;
   } = $props();
 
@@ -64,6 +65,26 @@
 
   let testState = $state<TestState>({ kind: "idle" });
   let saveState = $state<SaveState>({ kind: "idle" });
+  let showDisclaimer = $state(false);
+
+  function needsDisclaimer(): boolean {
+    if (typeof localStorage === "undefined") return false;
+    if (id === undefined) return true;
+    return !localStorage.getItem(`veesker.security.accepted.${id}`);
+  }
+
+  async function doSave(): Promise<void> {
+    saveState = { kind: "running" };
+    const res = await onSave(buildInput());
+    if (res.ok) {
+      if (typeof localStorage !== "undefined") {
+        localStorage.setItem(`veesker.security.accepted.${res.id}`, "1");
+      }
+      saveState = { kind: "idle" };
+    } else {
+      saveState = { kind: "err", message: res.message };
+    }
+  }
 
   async function pickWalletZip() {
     const selected = await open({
@@ -128,9 +149,11 @@
 
   async function onSubmit(event: Event) {
     event.preventDefault();
-    saveState = { kind: "running" };
-    const res = await onSave(buildInput());
-    saveState = res.ok ? { kind: "idle" } : { kind: "err", message: res.message };
+    if (needsDisclaimer()) {
+      showDisclaimer = true;
+      return;
+    }
+    await doSave();
   }
 </script>
 
@@ -253,6 +276,12 @@
       <strong>Save failed.</strong>
       <span>{saveState.message}</span>
     </div>
+  {/if}
+  {#if showDisclaimer}
+    <SecurityDisclaimerModal
+      onAccept={() => { showDisclaimer = false; void doSave(); }}
+      onCancel={() => { showDisclaimer = false; }}
+    />
   {/if}
 </form>
 
