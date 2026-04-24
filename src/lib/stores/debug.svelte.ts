@@ -20,6 +20,7 @@ import {
   debugGetCallStackRpc,
   SESSION_LOST,
 } from "$lib/workspace";
+import { extractPlsqlIdentifiers } from "$lib/plsql/identifiers";
 
 function extractBindNames(script: string): string[] {
   const bindPattern = /:([a-zA-Z_][a-zA-Z0-9_]*)/g;
@@ -75,6 +76,7 @@ class DebugStore {
   currentFrame = $state<StackFrame | null>(null);
   callStack = $state<StackFrame[]>([]);
   liveVars = $state<VarValue[]>([]);
+  localVars = $state<VarValue[]>([]);
   dbmsOutput = $state<string[]>([]);
   errorMessage = $state<string | null>(null);
 
@@ -99,6 +101,7 @@ class DebugStore {
     this.currentFrame = null;
     this.callStack = [];
     this.liveVars = [];
+    this.localVars = [];
     this.dbmsOutput = [];
     this.errorMessage = null;
     this.breakpoints = [];
@@ -241,7 +244,9 @@ class DebugStore {
     });
 
     // Guard: user may have clicked Stop while we were waiting for the RPC.
-    if (this.status === 'idle') return;
+    // Cast to string to avoid TS narrowing on the assignment above — status can change
+    // during the await via a concurrent stop() call.
+    if ((this.status as string) === "idle") return;
 
     if (!res.ok) {
       this.status = "error";
@@ -250,8 +255,7 @@ class DebugStore {
       return;
     }
 
-    // Guard again after async gap
-    if (this.status === 'idle') return;
+    if ((this.status as string) === "idle") return;
 
     await this._applyPauseInfo(res.data);
   }
@@ -303,6 +307,8 @@ class DebugStore {
         }
       }
     }
+
+    await this._refreshLocalVars();
   }
 
   async stepInto() {
@@ -351,7 +357,24 @@ class DebugStore {
     this.currentFrame = null;
     this.callStack = [];
     this.liveVars = [];
+    this.localVars = [];
     this.errorMessage = null;
+  }
+
+  private async _refreshLocalVars() {
+    if (this.status !== "paused") {
+      this.localVars = [];
+      return;
+    }
+    const names = extractPlsqlIdentifiers(this.editorSource);
+    if (names.length === 0) {
+      this.localVars = [];
+      return;
+    }
+    const res = await debugGetValuesRpc(names);
+    if (res.ok) {
+      this.localVars = res.data.variables.filter((v) => v.value !== null);
+    }
   }
 }
 
