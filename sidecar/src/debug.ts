@@ -239,11 +239,35 @@ const BREAK_RETURN    = 8;   // stop when current subprogram returns (step out)
 // info_requested bitmask
 const INFO_RUNTIME_INFO = 44;
 
-// DBMS_DEBUG reason codes
-export const REASON_BREAKPOINT = 2;
-export const REASON_STEP       = 4;
-export const REASON_EXCEPTION  = 8;
-export const REASON_FINISHED   = 16;
+// DBMS_DEBUG reason codes (Oracle 12c+ / 23ai)
+// These are the values Oracle stores in r.Reason after SYNCHRONIZE/CONTINUE.
+// Empirically verified against Oracle 23ai Free: reason=2 fires when the anonymous block
+// enters the interpreter (no location); reason=25 fires when the program finishes normally.
+export const REASON_NONE          = 0;
+export const REASON_INTERP_START  = 2;   // interpreter starting (anonymous block enters)
+export const REASON_BREAKPOINT    = 3;   // explicit breakpoint hit
+export const REASON_ENTER         = 6;
+export const REASON_RETURN        = 7;
+export const REASON_FINISH        = 8;
+export const REASON_LINE          = 9;
+export const REASON_EXCEPTION     = 11;
+export const REASON_EXIT          = 15;
+export const REASON_KNL_EXIT      = 16;
+export const REASON_WHATEVER      = 25;  // program finished without error (Oracle 12c+)
+
+// Legacy export kept for other callers; maps to the most common "done" code.
+export const REASON_FINISHED = REASON_WHATEVER;
+
+// Reason codes that indicate the target program has ended (nothing more to debug).
+function isDoneReason(reason: number): boolean {
+  return (
+    reason === REASON_NONE ||
+    reason === REASON_FINISH ||
+    reason === REASON_EXIT ||
+    reason === REASON_KNL_EXIT ||
+    reason === REASON_WHATEVER
+  );
+}
 
 // PROGRAM_INFO.LibunitType — same enum used by both SET_BREAKPOINT and SYNCHRONIZE/CONTINUE
 const LIBUNIT_PROCEDURE    = 1;
@@ -423,9 +447,9 @@ export class DebugSession {
       // they are intermediate events that require CONTINUE(0) to advance execution into
       // the actual stored procedure where the named breakpoints are set.
       for (let i = 0; i < 10; i++) {
-        if (info.status !== "completed") break;       // "paused" = got a real named location
-        if (info.reason === REASON_FINISHED) break;   // program ran to normal completion
-        // Intermediate event: tell Oracle to resume until the next explicit breakpoint
+        if (info.status !== "completed") break;   // "paused" = got a real named location
+        if (isDoneReason(info.reason)) break;     // target program ended
+        // Intermediate event (reason=2 interpreter_starting etc.): tell Oracle to resume
         process.stderr.write(`[debug] intermediate event reason=${info.reason} iter=${i + 1}, CONTINUE(0)\n`);
         info = await this.continueExecution(0);
         process.stderr.write(`[debug] CONTINUE(0): status=${info.status} reason=${info.reason} frame=${JSON.stringify(info.frame)}\n`);
@@ -482,7 +506,7 @@ export class DebugSession {
     const terminated: number = ob.terminated ?? 0;
     const reason: number = ob.reason ?? 0;
 
-    if (terminated || reason === REASON_FINISHED) {
+    if (terminated || isDoneReason(reason)) {
       return { status: "completed", frame: null, reason };
     }
 
@@ -534,7 +558,7 @@ export class DebugSession {
     const terminated: number = ob.terminated ?? 0;
     const reason: number = ob.reason ?? 0;
 
-    if (terminated || reason === REASON_FINISHED) {
+    if (terminated || isDoneReason(reason)) {
       return { status: "completed", frame: null, reason };
     }
 
@@ -686,9 +710,26 @@ export async function debugStart(p: DebugStartParams): Promise<PauseInfo> {
       session.removeBreakpoint(entryBpId).catch(() => {});
     }
 
+    // If the target completed without ever pausing at a named location, the breakpoints
+    // were accepted by Oracle but never fired — almost always because the target object
+    // lacks debug symbols (compiled with PLSQL_OPTIMIZE_LEVEL>1 or NATIVE).
+    if (result.status === "completed" && result.frame === null) {
+      session.stop();
+      process.stderr.write(`[debug] target ran to completion without pausing — likely not debug-compiled\n`);
+      throw new RpcCodedError(
+        ORACLE_ERR,
+        `${entryTarget} ran without pausing — the object likely lacks debug information.\n` +
+        `Recompile with debug symbols and try again:\n` +
+        `ALTER SESSION SET PLSQL_OPTIMIZE_LEVEL = 1;\n` +
+        `ALTER ${entryType} ${p.owner}.${entryTarget} COMPILE;\n` +
+        `Verify: SELECT plsql_optimize_level FROM all_plsql_object_settings WHERE owner='${p.owner}' AND name='${entryTarget}';`
+      );
+    }
+
     process.stderr.write(`[debug] debugStart complete: ${result.status}\n`);
     return result;
   } catch (e) {
+    if (e instanceof RpcCodedError) throw e;
     process.stderr.write(`[debug] synchronizeWithTimeout threw: ${String(e)}\n`);
     return { status: "completed", frame: null, reason: REASON_FINISHED };
   }
