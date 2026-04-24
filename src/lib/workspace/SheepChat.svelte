@@ -11,10 +11,13 @@
     sql: string;
   };
 
+  type QuickAction = { label: string; value: string };
+
   type ChatMessage = {
     role: "user" | "assistant";
     content: string;
     chartPreview?: { config: ChartConfig; previewData: PreviewData | null };
+    quickActions?: QuickAction[];
   };
 
   type Props = {
@@ -33,6 +36,8 @@
   let showSettings = $state(false);
   let apiKey = $state("");
   let messagesEl = $state<HTMLDivElement | null>(null);
+  let inputEl = $state<HTMLTextAreaElement | null>(null);
+  let selectedYCols = $state<string[]>([]);
 
   let analyzeStep = $state<"type" | "xColumn" | "yColumns" | "aggregation" | "title" | "confirm" | null>(null);
   let currentAnalyzePayload = $state<AnalyzePayload | null>(null);
@@ -66,8 +71,22 @@
     if (messagesEl) messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
-  function pushAssistant(content: string, chartPreview?: ChatMessage["chartPreview"]) {
-    messages = [...messages, { role: "assistant" as const, content, chartPreview }];
+  function pushAssistant(content: string, chartPreview?: ChatMessage["chartPreview"], quickActions?: QuickAction[]) {
+    messages = [...messages, { role: "assistant" as const, content, chartPreview, quickActions }];
+  }
+
+  function clearConversation() {
+    messages = [];
+    analyzeStep = null;
+    currentAnalyzePayload = null;
+    error = null;
+    selectedYCols = [];
+  }
+
+  function onTextareaInput(e: Event) {
+    const ta = e.target as HTMLTextAreaElement;
+    ta.style.height = "auto";
+    ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`;
   }
 
   const CHART_TYPES: Record<string, string> = {
@@ -87,16 +106,35 @@
     none: "none",
   };
 
+  const CHART_TYPE_BTNS: QuickAction[] = [
+    { label: "Bar", value: "bar" },
+    { label: "Bar-H", value: "bar-h" },
+    { label: "Line", value: "line" },
+    { label: "Pie", value: "pie" },
+    { label: "KPI", value: "kpi" },
+    { label: "Table", value: "table" },
+  ];
+
+  const AGG_BTNS: QuickAction[] = [
+    { label: "Sum", value: "sum" },
+    { label: "Avg", value: "avg" },
+    { label: "Count", value: "count" },
+    { label: "Max", value: "max" },
+    { label: "Min", value: "min" },
+    { label: "None", value: "none" },
+  ];
+
   async function startAnalyze(payload: AnalyzePayload) {
     await chartResetRpc(payload.sessionId);
     currentAnalyzePayload = payload;
     analyzeStep = "type";
+    selectedYCols = [];
     messages = [];
     const colList = payload.columns.map((c) => c.name).join(", ");
     pushAssistant(
-      `I'll help you build a chart from this result (${payload.columns.length} columns, ${payload.rows.length} rows).\n\n` +
-      `**What type of chart would you like?**\n` +
-      `- bar — vertical bars\n- bar-h — horizontal bars\n- line — trend line\n- pie — donut/pie\n- kpi — big number cards\n- table — formatted table\n\nAvailable columns: \`${colList}\``
+      `I'll help you build a chart from this result — **${payload.columns.length} columns**, **${payload.rows.length} rows**.\n\nAvailable columns: \`${colList}\`\n\n**What type of chart?**`,
+      undefined,
+      CHART_TYPE_BTNS,
     );
     await scrollToBottom();
   }
@@ -107,33 +145,36 @@
     if (analyzeStep === "type") {
       const matched = Object.entries(CHART_TYPES).find(([k]) => lower.includes(k));
       if (!matched) {
-        pushAssistant("I didn't catch that — please say one of: bar, bar-h, line, pie, kpi, table.");
+        pushAssistant("I didn't catch that — please choose a chart type.", undefined, CHART_TYPE_BTNS);
         return;
       }
       const r = await chartConfigureRpc({ sessionId: payload.sessionId, patch: { type: matched[1] as any }, columns: payload.columns, rows: payload.rows });
       if (!r.ok) {
-        pushAssistant("Something went wrong. Please try again.");
+        pushAssistant("Something went wrong. Please try again.", undefined, CHART_TYPE_BTNS);
         return;
       }
       if (matched[1] === "kpi" || matched[1] === "table") {
         analyzeStep = "yColumns";
-        const numericCols = payload.columns.filter((c) => /NUMBER|FLOAT|INT/i.test(c.dataType));
+        selectedYCols = [];
         pushAssistant(
-          `Got it — **${matched[1]}** chart.\n\n**Which column(s) for the values?** (comma-separated if multiple)\nNumeric columns: \`${numericCols.map((c) => c.name).join(", ") || payload.columns.map((c) => c.name).join(", ")}\``,
-          { config: r.data.config, previewData: r.data.previewData }
+          `Got it — **${matched[1]}** chart.\n\nSelect the value column(s) below:`,
+          { config: r.data.config, previewData: r.data.previewData },
         );
       } else {
         analyzeStep = "xColumn";
+        const colBtns = payload.columns.map((c) => ({ label: c.name, value: c.name }));
         pushAssistant(
-          `Got it — **${matched[1]}** chart.\n\n**Which column for the X axis (labels)?**\nColumns: \`${payload.columns.map((c) => c.name).join(", ")}\``,
-          { config: r.data.config, previewData: r.data.previewData }
+          `Got it — **${matched[1]}** chart.\n\n**Which column for the X axis (labels)?**`,
+          { config: r.data.config, previewData: r.data.previewData },
+          colBtns,
         );
       }
 
     } else if (analyzeStep === "xColumn") {
       const col = payload.columns.find((c) => lower.includes(c.name.toLowerCase()));
       if (!col) {
-        pushAssistant(`Column not found. Available: \`${payload.columns.map((c) => c.name).join(", ")}\``);
+        const colBtns = payload.columns.map((c) => ({ label: c.name, value: c.name }));
+        pushAssistant(`Column not found. Available: \`${payload.columns.map((c) => c.name).join(", ")}\``, undefined, colBtns);
         return;
       }
       const r = await chartConfigureRpc({ sessionId: payload.sessionId, patch: { xColumn: col.name }, columns: payload.columns, rows: payload.rows });
@@ -142,10 +183,10 @@
         return;
       }
       analyzeStep = "yColumns";
-      const numericCols = payload.columns.filter((c) => /NUMBER|FLOAT|INT/i.test(c.dataType));
+      selectedYCols = [];
       pushAssistant(
-        `X axis: **${col.name}**\n\n**Which column(s) for the Y axis (values)?** (comma-separated)\nNumeric columns: \`${numericCols.map((c) => c.name).join(", ") || payload.columns.map((c) => c.name).join(", ")}\``,
-        { config: r.data.config, previewData: r.data.previewData }
+        `X axis: **${col.name}**\n\nSelect value column(s) below:`,
+        { config: r.data.config, previewData: r.data.previewData },
       );
 
     } else if (analyzeStep === "yColumns") {
@@ -164,14 +205,15 @@
       }
       analyzeStep = "aggregation";
       pushAssistant(
-        `Y axis: **${matched.map((c) => c.name).join(", ")}**\n\n**Aggregation for duplicate X values?**\nOptions: sum, avg, count, max, min, none`,
-        { config: r.data.config, previewData: r.data.previewData }
+        `Y axis: **${matched.map((c) => c.name).join(", ")}**\n\n**Aggregation for duplicate X values?**`,
+        { config: r.data.config, previewData: r.data.previewData },
+        AGG_BTNS,
       );
 
     } else if (analyzeStep === "aggregation") {
       const agg = Object.entries(AGG_MAP).find(([k]) => lower.includes(k));
       if (!agg) {
-        pushAssistant("Please choose: sum, avg, count, max, min, or none.");
+        pushAssistant("Please choose an aggregation.", undefined, AGG_BTNS);
         return;
       }
       const r = await chartConfigureRpc({ sessionId: payload.sessionId, patch: { aggregation: agg[1] as any }, columns: payload.columns, rows: payload.rows });
@@ -182,7 +224,7 @@
       analyzeStep = "title";
       pushAssistant(
         `Aggregation: **${agg[1]}**\n\n**Give your chart a title:**`,
-        { config: r.data.config, previewData: r.data.previewData }
+        { config: r.data.config, previewData: r.data.previewData },
       );
 
     } else if (analyzeStep === "title") {
@@ -193,8 +235,12 @@
       }
       analyzeStep = "confirm";
       pushAssistant(
-        `Title: **${text}**\n\nHere's your chart — **add it to the Dashboard?** (yes / no)`,
-        { config: r.data.config, previewData: r.data.previewData }
+        `Title: **${text}**\n\nHere's your chart — add it to the Dashboard?`,
+        { config: r.data.config, previewData: r.data.previewData },
+        [
+          { label: "✓ Add to Dashboard", value: "yes" },
+          { label: "✗ Start Over", value: "no" },
+        ],
       );
 
     } else if (analyzeStep === "confirm") {
@@ -207,13 +253,33 @@
         dashboard.addChart({ config: r.data.config, previewData: r.data.previewData, sql: payload.sql, columns: payload.columns, rows: payload.rows });
         analyzeStep = null;
         currentAnalyzePayload = null;
-        pushAssistant("✅ Chart added to Dashboard! Switch to the **📊 Dashboard** tab to see it.\n\nWant to add another chart from this result? Just ask.");
+        pushAssistant("Chart added to Dashboard! Switch to the **Dashboard** tab to see it.\n\nWant to build another chart? Just click **Analyze** again.");
         onChartAdded?.();
       } else {
         analyzeStep = "type";
-        pushAssistant("No problem — let's start over. **What type of chart would you like?**");
+        pushAssistant("No problem — let's start over. **What type of chart?**", undefined, CHART_TYPE_BTNS);
       }
     }
+  }
+
+  function sendQuick(value: string) {
+    if (loading) return;
+    input = value;
+    void send();
+  }
+
+  function toggleYCol(name: string) {
+    selectedYCols = selectedYCols.includes(name)
+      ? selectedYCols.filter((n) => n !== name)
+      : [...selectedYCols, name];
+  }
+
+  async function submitYCols() {
+    if (selectedYCols.length === 0 || !currentAnalyzePayload) return;
+    const text = selectedYCols.join(", ");
+    selectedYCols = [];
+    input = text;
+    await send();
   }
 
   async function send() {
@@ -221,6 +287,7 @@
     if (!text || loading) return;
 
     input = "";
+    if (inputEl) { inputEl.style.height = "auto"; }
     error = null;
     messages = [...messages, { role: "user" as const, content: text }];
     await scrollToBottom();
@@ -228,6 +295,7 @@
     if (analyzeStep !== null && currentAnalyzePayload) {
       await handleAnalyzeAnswer(text, currentAnalyzePayload);
       await scrollToBottom();
+      inputEl?.focus();
       return;
     }
 
@@ -241,6 +309,7 @@
       error = (res.error as any)?.message ?? "Unknown error";
     }
     await scrollToBottom();
+    inputEl?.focus();
   }
 
   function onKeydown(e: KeyboardEvent) {
@@ -255,8 +324,6 @@
             .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
 
-  // Simple markdown: code blocks, inline code, bold, newlines
-  // Code blocks are extracted first so surrounding text can be safely HTML-escaped.
   function renderMarkdown(text: string): string {
     const blocks: string[] = [];
     text = text.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
@@ -277,6 +344,8 @@
       ? `${context.selectedKind ?? ""} ${context.selectedOwner}.${context.selectedName}`
       : context.currentSchema ? `Schema: ${context.currentSchema}` : null
   );
+
+  const isLastMsg = (msg: ChatMessage) => messages[messages.length - 1] === msg;
 </script>
 
 <aside class="sheep-panel">
@@ -290,6 +359,13 @@
       {/if}
     </div>
     <div class="head-right">
+      {#if messages.length > 0}
+        <button class="icon-btn" onclick={clearConversation} title="Clear conversation" aria-label="Clear">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+            <path d="M2 3.5h9M5 3.5V2.5h3v1M10 3.5l-.6 7H3.6l-.6-7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      {/if}
       <button
         class="icon-btn"
         class:active={showSettings}
@@ -365,6 +441,13 @@
                 <ChartWidget config={msg.chartPreview.config} previewData={msg.chartPreview.previewData} compact={true} />
               </div>
             {/if}
+            {#if msg.role === "assistant" && msg.quickActions && isLastMsg(msg)}
+              <div class="quick-actions">
+                {#each msg.quickActions as qa}
+                  <button class="qa-btn" onclick={() => sendQuick(qa.value)} disabled={loading}>{qa.label}</button>
+                {/each}
+              </div>
+            {/if}
           </div>
         </div>
       {/each}
@@ -385,21 +468,44 @@
   </div>
 
   <!-- Input -->
-  <div class="input-row">
-    <textarea
-      class="chat-input"
-      placeholder="Ask the sheep…"
-      bind:value={input}
-      onkeydown={onKeydown}
-      rows={1}
-      disabled={loading}
-    ></textarea>
-    <button class="send-btn" onclick={() => void send()} disabled={loading || !input.trim()} aria-label="Send">
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-        <path d="M2 7h10M8.5 3.5L12 7l-3.5 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-    </button>
-  </div>
+  {#if analyzeStep === "yColumns" && currentAnalyzePayload}
+    <div class="ycol-panel">
+      <div class="ycol-cols">
+        {#each currentAnalyzePayload.columns as col}
+          <button
+            class="ycol-chip"
+            class:selected={selectedYCols.includes(col.name)}
+            onclick={() => toggleYCol(col.name)}
+          >{col.name}</button>
+        {/each}
+      </div>
+      <button
+        class="ycol-submit"
+        disabled={selectedYCols.length === 0}
+        onclick={() => void submitYCols()}
+      >
+        {selectedYCols.length > 0 ? `Confirm (${selectedYCols.length} selected)` : "Select column(s)"}
+      </button>
+    </div>
+  {:else}
+    <div class="input-row">
+      <textarea
+        class="chat-input"
+        placeholder={analyzeStep === "title" ? "Enter chart title…" : "Ask the sheep…"}
+        bind:value={input}
+        bind:this={inputEl}
+        onkeydown={onKeydown}
+        oninput={onTextareaInput}
+        rows={1}
+        disabled={loading}
+      ></textarea>
+      <button class="send-btn" onclick={() => void send()} disabled={loading || !input.trim()} aria-label="Send">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M2 7h10M8.5 3.5L12 7l-3.5 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
+  {/if}
 </aside>
 
 <style>
@@ -641,6 +747,81 @@
   }
   .msg-chart-preview { margin-top: 8px; }
 
+  /* ── Quick action buttons ─────────────────────────────────── */
+  .quick-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 10px;
+  }
+  .qa-btn {
+    background: rgba(179,62,31,0.18);
+    border: 1px solid rgba(179,62,31,0.35);
+    color: #f5a08a;
+    font-family: "Inter", sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 4px 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.1s, border-color 0.1s;
+    white-space: nowrap;
+  }
+  .qa-btn:hover:not(:disabled) {
+    background: rgba(179,62,31,0.32);
+    border-color: rgba(179,62,31,0.6);
+    color: #fff;
+  }
+  .qa-btn:disabled { opacity: 0.4; cursor: default; }
+
+  /* ── yColumns multi-select panel ─────────────────────────── */
+  .ycol-panel {
+    padding: 0.6rem 0.75rem;
+    border-top: 1px solid rgba(255,255,255,0.07);
+    background: #100e0b;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    flex-shrink: 0;
+  }
+  .ycol-cols {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  .ycol-chip {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: rgba(255,255,255,0.6);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10.5px;
+    padding: 3px 9px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.1s;
+  }
+  .ycol-chip:hover { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.85); }
+  .ycol-chip.selected {
+    background: rgba(179,62,31,0.25);
+    border-color: rgba(179,62,31,0.5);
+    color: #f5a08a;
+  }
+  .ycol-submit {
+    background: #b33e1f;
+    border: none;
+    color: #fff;
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 0.35rem 0.75rem;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.1s;
+    align-self: flex-end;
+  }
+  .ycol-submit:hover:not(:disabled) { background: #c94b28; }
+  .ycol-submit:disabled { opacity: 0.45; cursor: default; }
+
   /* Typing dots */
   .dots {
     display: inline-flex;
@@ -728,6 +909,7 @@
     max-height: 120px;
     line-height: 1.45;
     transition: border-color 0.12s;
+    overflow-y: auto;
   }
   .chat-input:focus { border-color: rgba(179,62,31,0.5); }
   .chat-input::placeholder { color: rgba(255,255,255,0.25); }
@@ -748,5 +930,4 @@
   }
   .send-btn:hover:not(:disabled) { background: #c94b28; }
   .send-btn:disabled { opacity: 0.4; cursor: default; }
-  .msg-chart-preview { margin-top: 8px; }
 </style>

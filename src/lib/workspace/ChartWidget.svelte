@@ -16,6 +16,7 @@
   const PALETTE = ["#4a9eda", "#8bc4a8", "#c3a66e", "#f5a08a", "#7aa8c4", "#a78bfa"];
 
   let canvas = $state<HTMLCanvasElement | null>(null);
+  let canvasWrap = $state<HTMLDivElement | null>(null);
   let chart: any = null;
   let lastType = "";
   let lastLabelCount = -1;
@@ -119,6 +120,21 @@
     return () => { cancelAnimationFrame(raf); destroyChart(); };
   });
 
+  $effect(() => {
+    const wrap = canvasWrap;
+    if (!wrap || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      if (!chart || !canvas) return;
+      const w = wrap.offsetWidth;
+      const h = wrap.offsetHeight || (compact ? 130 : 200);
+      canvas.width = w;
+      canvas.height = h;
+      chart.resize(w, h);
+    });
+    ro.observe(wrap);
+    return () => ro.disconnect();
+  });
+
   function kpiValue(data: number[]): string {
     const v = data[0] ?? 0;
     if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
@@ -154,7 +170,7 @@
       </table>
     </div>
   {:else}
-    <div class="canvas-wrap">
+    <div class="canvas-wrap" bind:this={canvasWrap}>
       <canvas bind:this={canvas}></canvas>
     </div>
   {/if}

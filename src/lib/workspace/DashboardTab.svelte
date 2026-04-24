@@ -5,6 +5,8 @@
   const kpiCharts    = $derived(dashboard.charts.filter((c) => c.config.type === "kpi"));
   const nonKpiCharts = $derived(dashboard.charts.filter((c) => c.config.type !== "kpi"));
 
+  let clearConfirm = $state(false);
+
   async function exportPdf() {
     const root = document.createElement("div");
     root.id = "pdf-print-root";
@@ -84,8 +86,14 @@
     <span class="dash-title">Dashboard</span>
     <div class="dash-actions">
       {#if dashboard.charts.length > 0}
-        <button class="dash-btn" onclick={() => dashboard.clearDashboard()}>Clear All</button>
-        <button class="dash-btn primary" onclick={() => void exportPdf()}>Export PDF</button>
+        {#if clearConfirm}
+          <span class="clear-confirm-label">Remove all charts?</span>
+          <button class="dash-btn danger" onclick={() => { dashboard.clearDashboard(); clearConfirm = false; }}>Yes</button>
+          <button class="dash-btn" onclick={() => clearConfirm = false}>No</button>
+        {:else}
+          <button class="dash-btn" onclick={() => clearConfirm = true}>Clear All</button>
+          <button class="dash-btn primary" onclick={() => void exportPdf()}>Export PDF</button>
+        {/if}
       {/if}
     </div>
   </div>
@@ -143,7 +151,10 @@
   .dash-actions { display:flex; gap:6px; }
   .dash-btn { font-size:11px; padding:3px 8px; border-radius:4px; border:1px solid var(--border); background:var(--input-bg); color:var(--text-primary); cursor:pointer; }
   .dash-btn.primary { background:rgba(179,62,31,0.15); border-color:rgba(179,62,31,0.4); color:#f5a08a; }
+  .dash-btn.danger { background:rgba(179,62,31,0.25); border-color:rgba(179,62,31,0.6); color:#f5a08a; font-weight:600; }
   .dash-btn:hover { background:var(--row-hover); }
+  .dash-btn.danger:hover { background:rgba(179,62,31,0.4); }
+  .clear-confirm-label { font-size:11px; color:var(--text-muted); }
   .dash-empty { flex:1; display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-size:12px; }
   .dash-body { flex:1; overflow-y:auto; padding:10px; display:flex; flex-direction:column; gap:10px; }
   .kpi-strip { display:flex; gap:10px; }
