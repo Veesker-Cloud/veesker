@@ -1,6 +1,7 @@
 import oracledb from "oracledb";
 import { withActiveSession, buildConnection } from "./oracle";
 import { getSessionParams } from "./state";
+import { RpcCodedError, ORACLE_ERR } from "./errors";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -417,6 +418,38 @@ export class DebugSession {
     return this.synchronize();
   }
 
+  async getValuesForVars(varNames: string[]): Promise<VarValue[]> {
+    const result: VarValue[] = [];
+    for (const name of varNames) {
+      try {
+        const r = await this.debugConn.execute(
+          `DECLARE
+             val VARCHAR2(32767);
+             n   PLS_INTEGER;
+           BEGIN
+             n := DBMS_DEBUG.GET_VALUE(:varname, 0, val, NULL);
+             :val     := val;
+             :retcode := n;
+           END;`,
+          {
+            varname: name,
+            val:     { dir: oracledb.BIND_OUT, type: oracledb.STRING, maxSize: 32767 },
+            retcode: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+          }
+        );
+        const b = r.outBinds as any;
+        result.push({ name, value: (b.val as string) ?? null });
+      } catch {
+        result.push({ name, value: null });
+      }
+    }
+    return result;
+  }
+
+  async getCallStack(): Promise<StackFrame[]> {
+    return [];
+  }
+
   async stop(): Promise<void> {
     try {
       await this.targetConn.execute(`BEGIN DBMS_DEBUG.OFF; END;`);
@@ -427,4 +460,113 @@ export class DebugSession {
     try { await this.debugConn.close(); } catch {}
     _debugSession = null;
   }
+}
+
+// ── Exported RPC handler functions ─────────────────────────────────────────
+
+export type DebugStartParams = {
+  script: string;
+  binds: Record<string, unknown>;
+  breakpoints: Array<{ owner: string; objectName: string; objectType: string; line: number }>;
+};
+
+export async function debugStart(p: DebugStartParams): Promise<PauseInfo> {
+  if (_debugSession) await _debugSession.stop();
+
+  const session = await DebugSession.create();
+  await session.initialize();
+
+  for (const bp of p.breakpoints) {
+    await session.setBreakpoint(bp.owner, bp.objectName, bp.objectType, bp.line);
+  }
+
+  await (session as any).targetConn.execute(
+    `BEGIN DBMS_OUTPUT.ENABLE(1000000); END;`
+  );
+
+  session.startTarget(p.script, p.binds);
+  return session.synchronize();
+}
+
+export async function debugStepInto(): Promise<PauseInfo> {
+  if (!_debugSession) throw new RpcCodedError(ORACLE_ERR, "No active debug session");
+  return _debugSession.continueExecution(BREAK_ANY_CALL);
+}
+
+export async function debugStepOver(): Promise<PauseInfo> {
+  if (!_debugSession) throw new RpcCodedError(ORACLE_ERR, "No active debug session");
+  return _debugSession.continueExecution(BREAK_NEXT_LINE);
+}
+
+export async function debugStepOut(): Promise<PauseInfo> {
+  if (!_debugSession) throw new RpcCodedError(ORACLE_ERR, "No active debug session");
+  return _debugSession.continueExecution(BREAK_RETURN);
+}
+
+export async function debugContinue(): Promise<PauseInfo> {
+  if (!_debugSession) throw new RpcCodedError(ORACLE_ERR, "No active debug session");
+  return _debugSession.continueExecution(0);
+}
+
+export async function debugStop(): Promise<{ ok: boolean }> {
+  if (_debugSession) await _debugSession.stop();
+  return { ok: true };
+}
+
+export async function debugSetBreakpoint(p: {
+  owner: string;
+  objectName: string;
+  objectType: string;
+  line: number;
+}): Promise<{ breakpointId: number }> {
+  if (!_debugSession) throw new RpcCodedError(ORACLE_ERR, "No active debug session");
+  const id = await _debugSession.setBreakpoint(p.owner, p.objectName, p.objectType, p.line);
+  return { breakpointId: id };
+}
+
+export async function debugRemoveBreakpoint(p: {
+  breakpointId: number;
+}): Promise<{ ok: boolean }> {
+  if (!_debugSession) throw new RpcCodedError(ORACLE_ERR, "No active debug session");
+  await _debugSession.removeBreakpoint(p.breakpointId);
+  return { ok: true };
+}
+
+export async function debugGetValues(p: {
+  varNames: string[];
+}): Promise<{ variables: VarValue[] }> {
+  if (!_debugSession) throw new RpcCodedError(ORACLE_ERR, "No active debug session");
+  const variables = await _debugSession.getValuesForVars(p.varNames);
+  return { variables };
+}
+
+export async function debugGetCallStack(): Promise<{ frames: StackFrame[] }> {
+  if (!_debugSession) throw new RpcCodedError(ORACLE_ERR, "No active debug session");
+  const frames = await _debugSession.getCallStack();
+  return { frames };
+}
+
+export async function debugRun(p: {
+  script: string;
+  binds: Record<string, unknown>;
+}): Promise<{ output: string[]; elapsedMs: number }> {
+  const started = Date.now();
+  return withActiveSession(async (conn) => {
+    await conn.execute(`BEGIN DBMS_OUTPUT.ENABLE(1000000); END;`);
+    await conn.execute(p.script, p.binds);
+    const lines: string[] = [];
+    while (true) {
+      const r = await conn.execute(
+        `BEGIN DBMS_OUTPUT.GET_LINE(:line, :status); END;`,
+        {
+          line:   { dir: oracledb.BIND_OUT, type: oracledb.STRING, maxSize: 32767 },
+          status: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+        }
+      );
+      const b = r.outBinds as any;
+      if ((b.status as number) !== 0) break;
+      lines.push((b.line as string) ?? "");
+    }
+    return { output: lines, elapsedMs: Date.now() - started };
+  });
 }
