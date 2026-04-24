@@ -233,6 +233,9 @@ class DebugStore {
       script: this.script,
       binds: this._buildBindsForExecution(),
       breakpoints: bpRefs,
+      owner: this.owner,
+      objectName: this.objectName,
+      objectType: this.objectType,
     });
 
     if (!res.ok) {
