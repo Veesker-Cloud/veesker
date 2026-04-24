@@ -405,6 +405,7 @@ export const debugGetSourceRpc = (
 export const debugStartRpc = (payload: {
   script: string;
   binds: Record<string, unknown>;
+  cursorBinds?: string[];
   breakpoints: DebugBreakpointRef[];
   owner: string;
   objectName: string;
