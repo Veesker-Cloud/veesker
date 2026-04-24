@@ -58,7 +58,7 @@ describe("ChartWidget", () => {
     render(ChartWidget, { props: { config: kpiConfig, previewData: kpiData, rows: [] } });
     expect(document.querySelector("canvas")).toBeFalsy();
     expect(screen.getByText("SALARY")).toBeInTheDocument();
-    expect(screen.getByText("29000")).toBeInTheDocument();
+    expect(screen.getByText("29k")).toBeInTheDocument();
   });
 
   it("renders a table for table type — no canvas", () => {

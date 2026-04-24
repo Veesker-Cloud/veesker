@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onDestroy } from "svelte";
   import type { ChartConfig, PreviewData } from "$lib/workspace";
 
   type Props = {
@@ -23,6 +22,7 @@
   async function buildChart() {
     if (!canvas || !previewData) return;
     destroyChart();
+    const data = previewData;
     const { Chart, registerables } = await import("chart.js");
     Chart.register(...registerables);
 
@@ -33,12 +33,12 @@
     chart = new Chart(canvas, {
       type: config.type === "line" ? "line" : chartType,
       data: {
-        labels: previewData.labels,
-        datasets: previewData.datasets.map((ds, i) => ({
+        labels: data.labels,
+        datasets: data.datasets.map((ds, i) => ({
           label: ds.label,
           data: ds.data,
           backgroundColor: isDoughnut
-            ? previewData!.labels.map((_, j) => PALETTE[j % PALETTE.length])
+            ? data.labels.map((_, j) => PALETTE[j % PALETTE.length])
             : PALETTE[i % PALETTE.length] + "cc",
           borderColor: PALETTE[i % PALETTE.length],
           borderWidth: 1.5,
@@ -51,7 +51,7 @@
         maintainAspectRatio: true,
         indexAxis: isHorizontal ? "y" : "x",
         plugins: {
-          legend: { display: previewData.datasets.length > 1 || isDoughnut, labels: { color: "var(--text-primary)", font: { size: 10 } } },
+          legend: { display: data.datasets.length > 1 || isDoughnut, labels: { color: "var(--text-primary)", font: { size: 10 } } },
           title: { display: false },
         },
         scales: isDoughnut ? {} : {
@@ -69,11 +69,10 @@
     return destroyChart;
   });
 
-  onDestroy(destroyChart);
-
   function kpiValue(data: number[]): string {
     const v = data[0] ?? 0;
     if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
+    if (v >= 1_000)     return `${(v / 1_000).toFixed(0)}k`;
     return String(v);
   }
 </script>
