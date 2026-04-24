@@ -1,15 +1,32 @@
 <script lang="ts">
-  import { aiChat, aiKeySave, aiKeyGet, type AiMessage, type AiContext } from "$lib/workspace";
+  import { aiChat, aiKeySave, aiKeyGet, type AiMessage, type AiContext, chartConfigureRpc, chartResetRpc, type ChartConfig, type PreviewData, type ChartConfigureResult } from "$lib/workspace";
+  import { addChart } from "$lib/stores/dashboard.svelte";
+  import ChartWidget from "./ChartWidget.svelte";
   import { tick, onMount } from "svelte";
+
+  type AnalyzePayload = {
+    sessionId: string;
+    columns: { name: string; dataType: string }[];
+    rows: unknown[][];
+    sql: string;
+  };
+
+  type ChatMessage = {
+    role: "user" | "assistant";
+    content: string;
+    chartPreview?: { config: ChartConfig; previewData: PreviewData | null };
+  };
 
   type Props = {
     context: AiContext;
     onClose: () => void;
     pendingMessage?: string;
+    analyzePayload?: AnalyzePayload | null;
+    onChartAdded?: () => void;
   };
-  let { context, onClose, pendingMessage = "" }: Props = $props();
+  let { context, onClose, pendingMessage = "", analyzePayload = null, onChartAdded }: Props = $props();
 
-  let messages = $state<AiMessage[]>([]);
+  let messages = $state<ChatMessage[]>([]);
   let input = $state("");
   let loading = $state(false);
   let error = $state<string | null>(null);
@@ -17,8 +34,17 @@
   let apiKey = $state("");
   let messagesEl = $state<HTMLDivElement | null>(null);
 
+  let analyzeStep = $state<"type" | "xColumn" | "yColumns" | "aggregation" | "title" | "confirm" | null>(null);
+  let currentAnalyzePayload = $state<AnalyzePayload | null>(null);
+
   $effect(() => {
     if (pendingMessage) input = pendingMessage;
+  });
+
+  $effect(() => {
+    if (analyzePayload) {
+      void startAnalyze(analyzePayload);
+    }
   });
 
   onMount(async () => {
@@ -35,22 +61,153 @@
     if (messagesEl) messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
+  function pushAssistant(content: string, chartPreview?: ChatMessage["chartPreview"]) {
+    messages = [...messages, { role: "assistant" as const, content, chartPreview }];
+  }
+
+  const CHART_TYPES: Record<string, string> = {
+    bar: "bar", "bar-h": "bar-h", barh: "bar-h", horizontal: "bar-h",
+    line: "line", trend: "line",
+    pie: "pie", donut: "pie",
+    kpi: "kpi", card: "kpi", number: "kpi",
+    table: "table", raw: "table",
+  };
+
+  const AGG_MAP: Record<string, string> = {
+    sum: "sum", total: "sum",
+    avg: "avg", average: "avg", mean: "avg",
+    count: "count", cnt: "count",
+    max: "max", maximum: "max",
+    min: "min", minimum: "min",
+    none: "none",
+  };
+
+  async function startAnalyze(payload: AnalyzePayload) {
+    await chartResetRpc(payload.sessionId);
+    currentAnalyzePayload = payload;
+    analyzeStep = "type";
+    messages = [];
+    const colList = payload.columns.map((c) => c.name).join(", ");
+    pushAssistant(
+      `I'll help you build a chart from this result (${payload.columns.length} columns, ${payload.rows.length} rows).\n\n` +
+      `**What type of chart would you like?**\n` +
+      `- bar — vertical bars\n- bar-h — horizontal bars\n- line — trend line\n- pie — donut/pie\n- kpi — big number cards\n- table — formatted table\n\nAvailable columns: \`${colList}\``
+    );
+    await scrollToBottom();
+  }
+
+  async function handleAnalyzeAnswer(text: string, payload: AnalyzePayload) {
+    const lower = text.toLowerCase().trim();
+
+    if (analyzeStep === "type") {
+      const matched = Object.entries(CHART_TYPES).find(([k]) => lower.includes(k));
+      if (!matched) {
+        pushAssistant("I didn't catch that — please say one of: bar, bar-h, line, pie, kpi, table.");
+        return;
+      }
+      const r = await chartConfigureRpc({ sessionId: payload.sessionId, patch: { type: matched[1] as any }, columns: payload.columns, rows: payload.rows });
+      if (matched[1] === "kpi" || matched[1] === "table") {
+        analyzeStep = "yColumns";
+        const numericCols = payload.columns.filter((c) => /NUMBER|FLOAT|INT/i.test(c.dataType));
+        pushAssistant(
+          `Got it — **${matched[1]}** chart.\n\n**Which column(s) for the values?** (comma-separated if multiple)\nNumeric columns: \`${numericCols.map((c) => c.name).join(", ") || payload.columns.map((c) => c.name).join(", ")}\``,
+          { config: r.data.config, previewData: r.data.previewData }
+        );
+      } else {
+        analyzeStep = "xColumn";
+        pushAssistant(
+          `Got it — **${matched[1]}** chart.\n\n**Which column for the X axis (labels)?**\nColumns: \`${payload.columns.map((c) => c.name).join(", ")}\``,
+          { config: r.data.config, previewData: r.data.previewData }
+        );
+      }
+
+    } else if (analyzeStep === "xColumn") {
+      const col = payload.columns.find((c) => lower.includes(c.name.toLowerCase()));
+      if (!col) {
+        pushAssistant(`Column not found. Available: \`${payload.columns.map((c) => c.name).join(", ")}\``);
+        return;
+      }
+      const r = await chartConfigureRpc({ sessionId: payload.sessionId, patch: { xColumn: col.name }, columns: payload.columns, rows: payload.rows });
+      analyzeStep = "yColumns";
+      const numericCols = payload.columns.filter((c) => /NUMBER|FLOAT|INT/i.test(c.dataType));
+      pushAssistant(
+        `X axis: **${col.name}**\n\n**Which column(s) for the Y axis (values)?** (comma-separated)\nNumeric columns: \`${numericCols.map((c) => c.name).join(", ") || payload.columns.map((c) => c.name).join(", ")}\``,
+        { config: r.data.config, previewData: r.data.previewData }
+      );
+
+    } else if (analyzeStep === "yColumns") {
+      const parts = text.split(",").map((s) => s.trim());
+      const matched = parts
+        .map((p) => payload.columns.find((c) => c.name.toLowerCase() === p.toLowerCase() || p.toLowerCase().includes(c.name.toLowerCase())))
+        .filter((c): c is NonNullable<typeof c> => c !== undefined);
+      if (matched.length === 0) {
+        pushAssistant(`No columns matched. Available: \`${payload.columns.map((c) => c.name).join(", ")}\``);
+        return;
+      }
+      const r = await chartConfigureRpc({ sessionId: payload.sessionId, patch: { yColumns: matched.map((c) => c.name) }, columns: payload.columns, rows: payload.rows });
+      analyzeStep = "aggregation";
+      pushAssistant(
+        `Y axis: **${matched.map((c) => c.name).join(", ")}**\n\n**Aggregation for duplicate X values?**\nOptions: sum, avg, count, max, min, none`,
+        { config: r.data.config, previewData: r.data.previewData }
+      );
+
+    } else if (analyzeStep === "aggregation") {
+      const agg = Object.entries(AGG_MAP).find(([k]) => lower.includes(k));
+      if (!agg) {
+        pushAssistant("Please choose: sum, avg, count, max, min, or none.");
+        return;
+      }
+      const r = await chartConfigureRpc({ sessionId: payload.sessionId, patch: { aggregation: agg[1] as any }, columns: payload.columns, rows: payload.rows });
+      analyzeStep = "title";
+      pushAssistant(
+        `Aggregation: **${agg[1]}**\n\n**Give your chart a title:**`,
+        { config: r.data.config, previewData: r.data.previewData }
+      );
+
+    } else if (analyzeStep === "title") {
+      const r = await chartConfigureRpc({ sessionId: payload.sessionId, patch: { title: text }, columns: payload.columns, rows: payload.rows });
+      analyzeStep = "confirm";
+      pushAssistant(
+        `Title: **${text}**\n\nHere's your chart — **add it to the Dashboard?** (yes / no)`,
+        { config: r.data.config, previewData: r.data.previewData }
+      );
+
+    } else if (analyzeStep === "confirm") {
+      if (lower.includes("yes") || lower === "y" || lower.includes("add")) {
+        const r = await chartConfigureRpc({ sessionId: payload.sessionId, patch: {}, columns: payload.columns, rows: payload.rows });
+        addChart({ config: r.data.config, previewData: r.data.previewData, sql: payload.sql, columns: payload.columns, rows: payload.rows });
+        analyzeStep = null;
+        currentAnalyzePayload = null;
+        pushAssistant("✅ Chart added to Dashboard! Switch to the **📊 Dashboard** tab to see it.\n\nWant to add another chart from this result? Just ask.");
+        onChartAdded?.();
+      } else {
+        analyzeStep = "type";
+        pushAssistant("No problem — let's start over. **What type of chart would you like?**");
+      }
+    }
+  }
+
   async function send() {
     const text = input.trim();
     if (!text || loading) return;
 
     input = "";
     error = null;
-    messages = [...messages, { role: "user", content: text }];
+    messages = [...messages, { role: "user" as const, content: text }];
     await scrollToBottom();
 
-    loading = true;
+    if (analyzeStep !== null && currentAnalyzePayload) {
+      await handleAnalyzeAnswer(text, currentAnalyzePayload);
+      await scrollToBottom();
+      return;
+    }
 
-    const res = await aiChat(apiKey, messages, context);
+    loading = true;
+    const res = await aiChat(apiKey, messages.map(({ role, content }) => ({ role, content })), context);
     loading = false;
 
     if (res.ok) {
-      messages = [...messages, { role: "assistant", content: res.data.content }];
+      messages = [...messages, { role: "assistant" as const, content: res.data.content }];
     } else {
       error = (res.error as any)?.message ?? "Unknown error";
     }
@@ -171,6 +328,11 @@
           <div class="bubble" class:user-bubble={msg.role === "user"} class:ai-bubble={msg.role === "assistant"}>
             <!-- eslint-disable-next-line svelte/no-at-html-tags -->
             {@html renderMarkdown(msg.content)}
+            {#if msg.role === "assistant" && msg.chartPreview}
+              <div class="msg-chart-preview">
+                <ChartWidget config={msg.chartPreview.config} previewData={msg.chartPreview.previewData} compact={true} />
+              </div>
+            {/if}
           </div>
         </div>
       {/each}
@@ -538,4 +700,5 @@
   }
   .send-btn:hover:not(:disabled) { background: #c94b28; }
   .send-btn:disabled { opacity: 0.4; cursor: default; }
+  .msg-chart-preview { margin-top: 8px; }
 </style>

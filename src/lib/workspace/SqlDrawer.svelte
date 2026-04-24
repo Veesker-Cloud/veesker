@@ -7,8 +7,8 @@
   import CompileErrors from "./CompileErrors.svelte";
   import ExplainPlan from "./ExplainPlan.svelte";
 
-  type Props = { onCancel: () => void; onExplainWithAI: (msg: string) => void; };
-  let { onCancel, onExplainWithAI }: Props = $props();
+  type Props = { onCancel: () => void; onExplainWithAI: (msg: string) => void; onAnalyze?: () => void };
+  let { onCancel, onExplainWithAI, onAnalyze }: Props = $props();
 
   // ── Refs ────────────────────────────────────────────────────────────────────
   let drawerEl: HTMLDivElement | undefined = $state();
@@ -354,7 +354,7 @@
                   {onExplainWithAI}
                 />
               {:else}
-                <ResultGrid {tab} {onCancel} />
+                <ResultGrid {tab} {onCancel} {onAnalyze} />
               {/if}
             </div>
           </div>

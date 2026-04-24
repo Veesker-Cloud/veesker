@@ -5,8 +5,8 @@
   import { toCsv, toJson, toInsertSql } from "$lib/csv-export";
   import { saveBlob } from "$lib/sql-files";
 
-  type Props = { tab: SqlTab | null; onCancel: () => void };
-  let { tab, onCancel }: Props = $props();
+  type Props = { tab: SqlTab | null; onCancel: () => void; onAnalyze?: () => void };
+  let { tab, onCancel, onAnalyze }: Props = $props();
 
   function isNumericType(t: string): boolean {
     const u = t.toUpperCase();
@@ -275,6 +275,9 @@
             </div>
           {/if}
         </div>
+        {#if onAnalyze && r.columns.length > 0}
+          <button class="analyze-btn" onclick={onAnalyze}>📊 Analyze</button>
+        {/if}
       </div>
       <span>{r.rowCount} rows · {r.elapsedMs}ms</span>
     </div>
@@ -474,6 +477,16 @@
     color: var(--text-primary);
   }
   .export-menu button:hover { background: var(--row-hover); }
+  .analyze-btn {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(179,62,31,0.3);
+    background: rgba(179,62,31,0.1);
+    color: #f5a08a;
+    cursor: pointer;
+  }
+  .analyze-btn:hover { background: rgba(179,62,31,0.2); }
   .spinner {
     display: inline-block;
     width: 12px; height: 12px;

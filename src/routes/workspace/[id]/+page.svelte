@@ -8,7 +8,7 @@
   import SqlDrawer from "$lib/workspace/SqlDrawer.svelte";
   import CommandPalette from "$lib/workspace/CommandPalette.svelte";
   import SheepChat from "$lib/workspace/SheepChat.svelte";
-  import { sqlEditor, addProcResults } from "$lib/stores/sql-editor.svelte";
+  import { sqlEditor, addProcResults, activeResult } from "$lib/stores/sql-editor.svelte";
   import DashboardTab from "$lib/workspace/DashboardTab.svelte";
   import ProcExecModal from "$lib/workspace/ProcExecModal.svelte";
   import {
@@ -47,6 +47,12 @@
   let showPalette = $state(false);
   let showChat = $state(false);
   let chatPendingMessage = $state("");
+  let analyzePayload = $state<{
+    sessionId: string;
+    columns: { name: string; dataType: string }[];
+    rows: unknown[][];
+    sql: string;
+  } | null>(null);
   let refreshing = $state(false);
   let procExecTarget = $state<{ owner: string; name: string; objectType: "PROCEDURE" | "FUNCTION" } | null>(null);
   let detailError = $state<string | null>(null);
@@ -332,6 +338,21 @@
     }
   }
 
+  function handleAnalyze() {
+    const tab = sqlEditor.active;
+    if (!tab) return;
+    const ar = activeResult(tab);
+    if (!ar?.result) return;
+    analyzePayload = {
+      sessionId: `${tab.id}-${Date.now()}`,
+      columns: ar.result.columns,
+      rows: ar.result.rows,
+      sql: tab.sql,
+    };
+    showChat = true;
+    Promise.resolve().then(() => { analyzePayload = null; });
+  }
+
   function onKeydown(e: KeyboardEvent) {
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "i") {
       const tag = (e.target as HTMLElement).tagName;
@@ -525,6 +546,8 @@
             }}
             onClose={() => showChat = false}
             pendingMessage={chatPendingMessage}
+            {analyzePayload}
+            onChartAdded={() => { activeWsTab = "dashboard"; }}
           />
         </div>
       {/if}
@@ -536,6 +559,7 @@
         showChat = true;
         Promise.resolve().then(() => { chatPendingMessage = ""; });
       }}
+      onAnalyze={handleAnalyze}
     />
   </div>
   {#if showPalette}
