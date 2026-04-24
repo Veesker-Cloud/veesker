@@ -25,7 +25,7 @@
       const res = await objectsSearch(q);
       loading = false;
       if (res.ok) { results = res.data; highlighted = 0; }
-    }, 180);
+    }, 300);
   });
 
   function select(r: SearchResult) {
