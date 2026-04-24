@@ -520,6 +520,9 @@ export const sqlEditor = {
       for (let i = 0; i < tabResults.length; i++) {
         pushHistory(res.data.results[i].sql, tabResults[i]);
       }
+      if (tabResults.some((r) => r.status === "ok" && r.result !== null && r.result.columns.length === 0 && r.result.rowCount > 0)) {
+        _pendingTx = true;
+      }
 
       // Post-execution compile check for CREATE statements
       const tabId = tab.id;
@@ -576,6 +579,9 @@ export const sqlEditor = {
       tab.results = [tabResult];
       tab.activeResultId = resultId;
       pushHistory(sql, tabResult);
+      if (tabResult.status === "ok" && tabResult.result !== null && tabResult.result.columns.length === 0 && tabResult.result.rowCount > 0) {
+        _pendingTx = true;
+      }
     } finally {
       tab.running = false;
       tab.runningRequestId = null;
@@ -657,6 +663,9 @@ export const sqlEditor = {
       tab.results = [tabResult];
       tab.activeResultId = resultId;
       pushHistory(sqlToRun, tabResult);
+      if (tabResult.status === "ok" && tabResult.result !== null && tabResult.result.columns.length === 0 && tabResult.result.rowCount > 0) {
+        _pendingTx = true;
+      }
       if (tabResult.status === "ok") {
         const compilable = extractCompilable(sqlToRun);
         if (compilable) {
