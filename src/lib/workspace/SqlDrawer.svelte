@@ -8,8 +8,13 @@
   import CompileErrors from "./CompileErrors.svelte";
   import ExplainPlan from "./ExplainPlan.svelte";
 
-  type Props = { onCancel: () => void; onExplainWithAI: (msg: string) => void; onAnalyze?: () => void };
-  let { onCancel, onExplainWithAI, onAnalyze }: Props = $props();
+  type Props = {
+    onCancel: () => void;
+    onExplainWithAI: (msg: string) => void;
+    onAnalyze?: () => void;
+    completionSchema?: Record<string, string[]>;
+  };
+  let { onCancel, onExplainWithAI, onAnalyze, completionSchema }: Props = $props();
 
   // ── Refs ────────────────────────────────────────────────────────────────────
   let drawerEl: HTMLDivElement | undefined = $state();
@@ -312,6 +317,7 @@
                 onSave={() => void sqlEditor.saveActive()}
                 onSaveAs={() => void sqlEditor.saveAsActive()}
                 onExplain={triggerExplain}
+                {completionSchema}
               />
             {/if}
           </div>
