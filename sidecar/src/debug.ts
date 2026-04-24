@@ -377,7 +377,7 @@ export class DebugSession {
          r DBMS_DEBUG.RUNTIME_INFO;
          n PLS_INTEGER;
        BEGIN
-         n := DBMS_DEBUG.SYNCHRONIZE(r, ${INFO_RUNTIME_INFO}, 30);
+         n := DBMS_DEBUG.SYNCHRONIZE(r, ${INFO_RUNTIME_INFO});
          :retcode      := n;
          :line         := r.Line#;
          :reason       := r.Reason;
