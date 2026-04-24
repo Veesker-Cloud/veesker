@@ -245,12 +245,11 @@ export const REASON_STEP       = 4;
 export const REASON_EXCEPTION  = 8;
 export const REASON_FINISHED   = 16;
 
-// punit.type constants for DBMS_DEBUG.SET_BREAKPOINT — these differ from
-// the LibunitType integers returned by SYNCHRONIZE (separate Oracle enum families)
-const LIBUNIT_PROCEDURE    = 12;
-const LIBUNIT_FUNCTION     = 8;
-const LIBUNIT_PACKAGE_BODY = 9;
-const LIBUNIT_TRIGGER      = 11;
+// PROGRAM_INFO.LibunitType — same enum used by both SET_BREAKPOINT and SYNCHRONIZE/CONTINUE
+const LIBUNIT_PROCEDURE    = 1;
+const LIBUNIT_FUNCTION     = 2;
+const LIBUNIT_PACKAGE_BODY = 4;
+const LIBUNIT_TRIGGER      = 7;
 const NAMESPACE_PLSQL      = 1;
 
 // Maps RUNTIME_INFO.Program.LibunitType (from SYNCHRONIZE) to an object-type string.
