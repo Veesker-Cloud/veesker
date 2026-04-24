@@ -307,6 +307,8 @@ export class DebugSession {
       { sid: { dir: oracledb.BIND_OUT, type: oracledb.STRING, maxSize: 100 } }
     );
     const sid = (res.outBinds as any).sid as string;
+    // Oracle 23ai requires DEBUG_ON to activate step-through mode on the target session
+    await this.targetConn.execute(`BEGIN DBMS_DEBUG.DEBUG_ON; END;`);
     await this.debugConn.execute(
       `BEGIN DBMS_DEBUG.ATTACH_SESSION(:sid, 0); END;`,
       { sid }
@@ -364,8 +366,16 @@ export class DebugSession {
   }
 
   startTarget(script: string, binds: Record<string, unknown>): void {
+    const execBinds: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(binds)) {
+      if (key.startsWith("out_")) {
+        execBinds[key] = { dir: oracledb.BIND_OUT, type: oracledb.STRING, maxSize: 32767 };
+      } else {
+        execBinds[key] = val ?? null;
+      }
+    }
     this._targetExecution = this.targetConn
-      .execute(script, binds)
+      .execute(script, execBinds)
       .catch(() => {
         // target errors surface via SYNCHRONIZE reason codes
       });
