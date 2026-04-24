@@ -235,7 +235,18 @@
     />
 
     {#if debugStore.errorMessage}
-      <div class="tw-error">{debugStore.errorMessage}</div>
+      <div class="tw-error">
+        {debugStore.errorMessage}
+        {#if debugStore.errorMessage.includes('ORA-01031')}
+          <div class="tw-priv-hint">
+            <span>Run as DBA to grant debug privileges:</span>
+            <code>GRANT DEBUG CONNECT SESSION TO {debugStore.owner}; GRANT DEBUG ANY PROCEDURE TO {debugStore.owner};</code>
+            <button class="tw-copy-btn" onclick={() => navigator.clipboard.writeText(
+              `GRANT DEBUG CONNECT SESSION TO ${debugStore.owner};\nGRANT DEBUG ANY PROCEDURE TO ${debugStore.owner};`
+            )}>📋 Copy SQL</button>
+          </div>
+        {/if}
+      </div>
     {/if}
 
     <div class="tw-body">
@@ -315,6 +326,20 @@
     background: var(--bg-surface-alt); border-bottom: 1px solid rgba(179,62,31,0.3);
     color: var(--text-danger, #e74c3c); font-size: 12px; padding: 6px 12px;
   }
+  .tw-priv-hint {
+    display: flex; align-items: center; gap: 8px; margin-top: 4px; flex-wrap: wrap;
+    color: var(--text-muted); font-size: 11px;
+  }
+  .tw-priv-hint code {
+    background: var(--bg-page); padding: 2px 6px; border-radius: 3px;
+    font-family: monospace; color: var(--text-primary); flex: 1;
+  }
+  .tw-copy-btn {
+    background: var(--bg-surface); border: 1px solid var(--border);
+    color: var(--text-primary); border-radius: 4px; padding: 2px 8px;
+    cursor: pointer; font-size: 11px; white-space: nowrap; flex-shrink: 0;
+  }
+  .tw-copy-btn:hover { background: var(--bg-surface-alt); }
   .tw-body { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
   .tw-script-pane { display: flex; flex-direction: column; flex: 1; overflow: hidden; min-height: 0; }
   .tw-pane-hidden { display: none; }
