@@ -446,6 +446,10 @@ export class DebugSession {
     return result;
   }
 
+  async enableOutput(): Promise<void> {
+    await this.targetConn.execute(`BEGIN DBMS_OUTPUT.ENABLE(1000000); END;`);
+  }
+
   async getCallStack(): Promise<StackFrame[]> {
     return [];
   }
@@ -480,9 +484,7 @@ export async function debugStart(p: DebugStartParams): Promise<PauseInfo> {
     await session.setBreakpoint(bp.owner, bp.objectName, bp.objectType, bp.line);
   }
 
-  await (session as any).targetConn.execute(
-    `BEGIN DBMS_OUTPUT.ENABLE(1000000); END;`
-  );
+  await session.enableOutput();
 
   session.startTarget(p.script, p.binds);
   return session.synchronize();
