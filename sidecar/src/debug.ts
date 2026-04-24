@@ -310,16 +310,23 @@ export class DebugSession {
   }
 
   async initialize(): Promise<string> {
-    process.stderr.write("[debug] INITIALIZE called on target conn\n");
+    // CRITICAL: DBMS_OUTPUT.ENABLE, INITIALIZE, and DEBUG_ON must all execute in the
+    // SAME PL/SQL block. Once DEBUG_ON activates, Oracle intercepts the target session
+    // for the debug wire protocol — any subsequent execute() on targetConn blocks
+    // indefinitely until the debug session calls SYNCHRONIZE. Combining them here means
+    // after this block returns, targetConn is idle until startTarget() fires it
+    // concurrently with SYNCHRONIZE.
+    process.stderr.write("[debug] initializing target session (ENABLE+INITIALIZE+DEBUG_ON in one block)\n");
     const res = await this.targetConn.execute(
-      `BEGIN :sid := DBMS_DEBUG.INITIALIZE(diagnostics => 0); END;`,
+      `BEGIN
+         DBMS_OUTPUT.ENABLE(1000000);
+         :sid := DBMS_DEBUG.INITIALIZE(diagnostics => 0);
+         DBMS_DEBUG.DEBUG_ON;
+       END;`,
       { sid: { dir: oracledb.BIND_OUT, type: oracledb.STRING, maxSize: 100 } }
     );
     const sid = (res.outBinds as any).sid as string;
-    process.stderr.write(`[debug] INITIALIZE OK sid=${sid}\n`);
-    // Oracle 23ai requires DEBUG_ON to activate step-through mode on the target session
-    await this.targetConn.execute(`BEGIN DBMS_DEBUG.DEBUG_ON; END;`);
-    process.stderr.write("[debug] DEBUG_ON OK\n");
+    process.stderr.write(`[debug] INITIALIZE+DEBUG_ON OK, sid=${sid}\n`);
     await this.debugConn.execute(
       `BEGIN DBMS_DEBUG.ATTACH_SESSION(:sid, 0); END;`,
       { sid }
@@ -560,10 +567,6 @@ export class DebugSession {
     return result;
   }
 
-  async enableOutput(): Promise<void> {
-    await this.targetConn.execute(`BEGIN DBMS_OUTPUT.ENABLE(1000000); END;`);
-  }
-
   async getCallStack(): Promise<StackFrame[]> {
     return [];
   }
@@ -652,15 +655,6 @@ export async function debugStart(p: DebugStartParams): Promise<PauseInfo> {
       );
     }
     // else: proceed with just the user-defined breakpoints
-  }
-
-  try {
-    await session.enableOutput();
-    process.stderr.write("[debug] DBMS_OUTPUT enabled\n");
-  } catch (e) {
-    process.stderr.write(`[debug] enableOutput FAILED: ${String(e)}\n`);
-    session.stop();
-    throw e;
   }
 
   // Fire target asynchronously, then SYNCHRONIZE waits for the entry breakpoint.
