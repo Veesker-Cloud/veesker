@@ -1,12 +1,15 @@
 <script lang="ts">
   import type { BindVar } from "$lib/stores/debug.svelte";
+  import type { VarValue } from "$lib/workspace";
 
   let {
     vars = $bindable(),
     readonly = false,
+    liveVars = [],
   }: {
     vars: BindVar[];
     readonly?: boolean;
+    liveVars?: VarValue[];
   } = $props();
 
   function addRow() {
@@ -18,6 +21,24 @@
 
   function removeRow(i: number) {
     vars = vars.filter((_, idx) => idx !== i);
+  }
+
+  function liveValue(name: string): string | null {
+    return liveVars.find((v) => v.name.toUpperCase() === name.toUpperCase())?.value ?? null;
+  }
+
+  function inputType(oracleType: string): "text" | "number" | "datetime-local" {
+    const t = oracleType.toUpperCase();
+    if (
+      [
+        "NUMBER", "INTEGER", "INT", "SMALLINT", "DECIMAL", "NUMERIC",
+        "FLOAT", "REAL", "DOUBLE", "BINARY_INTEGER", "PLS_INTEGER",
+        "BINARY_FLOAT", "BINARY_DOUBLE",
+      ].includes(t)
+    )
+      return "number";
+    if (t === "DATE") return "datetime-local";
+    return "text";
   }
 </script>
 
@@ -76,17 +97,10 @@
             {/if}
           </td>
           <td class="vg-td vg-td-value">
-            {#if readonly}
+            {#if readonly && liveValue(v.name) !== null}
+              <span class="tw-live-val">{liveValue(v.name)}</span>
+            {:else if readonly}
               <span class="vg-value">{v.value ?? ''}</span>
-            {:else if v.oracleType.toUpperCase().startsWith('DATE')}
-              <input
-                class="vg-input"
-                type="datetime-local"
-                value={v.value}
-                oninput={(e) => {
-                  vars[i].value = (e.target as HTMLInputElement).value;
-                }}
-              />
             {:else if v.oracleType.toUpperCase() === 'BOOLEAN'}
               <select
                 class="vg-input vg-select"
@@ -102,7 +116,7 @@
             {:else}
               <input
                 class="vg-input"
-                type="text"
+                type={inputType(v.oracleType)}
                 value={v.value}
                 oninput={(e) => {
                   vars[i].value = (e.target as HTMLInputElement).value;
@@ -169,6 +183,7 @@
   .vg-type-input { min-width: 80px; }
   .vg-select { background: var(--bg-surface); color: var(--text-primary); border: 1px solid var(--border); border-radius: 2px; font-size: 12px; }
   .vg-name, .vg-type, .vg-value { color: var(--text-primary); }
+  .tw-live-val { color: #27ae60; font-family: monospace; }
   .vg-del { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 14px; padding: 0 2px; }
   .vg-del:hover { color: #e74c3c; }
   .vg-add-row td { padding: 4px 8px; }
