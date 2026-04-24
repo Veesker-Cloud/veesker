@@ -148,10 +148,12 @@
   });
 
   $effect(() => {
-    if (!view || !completionSchema) return;
+    if (!view) return;
     view.dispatch({
       effects: sqlLangCompartment.reconfigure(
-        sql({ dialect: PLSQL, schema: completionSchema })
+        completionSchema
+          ? sql({ dialect: PLSQL, schema: completionSchema })
+          : sql({ dialect: PLSQL })
       ),
     });
   });
