@@ -116,16 +116,9 @@ class DebugStore {
     this.params = res.data.params;
     this.memberList = res.data.memberList ?? [];
     this.bindVars = this._buildBindVars(res.data.script, res.data.params);
-
-    const srcType =
-      objectType.toUpperCase() === "PACKAGE" ? "PACKAGE BODY" : objectType;
-    const srcRes = await debugGetSourceRpc(owner, objectName, srcType);
-    if (srcRes.ok) {
-      this.editorSource = srcRes.data.lines.join("");
-      this.editorObject = { owner, objectName, objectType: srcType };
-    } else {
-      this.editorSource = this.script;
-    }
+    // Show the generated anonymous block initially; procedure source appears on first debug pause
+    this.editorSource = res.data.script;
+    this.editorObject = null;
   }
 
   private _buildBindVars(script: string, params: ParamDef[]): BindVar[] {
@@ -212,7 +205,7 @@ class DebugStore {
     if (res.ok) {
       this.dbmsOutput = res.data.output;
       this.liveVars = Object.entries(res.data.outBinds).map(([name, value]) => ({
-        name: name.replace(/^out_/i, ""),
+        name,  // keep "out_p_found" to match VariableGrid row names
         value: value ?? null,
       }));
       this.status = "completed";
@@ -277,9 +270,10 @@ class DebugStore {
     const stack = await debugGetCallStackRpc();
     if (stack.ok) this.callStack = stack.data.frames;
 
-    if (info.frame && this.editorObject) {
+    if (info.frame) {
       const f = info.frame;
       if (
+        !this.editorObject ||
         f.objectName !== this.editorObject.objectName ||
         f.owner !== this.editorObject.owner
       ) {
