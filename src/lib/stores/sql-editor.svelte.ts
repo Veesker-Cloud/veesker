@@ -4,6 +4,7 @@ import { splitSql } from "$lib/sql-splitter";
 import { historySave, type HistoryEntry } from "$lib/query-history";
 import { saveAs, saveExisting, openFile } from "$lib/sql-files";
 import { compileErrorsGet, connectionCommit, connectionRollback, explainPlanGet, type ProcExecuteResult } from "$lib/workspace";
+import { detectDestructive, type DestructiveOp } from "$lib/sql-safety";
 
 export type CompileError = {
   line: number;
@@ -73,6 +74,12 @@ let _queryCounter = $state(0);
 let _connectionId: string | null = null;
 let _connectionUsername: string | null = null;
 let _connectionHost: string | null = null;
+type PendingConfirm = {
+  sql: string;
+  ops: DestructiveOp[];
+  resolve: (confirmed: boolean) => void;
+};
+let _pendingConfirm = $state<PendingConfirm | null>(null);
 let _pendingTx = $state(false);
 let _editorExpanded = $state(false);
 
@@ -201,6 +208,14 @@ function pushHistory(sql: string, r: TabResult): void {
   }).catch((e) => console.warn("history save failed:", e));
 }
 
+function askConfirm(sql: string): true | Promise<boolean> {
+  const ops = detectDestructive(sql);
+  if (ops.length === 0) return true;
+  return new Promise<boolean>((resolve) => {
+    _pendingConfirm = { sql, ops, resolve };
+  });
+}
+
 export const sqlEditor = {
   get tabs() { return _tabs; },
   get activeId() { return _activeId; },
@@ -213,6 +228,13 @@ export const sqlEditor = {
     _connectionId = id;
     _connectionUsername = username;
     _connectionHost = host;
+  },
+  get pendingConfirm(): PendingConfirm | null { return _pendingConfirm; },
+  confirmRun(confirmed: boolean): void {
+    if (_pendingConfirm) {
+      _pendingConfirm.resolve(confirmed);
+      _pendingConfirm = null;
+    }
   },
   get pendingTx() { return _pendingTx; },
   clearPendingTx(): void { _pendingTx = false; },
@@ -340,6 +362,7 @@ export const sqlEditor = {
     if (tab === null) return;
     const sql = stripTrailingSemicolon(tab.sql);
     if (sql === "") return;
+    { const _c = askConfirm(sql); if (_c !== true && !(await _c)) return; }
     const requestId = crypto.randomUUID();
     const resultId = newId();
     tab.running = true;
@@ -404,6 +427,7 @@ export const sqlEditor = {
       return;
     }
 
+    { const _c = askConfirm(tab.sql); if (_c !== true && !(await _c)) return; }
     const requestId = crypto.randomUUID();
     tab.running = true;
     tab.runningRequestId = requestId;
@@ -521,6 +545,7 @@ export const sqlEditor = {
     if (tab === null) return;
     const sql = stripTrailingSemicolon(selection);
     if (sql === "") return;
+    { const _c = askConfirm(sql); if (_c !== true && !(await _c)) return; }
     const requestId = crypto.randomUUID();
     const resultId = newId();
     tab.running = true;
@@ -597,6 +622,8 @@ export const sqlEditor = {
       matchedSql = lastBeforeCursor ?? statements[0];
     }
 
+    const sqlToRun = stripTrailingSemicolon(matchedSql);
+    { const _c = askConfirm(sqlToRun); if (_c !== true && !(await _c)) return; }
     const requestId = crypto.randomUUID();
     const resultId = newId();
     tab.running = true;
@@ -604,8 +631,6 @@ export const sqlEditor = {
     tab.splitterError = null;
     tab.results = [];
     tab.activeResultId = null;
-
-    const sqlToRun = stripTrailingSemicolon(matchedSql);
     try {
       const res = await queryExecute(sqlToRun, requestId);
       const tabResult: TabResult = {
@@ -763,6 +788,7 @@ export const sqlEditor = {
     _connectionId = null;
     _connectionUsername = null;
     _connectionHost = null;
+    _pendingConfirm = null;
     _pendingTx = false;
     _editorExpanded = false;
   },

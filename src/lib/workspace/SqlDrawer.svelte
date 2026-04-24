@@ -1,6 +1,7 @@
 <script lang="ts">
   import { sqlEditor, COMPILE_REGEX, runExplain, setActiveResult } from "$lib/stores/sql-editor.svelte";
   import SqlEditor from "./SqlEditor.svelte";
+  import DmlConfirmModal from "./DmlConfirmModal.svelte";
   import ResultGrid from "./ResultGrid.svelte";
   import ExecutionLog from "./ExecutionLog.svelte";
   import QueryHistory from "./QueryHistory.svelte";
@@ -362,6 +363,14 @@
       </div>
     </div>
   </div>
+  {#if sqlEditor.pendingConfirm}
+    <DmlConfirmModal
+      sql={sqlEditor.pendingConfirm.sql}
+      ops={sqlEditor.pendingConfirm.ops}
+      onConfirm={() => sqlEditor.confirmRun(true)}
+      onCancel={() => sqlEditor.confirmRun(false)}
+    />
+  {/if}
 {/if}
 
 <style>

@@ -247,7 +247,10 @@ describe("sqlEditor.runSelection", () => {
   it("strips trailing semicolon from selection", async () => {
     sqlEditor.openBlank();
     mockedQueryExecute.mockResolvedValue(okResult(0, false));
-    await sqlEditor.runSelection("UPDATE t SET x=1;");
+    const runPromise = sqlEditor.runSelection("UPDATE t SET x=1;");
+    await Promise.resolve();
+    sqlEditor.confirmRun(true);
+    await runPromise;
     expect(mockedQueryExecute).toHaveBeenCalledWith("UPDATE t SET x=1", expect.any(String));
   });
 });
