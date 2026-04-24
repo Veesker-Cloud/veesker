@@ -327,3 +327,101 @@ export const chartConfigureRpc = (payload: {
 
 export const chartResetRpc = (sessionId: string) =>
   call<{ ok: boolean }>("chart_reset", { sessionId });
+
+// ── PL/SQL Debugger ────────────────────────────────────────────────────────
+
+export type ParamDef = {
+  name: string;
+  dataType: string;
+  inOut: "IN" | "OUT" | "IN/OUT";
+  position: number;
+};
+
+export type DebugBreakpointRef = {
+  owner: string;
+  objectName: string;
+  objectType: string;
+  line: number;
+};
+
+export type StackFrame = {
+  owner: string;
+  objectName: string;
+  objectType: string;
+  line: number;
+};
+
+export type VarValue = {
+  name: string;
+  value: string | null;
+};
+
+export type PauseInfo = {
+  status: "paused" | "completed" | "error";
+  frame: StackFrame | null;
+  reason: number;
+  errorMessage?: string;
+};
+
+export type DebugOpenResult = {
+  script: string;
+  params: ParamDef[];
+  memberList?: string[];
+};
+
+export const debugOpenRpc = (
+  owner: string,
+  objectName: string,
+  objectType: string,
+  packageName?: string,
+) =>
+  call<DebugOpenResult>("debug_open", {
+    payload: {
+      owner,
+      objectName,
+      objectType,
+      packageName: packageName ?? null,
+    },
+  });
+
+export const debugGetSourceRpc = (
+  owner: string,
+  objectName: string,
+  objectType: string,
+) =>
+  call<{ lines: string[] }>("debug_get_source", {
+    payload: { owner, objectName, objectType },
+  });
+
+export const debugStartRpc = (payload: {
+  script: string;
+  binds: Record<string, unknown>;
+  breakpoints: DebugBreakpointRef[];
+}) => call<PauseInfo>("debug_start", { payload });
+
+export const debugStopRpc = () => call<{ ok: boolean }>("debug_stop");
+export const debugStepIntoRpc = () => call<PauseInfo>("debug_step_into");
+export const debugStepOverRpc = () => call<PauseInfo>("debug_step_over");
+export const debugStepOutRpc = () => call<PauseInfo>("debug_step_out");
+export const debugContinueRpc = () => call<PauseInfo>("debug_continue");
+
+export const debugSetBreakpointRpc = (bp: DebugBreakpointRef) =>
+  call<{ breakpointId: number }>("debug_set_breakpoint", { payload: bp });
+
+export const debugRemoveBreakpointRpc = (breakpointId: number) =>
+  call<{ ok: boolean }>("debug_remove_breakpoint", {
+    payload: { breakpointId },
+  });
+
+export const debugGetValuesRpc = (varNames: string[]) =>
+  call<{ variables: VarValue[] }>("debug_get_values", {
+    payload: { varNames },
+  });
+
+export const debugGetCallStackRpc = () =>
+  call<{ frames: StackFrame[] }>("debug_get_call_stack");
+
+export const debugRunRpc = (payload: {
+  script: string;
+  binds: Record<string, unknown>;
+}) => call<{ output: string[]; elapsedMs: number }>("debug_run", { payload });
