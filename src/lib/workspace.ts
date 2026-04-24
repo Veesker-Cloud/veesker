@@ -361,6 +361,8 @@ export type PauseInfo = {
   frame: StackFrame | null;
   reason: number;
   errorMessage?: string;
+  refCursors?: DebugRunCursor[];
+  outBinds?: Record<string, string | null>;
 };
 
 export type MemberRef = { name: string; type: "PROCEDURE" | "FUNCTION" };

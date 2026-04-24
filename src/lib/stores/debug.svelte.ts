@@ -286,6 +286,15 @@ class DebugStore {
       this.status = "completed";
       this.currentFrame = null;
       this.callStack = [];
+      if (info.refCursors && info.refCursors.length > 0) {
+        this.refCursors = info.refCursors;
+      }
+      if (info.outBinds) {
+        this.liveVars = Object.entries(info.outBinds).map(([name, value]) => ({
+          name,
+          value: value ?? null,
+        }));
+      }
       return;
     }
     if (info.status === "error") {

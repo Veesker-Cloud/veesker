@@ -38,6 +38,8 @@ export type PauseInfo = {
   frame: StackFrame | null;
   reason: number;
   errorMessage?: string;
+  refCursors?: RefCursorResult[];
+  outBinds?: Record<string, string | null>;
 };
 
 // ── Block generator ────────────────────────────────────────────────────────
@@ -333,6 +335,8 @@ export class DebugSession {
   private breakpoints = new Map<number, DebugBreakpoint>();
   private nextBpId = 1;
   private _targetExecution: Promise<any> | null = null;
+  private _cursorBindNames = new Set<string>();
+  private _completionResultsExtracted = false;
 
   private constructor(
     targetConn: oracledb.Connection,
@@ -433,10 +437,11 @@ export class DebugSession {
   }
 
   startTarget(script: string, binds: Record<string, unknown>, cursorBinds: string[] = []): void {
-    const cursorSet = new Set(cursorBinds);
+    this._cursorBindNames = new Set(cursorBinds);
+    this._completionResultsExtracted = false;
     const execBinds: Record<string, unknown> = {};
     for (const [key, val] of Object.entries(binds)) {
-      if (cursorSet.has(key)) {
+      if (this._cursorBindNames.has(key)) {
         execBinds[key] = { dir: oracledb.BIND_OUT, type: oracledb.CURSOR };
       } else if (key.startsWith("out_")) {
         execBinds[key] = { dir: oracledb.BIND_OUT, type: oracledb.STRING, maxSize: 32767 };
@@ -450,6 +455,52 @@ export class DebugSession {
         process.stderr.write(`[debug] target execute error: ${String(err)}\n`);
         return null;
       });
+  }
+
+  async extractCompletionResults(): Promise<{
+    refCursors: RefCursorResult[];
+    outBinds: Record<string, string | null>;
+  }> {
+    if (this._completionResultsExtracted || !this._targetExecution) {
+      return { refCursors: [], outBinds: {} };
+    }
+    this._completionResultsExtracted = true;
+    const exec = await Promise.race([
+      this._targetExecution,
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
+    ]);
+    if (!exec) return { refCursors: [], outBinds: {} };
+
+    const rawOut = ((exec as any).outBinds ?? {}) as Record<string, unknown>;
+    const refCursors: RefCursorResult[] = [];
+    const outBinds: Record<string, string | null> = {};
+    for (const [name, val] of Object.entries(rawOut)) {
+      if (this._cursorBindNames.has(name)) {
+        const rs = val as oracledb.ResultSet<unknown[]> | null;
+        if (rs) {
+          const meta = (rs.metaData ?? []) as Array<{ name: string; dbTypeName?: string }>;
+          const columns = meta.map((m) => ({
+            name: m.name,
+            dataType: m.dbTypeName ?? "UNKNOWN",
+          }));
+          const rows: unknown[][] = [];
+          let row: unknown[] | undefined;
+          let count = 0;
+          while ((row = (await rs.getRow()) as unknown[] | undefined) && count < 1000) {
+            rows.push(row);
+            count++;
+          }
+          await rs.close();
+          refCursors.push({ name, columns, rows });
+        } else {
+          refCursors.push({ name, columns: [], rows: [] });
+        }
+      } else {
+        outBinds[name] = val === null || val === undefined ? null : String(val);
+      }
+    }
+    process.stderr.write(`[debug] completion extracted: ${refCursors.length} cursors, ${Object.keys(outBinds).length} outBinds\n`);
+    return { refCursors, outBinds };
   }
 
   // synchronizeWithTimeout wraps synchronize() with a JS-level timeout.
@@ -497,6 +548,10 @@ export class DebugSession {
     const result = await Promise.race([syncPromise, timeoutClose]);
     if (timer !== null) clearTimeout(timer);
     process.stderr.write(`[debug] sync loop final: ${JSON.stringify(result)}\n`);
+    if (result.status === "completed") {
+      const extras = await this.extractCompletionResults();
+      return { ...result, refCursors: extras.refCursors, outBinds: extras.outBinds };
+    }
     return result;
   }
 
@@ -773,6 +828,10 @@ async function safeStep(flags: number): Promise<PauseInfo> {
   });
   const result = await Promise.race([continuePromise, timeoutClose]);
   if (timer !== null) clearTimeout(timer);
+  if (result.status === "completed") {
+    const extras = await session.extractCompletionResults();
+    return { ...result, refCursors: extras.refCursors, outBinds: extras.outBinds };
+  }
   return result;
 }
 
