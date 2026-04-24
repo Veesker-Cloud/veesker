@@ -1,3 +1,6 @@
+import oracledb from "oracledb";
+import { withActiveSession } from "./oracle";
+
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export type ParamDef = {
@@ -109,4 +112,103 @@ export function generateTestBlock(
   const postSection = postCall.length > 0 ? "\n" + postCall.join("\n") : "";
 
   return `${declSection}BEGIN\n${callSection}${postSection}\nEND;`;
+}
+
+// ── debug.open ─────────────────────────────────────────────────────────────
+
+export type DebugOpenParams = {
+  owner: string;
+  objectName: string;
+  objectType: string;
+  packageName?: string | null;
+};
+
+export type DebugOpenResult = {
+  script: string;
+  params: ParamDef[];
+  memberList?: string[];
+};
+
+export async function debugOpen(p: DebugOpenParams): Promise<DebugOpenResult> {
+  return withActiveSession(async (conn) => {
+    const packageBind = p.packageName ?? null;
+    const res = await conn.execute<{
+      ARGUMENT_NAME: string;
+      DATA_TYPE: string;
+      IN_OUT: string;
+      POSITION: number;
+    }>(
+      `SELECT argument_name, data_type, in_out, position
+         FROM all_arguments
+        WHERE owner        = UPPER(:owner)
+          AND object_name  = UPPER(:objectName)
+          AND (package_name = UPPER(:packageName) OR
+               (:packageName IS NULL AND package_name IS NULL))
+          AND overload IS NULL
+          AND argument_name IS NOT NULL
+        ORDER BY position`,
+      {
+        owner: p.owner,
+        objectName: p.objectName,
+        packageName: packageBind,
+      },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT }
+    );
+
+    const params: ParamDef[] = (res.rows ?? []).map((r) => ({
+      name: r.ARGUMENT_NAME,
+      dataType: r.DATA_TYPE,
+      inOut: r.IN_OUT as ParamDef["inOut"],
+      position: r.POSITION,
+    }));
+
+    const script = generateTestBlock(
+      p.owner,
+      p.objectName,
+      p.packageName ?? null,
+      params
+    );
+
+    let memberList: string[] | undefined;
+    if (p.objectType.toUpperCase() === "PACKAGE") {
+      const membRes = await conn.execute<{ OBJECT_NAME: string }>(
+        `SELECT DISTINCT object_name
+           FROM all_arguments
+          WHERE owner        = UPPER(:owner)
+            AND package_name = UPPER(:packageName)
+          ORDER BY object_name`,
+        { owner: p.owner, packageName: p.objectName },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+      );
+      memberList = (membRes.rows ?? []).map((r) => r.OBJECT_NAME);
+    }
+
+    return { script, params, memberList };
+  });
+}
+
+// ── debug.getSource ────────────────────────────────────────────────────────
+
+export type DebugGetSourceParams = {
+  owner: string;
+  objectName: string;
+  objectType: string;
+};
+
+export async function debugGetSource(
+  p: DebugGetSourceParams
+): Promise<{ lines: string[] }> {
+  return withActiveSession(async (conn) => {
+    const res = await conn.execute<{ TEXT: string }>(
+      `SELECT text
+         FROM all_source
+        WHERE owner = UPPER(:owner)
+          AND name  = UPPER(:name)
+          AND type  = UPPER(:type)
+        ORDER BY line`,
+      { owner: p.owner, name: p.objectName, type: p.objectType },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT }
+    );
+    return { lines: (res.rows ?? []).map((r) => r.TEXT) };
+  });
 }

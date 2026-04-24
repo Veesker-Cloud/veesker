@@ -71,13 +71,13 @@ export async function connectionTest(
   }
 }
 
-import { setSession, clearSession, hasSession, getActiveSession } from "./state";
+import { setSession, clearSession, hasSession, getActiveSession, setSessionParams } from "./state";
 import { RpcCodedError, SESSION_LOST, ORACLE_ERR } from "./errors";
 
 export type OpenSessionParams = ConnectionTestParams;
 export type OpenSessionResult = { serverVersion: string; currentSchema: string };
 
-function isLostSessionError(err: unknown): boolean {
+export function isLostSessionError(err: unknown): boolean {
   if (!(err instanceof Error)) return false;
   const m = err.message || "";
   // node-oracledb thin / Oracle codes that mean "session is gone":
@@ -91,7 +91,7 @@ function isLostSessionError(err: unknown): boolean {
   );
 }
 
-async function buildConnection(p: OpenSessionParams): Promise<oracledb.Connection> {
+export async function buildConnection(p: OpenSessionParams): Promise<oracledb.Connection> {
   if (p.authType === "basic") {
     return await oracledb.getConnection({
       user: p.username,
@@ -137,6 +137,7 @@ export async function openSession(p: OpenSessionParams): Promise<OpenSessionResu
     const serverVersion = versionRes.rows?.[0]?.V ?? "Oracle (version unavailable)";
     const currentSchema = schemaRes.rows?.[0]?.S ?? p.username.toUpperCase();
     setSession(conn, currentSchema);
+    setSessionParams(p);
     return { serverVersion, currentSchema };
   } catch (err) {
     // Failed during the version/schema bootstrap — clean up the half-open session.

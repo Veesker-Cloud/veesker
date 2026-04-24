@@ -31,3 +31,16 @@ export function hasSession(): boolean {
 export function getCurrentSchema(): string | null {
   return currentSchema;
 }
+
+let _sessionParams: unknown = null;
+
+export function setSessionParams(p: unknown): void {
+  _sessionParams = p;
+}
+
+export function getSessionParams(): unknown {
+  if (!_sessionParams) {
+    throw new RpcCodedError(NO_ACTIVE_SESSION, "No session params stored");
+  }
+  return _sessionParams;
+}
