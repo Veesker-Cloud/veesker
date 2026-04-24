@@ -509,13 +509,11 @@ export class DebugSession {
   }
 
   async stop(): Promise<void> {
-    try {
-      await this.targetConn.execute(`BEGIN DBMS_DEBUG.OFF; END;`);
-    } catch {
-      // best-effort
-    }
-    try { await this.targetConn.close(); } catch {}
+    // Close debugConn FIRST — this interrupts any pending SYNCHRONIZE or CONTINUE
+    // (closing the connection causes the blocking execute() to throw)
     try { await this.debugConn.close(); } catch {}
+    // Then close targetConn — aborts the running anonymous block
+    try { await this.targetConn.close(); } catch {}
     _debugSession = null;
   }
 }
@@ -541,28 +539,30 @@ export async function debugStart(p: DebugStartParams): Promise<PauseInfo> {
   await session.enableOutput();
 
   session.startTarget(p.script, p.binds);
-  return session.synchronize();
+  // CONTINUE(BREAK_ANY_CALL) sets step-into mode and waits for the first pause event.
+  // SYNCHRONIZE alone doesn't set break mode so execution runs to completion without
+  // pausing. CONTINUE tells Oracle to stop when entering the next named subprogram.
+  try {
+    return await session.continueExecution(BREAK_ANY_CALL);
+  } catch {
+    // Connection was closed by stop() — treat as completed
+    return { status: "completed", frame: null, reason: REASON_FINISHED };
+  }
 }
 
-export async function debugStepInto(): Promise<PauseInfo> {
+async function safeStep(flags: number): Promise<PauseInfo> {
   if (!_debugSession) throw new RpcCodedError(ORACLE_ERR, "No active debug session");
-  return _debugSession.continueExecution(BREAK_ANY_CALL);
+  try {
+    return await _debugSession.continueExecution(flags);
+  } catch {
+    return { status: "completed", frame: null, reason: REASON_FINISHED };
+  }
 }
 
-export async function debugStepOver(): Promise<PauseInfo> {
-  if (!_debugSession) throw new RpcCodedError(ORACLE_ERR, "No active debug session");
-  return _debugSession.continueExecution(BREAK_NEXT_LINE);
-}
-
-export async function debugStepOut(): Promise<PauseInfo> {
-  if (!_debugSession) throw new RpcCodedError(ORACLE_ERR, "No active debug session");
-  return _debugSession.continueExecution(BREAK_RETURN);
-}
-
-export async function debugContinue(): Promise<PauseInfo> {
-  if (!_debugSession) throw new RpcCodedError(ORACLE_ERR, "No active debug session");
-  return _debugSession.continueExecution(0);
-}
+export const debugStepInto  = () => safeStep(BREAK_ANY_CALL);
+export const debugStepOver  = () => safeStep(BREAK_NEXT_LINE);
+export const debugStepOut   = () => safeStep(BREAK_RETURN);
+export const debugContinue  = () => safeStep(0);
 
 export async function debugStop(): Promise<{ ok: boolean }> {
   if (_debugSession) await _debugSession.stop();

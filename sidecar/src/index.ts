@@ -120,8 +120,10 @@ async function main() {
         writeLine(makeError(null, -32700, "Parse error"));
         continue;
       }
-      const res = await dispatch(handlers, req);
-      writeLine(res);
+      // Fire-and-forget: allows debug.stop to interrupt a blocking debug.start
+      dispatch(handlers, req)
+        .then(writeLine)
+        .catch((err) => writeLine(makeError(req.id, -32603, String(err))));
     }
   }
 }
