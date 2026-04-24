@@ -236,6 +236,7 @@ class DebugStore {
       owner: this.owner,
       objectName: this.objectName,
       objectType: this.objectType,
+      packageName: this.packageName,
     });
 
     if (!res.ok) {
