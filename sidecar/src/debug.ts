@@ -345,7 +345,12 @@ export class DebugSession {
         bpnum:        { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
       }
     );
-    const oracleBpNum = (res.outBinds as Record<string, number>).bpnum as number;
+    const out = res.outBinds as Record<string, number>;
+    const retcode = out.retcode as number;
+    if (retcode !== 0) {
+      throw new RpcCodedError(ORACLE_ERR, `SET_BREAKPOINT failed: retcode=${retcode} (object not compiled for debug?)`);
+    }
+    const oracleBpNum = out.bpnum as number;
     const id = this.nextBpId++;
     this.breakpoints.set(id, { id, oracleBpNum, owner, objectName, objectType, line });
     return id;
@@ -385,21 +390,23 @@ export class DebugSession {
   // If Oracle SYNCHRONIZE doesn't return within `ms` milliseconds, the debugConn
   // is closed (which causes the blocking execute to reject), and we return "completed".
   async synchronizeWithTimeout(ms: number): Promise<PauseInfo> {
+    const completed: PauseInfo = { status: "completed", frame: null, reason: REASON_FINISHED };
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const timeoutClose = new Promise<never>((_, reject) => {
+
+    // Attach .catch so the synchronize() promise never becomes an unhandled rejection
+    // if the timeout fires first and closes the connection.
+    const syncPromise = this.synchronize().catch(() => completed);
+
+    const timeoutClose = new Promise<PauseInfo>((resolve) => {
       timer = setTimeout(() => {
         this.debugConn.close().catch(() => {});
-        reject(new Error("SYNCHRONIZE timeout"));
+        resolve(completed);
       }, ms);
     });
-    try {
-      const result = await Promise.race([this.synchronize(), timeoutClose]);
-      if (timer !== null) clearTimeout(timer);
-      return result;
-    } catch {
-      if (timer !== null) clearTimeout(timer);
-      return { status: "completed", frame: null, reason: REASON_FINISHED };
-    }
+
+    const result = await Promise.race([syncPromise, timeoutClose]);
+    if (timer !== null) clearTimeout(timer);
+    return result;
   }
 
   async synchronize(): Promise<PauseInfo> {
@@ -435,14 +442,20 @@ export class DebugSession {
       return { status: "completed", frame: null, reason };
     }
 
+    const objName = (ob.obj_name as string) ?? "";
+    const line    = (ob.line as number) ?? 0;
+    if (!objName || line <= 0) {
+      return { status: "completed", frame: null, reason };
+    }
+
     return {
       status: "paused",
       reason,
       frame: {
         owner:      (ob.obj_owner as string) ?? "",
-        objectName: (ob.obj_name as string) ?? "",
+        objectName: objName,
         objectType: libunitTypeToString((ob as any).libunit_type as number),
-        line:       (ob.line as number) ?? 0,
+        line,
       },
     };
   }
@@ -481,14 +494,20 @@ export class DebugSession {
       return { status: "completed", frame: null, reason };
     }
 
+    const objName2 = (ob.obj_name as string) ?? "";
+    const line2    = (ob.line as number) ?? 0;
+    if (!objName2 || line2 <= 0) {
+      return { status: "completed", frame: null, reason };
+    }
+
     return {
       status: "paused",
       reason,
       frame: {
         owner:      (ob.obj_owner as string) ?? "",
-        objectName: (ob.obj_name as string) ?? "",
+        objectName: objName2,
         objectType: libunitTypeToString((ob.libunit_type as number) ?? 0),
-        line:       (ob.line as number) ?? 0,
+        line:       line2,
       },
     };
   }
@@ -550,13 +569,19 @@ export type DebugStartParams = {
   owner: string;
   objectName: string;
   objectType: string;
+  packageName?: string | null;
 };
 
 export async function debugStart(p: DebugStartParams): Promise<PauseInfo> {
   if (_debugSession) _debugSession.stop();
 
   const session = await DebugSession.create();
-  await session.initialize();
+  try {
+    await session.initialize();
+  } catch (e) {
+    session.stop();
+    throw e;
+  }
 
   // Set user-defined breakpoints
   for (const bp of p.breakpoints) {
@@ -567,9 +592,12 @@ export async function debugStart(p: DebugStartParams): Promise<PauseInfo> {
   // DBMS_DEBUG never auto-pauses on entry — without at least one breakpoint the
   // anonymous block runs to completion and SYNCHRONIZE blocks forever.
   // SET_BREAKPOINT moves line 1 to the first executable line automatically.
+  // For package members the breakpoint must target the PACKAGE BODY, not the spec.
+  const entryTarget = p.packageName ?? p.objectName;
+  const entryType   = p.packageName ? "PACKAGE BODY" : p.objectType;
   let entryBpId: number | null = null;
   try {
-    entryBpId = await session.setBreakpoint(p.owner, p.objectName, p.objectType, 1);
+    entryBpId = await session.setBreakpoint(p.owner, entryTarget, entryType, 1);
   } catch {
     // If SET_BREAKPOINT fails (object not compiled for debug), proceed without it
   }
@@ -596,21 +624,18 @@ export async function debugStart(p: DebugStartParams): Promise<PauseInfo> {
 async function safeStep(flags: number): Promise<PauseInfo> {
   if (!_debugSession) throw new RpcCodedError(ORACLE_ERR, "No active debug session");
   const session = _debugSession;
+  const completed: PauseInfo = { status: "completed", frame: null, reason: REASON_FINISHED };
   let timer: ReturnType<typeof setTimeout> | null = null;
-  const timeoutClose = new Promise<never>((_, reject) => {
+  const continuePromise = session.continueExecution(flags).catch(() => completed);
+  const timeoutClose = new Promise<PauseInfo>((resolve) => {
     timer = setTimeout(() => {
       session.stop();
-      reject(new Error("CONTINUE timeout"));
+      resolve(completed);
     }, 60_000);
   });
-  try {
-    const result = await Promise.race([session.continueExecution(flags), timeoutClose]);
-    if (timer !== null) clearTimeout(timer);
-    return result;
-  } catch {
-    if (timer !== null) clearTimeout(timer);
-    return { status: "completed", frame: null, reason: REASON_FINISHED };
-  }
+  const result = await Promise.race([continuePromise, timeoutClose]);
+  if (timer !== null) clearTimeout(timer);
+  return result;
 }
 
 export const debugStepInto  = () => safeStep(BREAK_ANY_CALL);

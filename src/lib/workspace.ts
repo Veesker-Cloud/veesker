@@ -400,6 +400,7 @@ export const debugStartRpc = (payload: {
   owner: string;
   objectName: string;
   objectType: string;
+  packageName?: string | null;
 }) => call<PauseInfo>("debug_start", { payload });
 
 export const debugStopRpc = () => call<{ ok: boolean }>("debug_stop");
