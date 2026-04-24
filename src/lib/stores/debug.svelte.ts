@@ -5,6 +5,7 @@ import type {
   VarValue,
   DebugBreakpointRef,
   MemberRef,
+  DebugRunCursor,
 } from "$lib/workspace";
 import {
   debugOpenRpc,
@@ -68,6 +69,7 @@ class DebugStore {
   script = $state("");
   params = $state<ParamDef[]>([]);
   bindVars = $state<BindVar[]>([]);
+  cursorBindNames = $state<string[]>([]);
 
   breakpoints = $state<LocalBreakpoint[]>([]);
   private nextLocalBpId = 1;
@@ -78,6 +80,8 @@ class DebugStore {
   liveVars = $state<VarValue[]>([]);
   localVars = $state<VarValue[]>([]);
   dbmsOutput = $state<string[]>([]);
+  refCursors = $state<DebugRunCursor[]>([]);
+  elapsedMs = $state<number | null>(null);
   errorMessage = $state<string | null>(null);
 
   editorSource = $state("");
@@ -103,6 +107,8 @@ class DebugStore {
     this.liveVars = [];
     this.localVars = [];
     this.dbmsOutput = [];
+    this.refCursors = [];
+    this.elapsedMs = null;
     this.errorMessage = null;
     this.breakpoints = [];
 
@@ -119,40 +125,46 @@ class DebugStore {
     this.script = res.data.script;
     this.params = res.data.params;
     this.memberList = res.data.memberList ?? [];
+    this.cursorBindNames = res.data.refCursorOutBinds ?? [];
     this.bindVars = this._buildBindVars(res.data.script, res.data.params);
-    // Show the generated anonymous block initially; procedure source appears on first debug pause
     this.editorSource = res.data.script;
     this.editorObject = null;
   }
 
   private _buildBindVars(script: string, params: ParamDef[]): BindVar[] {
     const detected = extractBindNames(script);
-    return detected.map((name) => {
-      const bare = name.replace(/^out_/i, "");
-      const param = params.find(
-        (p) => p.name.toLowerCase() === bare.toLowerCase(),
-      );
-      return {
-        name,
-        oracleType: param?.dataType ?? "VARCHAR2",
-        value: "",
-        enabled: true,
-      };
-    });
+    const cursorSet = new Set(this.cursorBindNames);
+    return detected
+      .filter((name) => !cursorSet.has(name))
+      .map((name) => {
+        const bare = name.replace(/^out_/i, "");
+        const param = params.find(
+          (p) => p.name.toLowerCase() === bare.toLowerCase(),
+        );
+        return {
+          name,
+          oracleType: param?.dataType ?? "VARCHAR2",
+          value: "",
+          enabled: true,
+        };
+      });
   }
 
   syncBindVars(newScript: string) {
     const detected = extractBindNames(newScript);
+    const cursorSet = new Set(this.cursorBindNames);
     const existing = new Map(this.bindVars.map((v) => [v.name, v]));
-    this.bindVars = detected.map(
-      (name) =>
-        existing.get(name) ?? {
-          name,
-          oracleType: "VARCHAR2",
-          value: "",
-          enabled: true,
-        },
-    );
+    this.bindVars = detected
+      .filter((name) => !cursorSet.has(name))
+      .map(
+        (name) =>
+          existing.get(name) ?? {
+            name,
+            oracleType: "VARCHAR2",
+            value: "",
+            enabled: true,
+          },
+      );
   }
 
   toggleBreakpoint(line: number) {
@@ -188,12 +200,13 @@ class DebugStore {
   }
 
   private _buildBindsForExecution(): Record<string, unknown> {
-    // datetime-local inputs produce ISO strings; TO_DATE wrapping belongs in the generated
-    // anonymous block but requires a sidecar-side change — deferred
     const result: Record<string, unknown> = {};
     for (const v of this.bindVars) {
       if (!v.enabled) continue;
       result[v.name] = v.value === "" ? null : v.value;
+    }
+    for (const name of this.cursorBindNames) {
+      result[name] = null;
     }
     return result;
   }
@@ -202,14 +215,19 @@ class DebugStore {
     this.status = "running";
     this.errorMessage = null;
     this.dbmsOutput = [];
+    this.refCursors = [];
+    this.elapsedMs = null;
     const res = await debugRunRpc({
       script: this.script,
       binds: this._buildBindsForExecution(),
+      cursorBinds: this.cursorBindNames,
     });
     if (res.ok) {
       this.dbmsOutput = res.data.output;
+      this.refCursors = res.data.refCursors;
+      this.elapsedMs = res.data.elapsedMs;
       this.liveVars = Object.entries(res.data.outBinds).map(([name, value]) => ({
-        name,  // keep "out_p_found" to match VariableGrid row names
+        name,
         value: value ?? null,
       }));
       this.status = "completed";
@@ -224,6 +242,8 @@ class DebugStore {
     this.status = "running";
     this.errorMessage = null;
     this.dbmsOutput = [];
+    this.refCursors = [];
+    this.elapsedMs = null;
     this.currentFrame = null;
 
     const bpRefs: DebugBreakpointRef[] = this.breakpoints.map((b) => ({

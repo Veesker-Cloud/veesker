@@ -11,6 +11,7 @@
   import VariableGrid from "./VariableGrid.svelte";
   import DebugCallStack from "./DebugCallStack.svelte";
   import DebugLocals from "./DebugLocals.svelte";
+  import CursorGrid from "./CursorGrid.svelte";
   import {
     breakpointGutter,
     toggleBreakpointEffect,
@@ -21,7 +22,7 @@
   } from "./currentLineDecoration";
   import { debugHoverTooltip } from "./debugHover";
 
-  type Tab = "script" | "output" | "stats";
+  type Tab = "script" | "output";
 
   let { onClose }: { onClose: () => void } = $props();
 
@@ -187,17 +188,10 @@
           class:tw-tab-active={activeTab === 'output'}
           onclick={() => (activeTab = 'output')}
         >
-          DBMS Output
-          {#if debugStore.dbmsOutput.length > 0}
-            <span class="tw-badge">{debugStore.dbmsOutput.length}</span>
+          Output
+          {#if debugStore.dbmsOutput.length > 0 || debugStore.refCursors.length > 0}
+            <span class="tw-badge">{debugStore.dbmsOutput.length + debugStore.refCursors.length}</span>
           {/if}
-        </button>
-        <button
-          class="tw-tab"
-          class:tw-tab-active={activeTab === 'stats'}
-          onclick={() => (activeTab = 'stats')}
-        >
-          Statistics
         </button>
       </div>
       <div class="tw-object-info">
@@ -228,6 +222,8 @@
 
     <DebugToolbar
       status={debugStore.status}
+      breakpointCount={debugStore.breakpoints.length}
+      elapsedMs={debugStore.elapsedMs}
       onRun={() => void debugStore.run()}
       onDebug={() => void debugStore.startDebug()}
       onStepInto={() => void debugStore.stepInto()}
@@ -271,26 +267,40 @@
             </div>
           {/if}
         </div>
-        <div class="tw-callstack-wrap">
-          <DebugCallStack
-            frames={debugStore.callStack}
-            currentFrame={debugStore.currentFrame}
-            disabled={true}
-          />
-        </div>
+        {#if debugStore.callStack.length > 0}
+          <div class="tw-callstack-wrap">
+            <DebugCallStack
+              frames={debugStore.callStack}
+              currentFrame={debugStore.currentFrame}
+              disabled={true}
+            />
+          </div>
+        {/if}
       </div>
       {#if activeTab === 'output'}
         <div class="tw-output">
-          {#if debugStore.dbmsOutput.length === 0}
-            <span class="tw-output-empty">No output yet.</span>
-          {:else}
-            {#each debugStore.dbmsOutput as line}
-              <div class="tw-output-line">{line}</div>
-            {/each}
+          {#if debugStore.refCursors.length > 0}
+            <div class="tw-output-section">
+              <div class="tw-output-title">Cursors</div>
+              {#each debugStore.refCursors as cur}
+                <CursorGrid cursor={cur} />
+              {/each}
+            </div>
+          {/if}
+          {#if debugStore.dbmsOutput.length > 0}
+            <div class="tw-output-section">
+              <div class="tw-output-title">DBMS_OUTPUT</div>
+              <div class="tw-output-text">
+                {#each debugStore.dbmsOutput as line}
+                  <div class="tw-output-line">{line}</div>
+                {/each}
+              </div>
+            </div>
+          {/if}
+          {#if debugStore.refCursors.length === 0 && debugStore.dbmsOutput.length === 0}
+            <span class="tw-output-empty">No output yet. Run the script to see results.</span>
           {/if}
         </div>
-      {:else if activeTab === 'stats'}
-        <p class="tw-placeholder">Statistics coming soon.</p>
       {/if}
     </div>
   </div>
@@ -369,9 +379,18 @@
   .tw-editor-wrap :global(.cm-debug-hover-name) { color: #7dcfff; }
   .tw-editor-wrap :global(.cm-debug-hover-sep)  { color: var(--text-muted); }
   .tw-editor-wrap :global(.cm-debug-hover-value) { color: var(--text-primary); }
-  .tw-output { flex: 1; padding: 12px; overflow: auto; font-family: monospace; font-size: 12px; color: var(--text-primary); }
-  .tw-output-empty { color: var(--text-muted); }
+  .tw-output { flex: 1; padding: 12px; overflow: auto; color: var(--text-primary); }
+  .tw-output-empty { color: var(--text-muted); font-size: 12px; font-style: italic; }
+  .tw-output-section { margin-bottom: 16px; }
+  .tw-output-section:last-child { margin-bottom: 0; }
+  .tw-output-title {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--text-muted); margin-bottom: 6px; font-weight: 500;
+  }
+  .tw-output-text {
+    background: var(--bg-surface-alt); border: 1px solid var(--border); border-radius: 4px;
+    padding: 8px 12px; font-family: monospace; font-size: 12px;
+  }
   .tw-output-line { white-space: pre-wrap; }
   .tw-callstack-wrap { max-height: 160px; overflow: auto; border-top: 1px solid var(--border); flex-shrink: 0; }
-  .tw-placeholder { color: var(--text-muted); font-size: 12px; padding: 16px; margin: 0; }
 </style>

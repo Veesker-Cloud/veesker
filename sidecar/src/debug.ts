@@ -83,10 +83,14 @@ export function generateTestBlock(
       );
       callArgs.push(`    ${bind} => ${localVar}`);
     } else if (COMPLEX_TYPES.has(dt)) {
-      const declType =
-        dt === "REF CURSOR" || dt === "CURSOR" ? "SYS_REFCURSOR" : p.dataType;
-      declares.push(`  ${localVar} ${declType}; -- fill in`);
-      callArgs.push(`    ${bind} => ${localVar}`);
+      const isRefCursor = dt === "REF CURSOR" || dt === "CURSOR";
+      if (isRefCursor && (p.inOut === "OUT" || p.inOut === "IN/OUT")) {
+        callArgs.push(`    ${bind} => :out_${bind}`);
+      } else {
+        const declType = isRefCursor ? "SYS_REFCURSOR" : p.dataType;
+        declares.push(`  ${localVar} ${declType}; -- fill in`);
+        callArgs.push(`    ${bind} => ${localVar}`);
+      }
     } else if (p.inOut === "IN") {
       callArgs.push(`    ${bind} => :${bind}`);
     } else if (p.inOut === "OUT") {
@@ -136,6 +140,13 @@ export type DebugOpenResult = {
   script: string;
   params: ParamDef[];
   memberList?: MemberRef[];
+  refCursorOutBinds: string[];
+};
+
+export type RefCursorResult = {
+  name: string;
+  columns: { name: string; dataType: string }[];
+  rows: unknown[][];
 };
 
 export async function debugOpen(p: DebugOpenParams): Promise<DebugOpenResult> {
@@ -178,6 +189,14 @@ export async function debugOpen(p: DebugOpenParams): Promise<DebugOpenResult> {
       params
     );
 
+    const refCursorOutBinds: string[] = [];
+    for (const pp of params) {
+      const pt = pp.dataType.toUpperCase();
+      if ((pt === "REF CURSOR" || pt === "CURSOR") && (pp.inOut === "OUT" || pp.inOut === "IN/OUT")) {
+        refCursorOutBinds.push(`out_${pp.name.toLowerCase()}`);
+      }
+    }
+
     let memberList: MemberRef[] | undefined;
     if (p.objectType.toUpperCase() === "PACKAGE") {
       const membRes = await conn.execute<{ OBJECT_NAME: string; MEMBER_TYPE: string }>(
@@ -199,7 +218,7 @@ export async function debugOpen(p: DebugOpenParams): Promise<DebugOpenResult> {
       }));
     }
 
-    return { script, params, memberList };
+    return { script, params, memberList, refCursorOutBinds };
   });
 }
 
@@ -798,15 +817,23 @@ export async function debugGetCallStack(): Promise<{ frames: StackFrame[] }> {
 export async function debugRun(p: {
   script: string;
   binds: Record<string, unknown>;
-}): Promise<{ output: string[]; elapsedMs: number; outBinds: Record<string, string | null> }> {
+  cursorBinds?: string[];
+}): Promise<{
+  output: string[];
+  elapsedMs: number;
+  outBinds: Record<string, string | null>;
+  refCursors: RefCursorResult[];
+}> {
   const started = Date.now();
+  const cursorSet = new Set(p.cursorBinds ?? []);
   return withActiveSession(async (conn) => {
     await conn.execute(`BEGIN DBMS_OUTPUT.ENABLE(1000000); END;`);
 
-    // Separate IN binds (user-supplied values) from OUT binds (out_* prefix → need BIND_OUT)
     const execBinds: Record<string, unknown> = {};
     for (const [key, val] of Object.entries(p.binds)) {
-      if (key.startsWith("out_")) {
+      if (cursorSet.has(key)) {
+        execBinds[key] = { dir: oracledb.BIND_OUT, type: oracledb.CURSOR };
+      } else if (key.startsWith("out_")) {
         execBinds[key] = { dir: oracledb.BIND_OUT, type: oracledb.STRING, maxSize: 32767 };
       } else {
         execBinds[key] = val ?? null;
@@ -814,7 +841,35 @@ export async function debugRun(p: {
     }
 
     const execResult = await conn.execute(p.script, execBinds);
-    const rawOut = (execResult.outBinds ?? {}) as Record<string, string | null>;
+    const rawOut = (execResult.outBinds ?? {}) as Record<string, unknown>;
+
+    const outBinds: Record<string, string | null> = {};
+    const refCursors: RefCursorResult[] = [];
+    for (const [name, val] of Object.entries(rawOut)) {
+      if (cursorSet.has(name)) {
+        const rs = val as oracledb.ResultSet<unknown[]> | null;
+        if (rs) {
+          const meta = (rs.metaData ?? []) as Array<{ name: string; dbTypeName?: string }>;
+          const columns = meta.map((m) => ({
+            name: m.name,
+            dataType: m.dbTypeName ?? "UNKNOWN",
+          }));
+          const rows: unknown[][] = [];
+          let row: unknown[] | undefined;
+          let count = 0;
+          while ((row = (await rs.getRow()) as unknown[] | undefined) && count < 1000) {
+            rows.push(row);
+            count++;
+          }
+          await rs.close();
+          refCursors.push({ name, columns, rows });
+        } else {
+          refCursors.push({ name, columns: [], rows: [] });
+        }
+      } else {
+        outBinds[name] = val === null || val === undefined ? null : String(val);
+      }
+    }
 
     const lines: string[] = [];
     while (true) {
@@ -829,6 +884,6 @@ export async function debugRun(p: {
       if ((b.status as number) !== 0) break;
       lines.push((b.line as string) ?? "");
     }
-    return { output: lines, elapsedMs: Date.now() - started, outBinds: rawOut };
+    return { output: lines, elapsedMs: Date.now() - started, outBinds, refCursors };
   });
 }

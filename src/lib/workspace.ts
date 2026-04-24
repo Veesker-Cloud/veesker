@@ -369,6 +369,13 @@ export type DebugOpenResult = {
   script: string;
   params: ParamDef[];
   memberList?: MemberRef[];
+  refCursorOutBinds: string[];
+};
+
+export type DebugRunCursor = {
+  name: string;
+  columns: { name: string; dataType: string }[];
+  rows: unknown[][];
 };
 
 export const debugOpenRpc = (
@@ -430,4 +437,10 @@ export const debugGetCallStackRpc = () =>
 export const debugRunRpc = (payload: {
   script: string;
   binds: Record<string, unknown>;
-}) => call<{ output: string[]; elapsedMs: number; outBinds: Record<string, string | null> }>("debug_run", { payload });
+  cursorBinds?: string[];
+}) => call<{
+  output: string[];
+  elapsedMs: number;
+  outBinds: Record<string, string | null>;
+  refCursors: DebugRunCursor[];
+}>("debug_run", { payload });
