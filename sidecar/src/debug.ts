@@ -584,8 +584,13 @@ export async function debugStart(p: DebugStartParams): Promise<PauseInfo> {
   }
 
   // Set user-defined breakpoints
-  for (const bp of p.breakpoints) {
-    await session.setBreakpoint(bp.owner, bp.objectName, bp.objectType, bp.line);
+  try {
+    for (const bp of p.breakpoints) {
+      await session.setBreakpoint(bp.owner, bp.objectName, bp.objectType, bp.line);
+    }
+  } catch (e) {
+    session.stop();
+    throw e;
   }
 
   // Auto-set an entry breakpoint at line 1 of the target procedure.
