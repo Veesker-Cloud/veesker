@@ -56,6 +56,7 @@
     sql: string;
   } | null>(null);
   let refreshing = $state(false);
+  let completionSchema = $state<Record<string, string[]>>({});
   let procExecTarget = $state<{ owner: string; name: string; objectType: "PROCEDURE" | "FUNCTION" } | null>(null);
   let detailError = $state<string | null>(null);
   let dataflow = $state<DataFlowResult | null>(null);
@@ -311,6 +312,19 @@
     schemas = schemaRes.data.map((s) => newSchemaNode(s.name, s.isCurrent));
     const current = schemas.find((s) => s.isCurrent);
     if (current) expandIfNeeded(current);
+
+    if (current) {
+      const [tablesRes, viewsRes] = await Promise.allSettled([
+        objectsList(current.name, "TABLE"),
+        objectsList(current.name, "VIEW"),
+      ]);
+      const schema: Record<string, string[]> = {};
+      if (tablesRes.status === "fulfilled" && tablesRes.value.ok)
+        for (const t of tablesRes.value.data) schema[t.name] = [];
+      if (viewsRes.status === "fulfilled" && viewsRes.value.ok)
+        for (const v of viewsRes.value.data) schema[v.name] = [];
+      completionSchema = schema;
+    }
   }
 
   async function onReconnect(): Promise<void> {
@@ -575,6 +589,7 @@
         Promise.resolve().then(() => { chatPendingMessage = ""; });
       }}
       onAnalyze={handleAnalyze}
+      {completionSchema}
     />
   </div>
   {#if showPalette}
