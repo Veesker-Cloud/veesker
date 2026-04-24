@@ -83,7 +83,9 @@ export function generateTestBlock(
       );
       callArgs.push(`    ${bind} => ${localVar}`);
     } else if (COMPLEX_TYPES.has(dt)) {
-      declares.push(`  ${localVar} ${p.dataType}; -- fill in`);
+      const declType =
+        dt === "REF CURSOR" || dt === "CURSOR" ? "SYS_REFCURSOR" : p.dataType;
+      declares.push(`  ${localVar} ${declType}; -- fill in`);
       callArgs.push(`    ${bind} => ${localVar}`);
     } else if (p.inOut === "IN") {
       callArgs.push(`    ${bind} => :${bind}`);
