@@ -51,11 +51,13 @@
     }
   }
 
-  // Reset sort when the active result changes
+  // Reset sort + scroll when the active result changes
   $effect(() => {
     ar; // track
     sortCol = null;
     sortDir = "none";
+    scrollTop = 0;
+    if (scrollEl) scrollEl.scrollTop = 0;
   });
 
   // Sorted rows (derived)
@@ -76,6 +78,30 @@
       }
       return sortDir === "asc" ? cmp : -cmp;
     });
+  });
+
+  // ── Virtual scroll ───────────────────────────────────────────────────────────
+  const ROW_HEIGHT = 24;
+  const OVERSCAN = 10;
+
+  let scrollEl = $state<HTMLDivElement | null>(null);
+  let scrollTop = $state(0);
+  let containerH = $state(400);
+
+  $effect(() => {
+    const el = scrollEl;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => { containerH = el.clientHeight; });
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
+
+  let visibleSlice = $derived.by(() => {
+    const total = sortedRows.length;
+    if (total === 0) return { start: 0, end: 0, topPad: 0, botPad: 0 };
+    const start = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
+    const end = Math.min(total, Math.ceil((scrollTop + containerH) / ROW_HEIGHT) + OVERSCAN);
+    return { start, end, topPad: start * ROW_HEIGHT, botPad: (total - end) * ROW_HEIGHT };
   });
 
   // ── Resize state ─────────────────────────────────────────────────────────────
@@ -219,7 +245,7 @@
     </div>
   {:else if ar.result}
     {@const r = ar.result}
-    <div class="scroll">
+    <div class="scroll" bind:this={scrollEl} onscroll={(e) => { scrollTop = (e.currentTarget as HTMLDivElement).scrollTop; }}>
       <table>
         <thead>
           <tr>
@@ -251,13 +277,20 @@
           </tr>
         </thead>
         <tbody>
-          {#each sortedRows as row, i (i)}
-            <tr>
+          {#if visibleSlice.topPad > 0}
+            <tr class="spacer" style="height:{visibleSlice.topPad}px"><td colspan={r.columns.length}></td></tr>
+          {/if}
+          {#each sortedRows.slice(visibleSlice.start, visibleSlice.end) as row, vi (visibleSlice.start + vi)}
+            {@const rowIdx = visibleSlice.start + vi}
+            <tr class:even={rowIdx % 2 === 1}>
               {#each row as cell, j (j)}
                 <td class:numeric={isNumericType(r.columns[j].dataType)} class:null-cell={cell === null}>{formatCell(cell)}</td>
               {/each}
             </tr>
           {/each}
+          {#if visibleSlice.botPad > 0}
+            <tr class="spacer" style="height:{visibleSlice.botPad}px"><td colspan={r.columns.length}></td></tr>
+          {/if}
         </tbody>
       </table>
     </div>
@@ -405,18 +438,22 @@
     font-size: 9.5px;
   }
   thead th.numeric .th-stack { align-items: flex-end; }
+  tbody tr { height: 24px; }
   tbody td {
-    padding: 0.3rem 0.6rem;
+    padding: 0.2rem 0.6rem;
     border-right: 1px solid var(--border);
     border-bottom: 1px solid var(--border);
     font-family: "JetBrains Mono", "SF Mono", monospace;
     font-size: 11.5px;
     white-space: nowrap;
-    vertical-align: top;
+    vertical-align: middle;
     min-width: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   tbody td.numeric { text-align: right; }
-  tbody tr:nth-child(even) { background: var(--row-alt); }
+  tbody tr.even { background: var(--row-alt); }
+  tbody tr.spacer { background: none; }
   td.null-cell {
     color: var(--text-muted);
     font-style: italic;
