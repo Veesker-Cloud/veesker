@@ -168,7 +168,7 @@
   .vg-td-check { width: 28px; text-align: center; }
   .vg-td-del { width: 24px; text-align: center; }
   .vg-td-value { width: 40%; }
-  .vg-row:hover { background: rgba(255,255,255,0.03); }
+  .vg-row:hover { background: var(--row-hover); }
   .vg-input {
     background: transparent;
     border: none;

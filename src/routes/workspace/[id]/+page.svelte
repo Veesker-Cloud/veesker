@@ -603,7 +603,7 @@
 <style>
   :global(body) {
     margin: 0;
-    background: #18140f;
+    background: var(--bg-page);
     color: var(--text-primary);
     font-family: "Inter", -apple-system, system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;

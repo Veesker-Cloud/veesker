@@ -69,7 +69,7 @@
     color: var(--text-primary); cursor: pointer; font-size: 13px;
     padding: 3px 7px; transition: background 0.1s;
   }
-  .btn:hover:not(:disabled) { background: rgba(255,255,255,0.08); border-color: var(--border); }
+  .btn:hover:not(:disabled) { background: var(--row-hover); border-color: var(--border); }
   .btn:disabled { opacity: 0.3; cursor: default; }
   .btn-debug { color: #27ae60; }
   .btn-stop  { color: #e74c3c; }

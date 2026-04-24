@@ -139,5 +139,5 @@
   table { width: 100%; border-collapse: collapse; font-size: 10px; color: var(--text-primary); }
   th { background: var(--bg-surface); color: var(--text-muted); padding: 3px 6px; text-align: left; font-weight: 600; position: sticky; top: 0; }
   td { padding: 3px 6px; border-bottom: 1px solid var(--border); }
-  tr:nth-child(even) { background: rgba(255,255,255,0.02); }
+  tr:nth-child(even) { background: var(--row-alt); }
 </style>

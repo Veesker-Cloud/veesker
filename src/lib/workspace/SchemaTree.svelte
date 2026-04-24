@@ -319,7 +319,7 @@
     height: 100%;
     min-width: 0;
     background: var(--bg-page);
-    border-right: 1px solid rgba(255,255,255,0.06);
+    border-right: 1px solid var(--border);
     overflow-y: auto;
     display: flex;
     flex-direction: column;
@@ -340,15 +340,15 @@
   .search-icon {
     position: absolute;
     left: 1rem;
-    color: rgba(255,255,255,0.3);
+    color: var(--text-muted);
     pointer-events: none;
   }
   .search {
     width: 100%;
-    background: rgba(255,255,255,0.07);
-    border: 1px solid rgba(255,255,255,0.1);
+    background: var(--bg-surface-alt);
+    border: 1px solid var(--border);
     border-radius: 5px;
-    color: rgba(255,255,255,0.85);
+    color: var(--text-primary);
     font-family: "Inter", sans-serif;
     font-size: 11px;
     padding: 0.3rem 1.6rem 0.3rem 1.8rem;
@@ -356,10 +356,10 @@
     box-sizing: border-box;
     transition: border-color 0.12s, background 0.12s;
   }
-  .search::placeholder { color: rgba(255,255,255,0.3); }
+  .search::placeholder { color: var(--text-muted); }
   .search:focus {
     border-color: rgba(179, 62, 31, 0.6);
-    background: rgba(255,255,255,0.1);
+    background: var(--bg-surface);
   }
   .search::-webkit-search-cancel-button { display: none; }
   .search-clear {
@@ -367,18 +367,18 @@
     right: 0.9rem;
     background: transparent;
     border: none;
-    color: rgba(255,255,255,0.35);
+    color: var(--text-muted);
     font-size: 14px;
     line-height: 1;
     cursor: pointer;
     padding: 0;
   }
-  .search-clear:hover { color: rgba(255,255,255,0.7); }
+  .search-clear:hover { color: var(--text-secondary); }
   .sys-btn {
     background: transparent;
-    border: 1px solid rgba(255,255,255,0.1);
+    border: 1px solid var(--border);
     border-radius: 3px;
-    color: rgba(255,255,255,0.25);
+    color: var(--text-muted);
     font-size: 9px;
     font-family: "Inter", sans-serif;
     letter-spacing: 0.04em;
@@ -387,7 +387,7 @@
     flex-shrink: 0;
     transition: color 0.12s, border-color 0.12s, background 0.12s;
   }
-  .sys-btn:hover { color: rgba(255,255,255,0.55); border-color: rgba(255,255,255,0.2); }
+  .sys-btn:hover { color: var(--text-secondary); border-color: var(--border-strong); }
   .sys-btn.active {
     color: #e8d5a0;
     border-color: rgba(232,213,160,0.35);
@@ -397,7 +397,7 @@
   .refresh-btn {
     background: transparent;
     border: none;
-    color: rgba(255,255,255,0.35);
+    color: var(--text-muted);
     cursor: pointer;
     padding: 2px;
     display: flex;
@@ -407,7 +407,7 @@
     flex-shrink: 0;
     transition: color 0.12s, background 0.12s;
   }
-  .refresh-btn:hover { color: rgba(255,255,255,0.75); background: rgba(255,255,255,0.07); }
+  .refresh-btn:hover { color: var(--text-primary); background: var(--row-hover); }
   .refresh-btn:disabled { opacity: 0.4; cursor: default; }
   .refresh-btn.spinning svg { animation: spin 0.8s linear infinite; }
 
@@ -426,7 +426,7 @@
     border-radius: 4px;
     border: 1px solid color-mix(in srgb, var(--kc) 40%, transparent);
     background: color-mix(in srgb, var(--kc) 12%, transparent);
-    color: color-mix(in srgb, var(--kc) 80%, rgba(255,255,255,0.6));
+    color: color-mix(in srgb, var(--kc) 75%, var(--text-secondary));
     font-size: 10px;
     font-family: "Inter", sans-serif;
     cursor: pointer;
@@ -440,10 +440,10 @@
   }
   .kind-pill.off {
     background: transparent;
-    border-color: rgba(255,255,255,0.08);
-    color: rgba(255,255,255,0.25);
+    border-color: var(--border);
+    color: var(--text-muted);
   }
-  .kind-pill.off .pill-dot { background: rgba(255,255,255,0.15); }
+  .kind-pill.off .pill-dot { background: var(--border-strong); }
   .pill-dot {
     width: 4px;
     height: 4px;
@@ -465,7 +465,7 @@
     padding: 0.45rem 0.7rem;
     cursor: pointer;
     text-align: left;
-    color: rgba(255,255,255,0.5);
+    color: var(--text-secondary);
     font-family: "Space Grotesk", sans-serif;
     font-size: 10.5px;
     text-transform: uppercase;
@@ -473,7 +473,7 @@
     border-radius: 0;
     transition: background 0.1s;
   }
-  .schema-row:hover { background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.8); }
+  .schema-row:hover { background: var(--row-hover); color: var(--text-primary); }
   .schema-row.current { color: #e8d5a0; }
   .schema-icon { flex-shrink: 0; color: inherit; }
   .schema-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -498,13 +498,13 @@
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: rgba(255,255,255,0.35);
+    color: var(--text-muted);
     transition: color 0.1s;
     user-select: none;
   }
   .kind-head::-webkit-details-marker { display: none; }
   .kind-head::marker { display: none; }
-  .kind-head:hover { color: rgba(255,255,255,0.6); }
+  .kind-head:hover { color: var(--text-secondary); }
   .kind-dot {
     width: 5px;
     height: 5px;
@@ -514,8 +514,8 @@
   }
   .kind-label { flex: 1 1 auto; }
   .kind-count {
-    background: rgba(255,255,255,0.08);
-    color: rgba(255,255,255,0.4);
+    background: var(--row-alt);
+    color: var(--text-muted);
     font-size: 9px;
     padding: 1px 5px;
     border-radius: 8px;
@@ -525,8 +525,8 @@
   .pre-count { opacity: 0.55; }
   .kind-spinner {
     width: 8px; height: 8px;
-    border: 1.5px solid rgba(255,255,255,0.1);
-    border-top-color: rgba(255,255,255,0.4);
+    border: 1.5px solid var(--border);
+    border-top-color: var(--text-muted);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
     flex-shrink: 0;
@@ -546,18 +546,18 @@
     border-radius: 0;
     font-family: "JetBrains Mono", "SF Mono", monospace;
     font-size: 11px;
-    color: rgba(255,255,255,0.58);
+    color: var(--text-secondary);
     cursor: pointer;
     transition: background 0.08s, color 0.08s;
     gap: 0.35rem;
   }
   .object:hover {
-    background: rgba(255,255,255,0.06);
-    color: rgba(255,255,255,0.85);
+    background: var(--row-hover);
+    color: var(--text-primary);
   }
   .object.selected {
     background: color-mix(in srgb, var(--kc) 18%, transparent);
-    color: #fff;
+    color: var(--text-primary);
     font-weight: 500;
     border-left: 2px solid var(--kc);
     padding-left: calc(1.8rem - 2px);
@@ -584,7 +584,7 @@
 
   /* ── States ───────────────────────────────────────────────── */
   .muted-row {
-    color: rgba(255,255,255,0.2);
+    color: var(--text-muted);
     font-size: 10px;
     padding: 0.1rem 0.7rem 0.1rem 1.8rem;
     font-style: italic;
@@ -630,5 +630,5 @@
     color: var(--text-primary); cursor: pointer; font-size: 12px;
     padding: 6px 14px; text-align: left;
   }
-  .ctx-item:hover { background: rgba(255,255,255,0.07); }
+  .ctx-item:hover { background: var(--row-hover); }
 </style>
