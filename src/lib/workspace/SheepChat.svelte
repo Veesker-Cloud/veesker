@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { aiChat, aiKeySave, aiKeyGet, type AiMessage, type AiContext, chartConfigureRpc, chartResetRpc, type ChartConfig, type PreviewData, type ChartConfigureResult } from "$lib/workspace";
+  import { aiChat, aiKeySave, aiKeyGet, type AiMessage, type AiContext, chartConfigureRpc, chartResetRpc, type ChartConfig, type PreviewData } from "$lib/workspace";
   import { addChart } from "$lib/stores/dashboard.svelte";
   import ChartWidget from "./ChartWidget.svelte";
   import { tick, onMount } from "svelte";
@@ -42,7 +42,7 @@
   });
 
   $effect(() => {
-    if (analyzePayload) {
+    if (analyzePayload && analyzePayload.sessionId !== currentAnalyzePayload?.sessionId) {
       void startAnalyze(analyzePayload);
     }
   });
@@ -106,6 +106,10 @@
         return;
       }
       const r = await chartConfigureRpc({ sessionId: payload.sessionId, patch: { type: matched[1] as any }, columns: payload.columns, rows: payload.rows });
+      if (!r.ok) {
+        pushAssistant("Something went wrong. Please try again.");
+        return;
+      }
       if (matched[1] === "kpi" || matched[1] === "table") {
         analyzeStep = "yColumns";
         const numericCols = payload.columns.filter((c) => /NUMBER|FLOAT|INT/i.test(c.dataType));
@@ -128,6 +132,10 @@
         return;
       }
       const r = await chartConfigureRpc({ sessionId: payload.sessionId, patch: { xColumn: col.name }, columns: payload.columns, rows: payload.rows });
+      if (!r.ok) {
+        pushAssistant("Something went wrong. Please try again.");
+        return;
+      }
       analyzeStep = "yColumns";
       const numericCols = payload.columns.filter((c) => /NUMBER|FLOAT|INT/i.test(c.dataType));
       pushAssistant(
@@ -145,6 +153,10 @@
         return;
       }
       const r = await chartConfigureRpc({ sessionId: payload.sessionId, patch: { yColumns: matched.map((c) => c.name) }, columns: payload.columns, rows: payload.rows });
+      if (!r.ok) {
+        pushAssistant("Something went wrong. Please try again.");
+        return;
+      }
       analyzeStep = "aggregation";
       pushAssistant(
         `Y axis: **${matched.map((c) => c.name).join(", ")}**\n\n**Aggregation for duplicate X values?**\nOptions: sum, avg, count, max, min, none`,
@@ -158,6 +170,10 @@
         return;
       }
       const r = await chartConfigureRpc({ sessionId: payload.sessionId, patch: { aggregation: agg[1] as any }, columns: payload.columns, rows: payload.rows });
+      if (!r.ok) {
+        pushAssistant("Something went wrong. Please try again.");
+        return;
+      }
       analyzeStep = "title";
       pushAssistant(
         `Aggregation: **${agg[1]}**\n\n**Give your chart a title:**`,
@@ -166,6 +182,10 @@
 
     } else if (analyzeStep === "title") {
       const r = await chartConfigureRpc({ sessionId: payload.sessionId, patch: { title: text }, columns: payload.columns, rows: payload.rows });
+      if (!r.ok) {
+        pushAssistant("Something went wrong. Please try again.");
+        return;
+      }
       analyzeStep = "confirm";
       pushAssistant(
         `Title: **${text}**\n\nHere's your chart — **add it to the Dashboard?** (yes / no)`,
@@ -175,6 +195,10 @@
     } else if (analyzeStep === "confirm") {
       if (lower.includes("yes") || lower === "y" || lower.includes("add")) {
         const r = await chartConfigureRpc({ sessionId: payload.sessionId, patch: {}, columns: payload.columns, rows: payload.rows });
+        if (!r.ok) {
+          pushAssistant("Something went wrong. Please try again.");
+          return;
+        }
         addChart({ config: r.data.config, previewData: r.data.previewData, sql: payload.sql, columns: payload.columns, rows: payload.rows });
         analyzeStep = null;
         currentAnalyzePayload = null;
