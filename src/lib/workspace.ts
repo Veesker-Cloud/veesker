@@ -397,6 +397,9 @@ export const debugStartRpc = (payload: {
   script: string;
   binds: Record<string, unknown>;
   breakpoints: DebugBreakpointRef[];
+  owner: string;
+  objectName: string;
+  objectType: string;
 }) => call<PauseInfo>("debug_start", { payload });
 
 export const debugStopRpc = () => call<{ ok: boolean }>("debug_stop");

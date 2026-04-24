@@ -381,6 +381,27 @@ export class DebugSession {
       });
   }
 
+  // synchronizeWithTimeout wraps synchronize() with a JS-level timeout.
+  // If Oracle SYNCHRONIZE doesn't return within `ms` milliseconds, the debugConn
+  // is closed (which causes the blocking execute to reject), and we return "completed".
+  async synchronizeWithTimeout(ms: number): Promise<PauseInfo> {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const timeoutClose = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        this.debugConn.close().catch(() => {});
+        reject(new Error("SYNCHRONIZE timeout"));
+      }, ms);
+    });
+    try {
+      const result = await Promise.race([this.synchronize(), timeoutClose]);
+      if (timer !== null) clearTimeout(timer);
+      return result;
+    } catch {
+      if (timer !== null) clearTimeout(timer);
+      return { status: "completed", frame: null, reason: REASON_FINISHED };
+    }
+  }
+
   async synchronize(): Promise<PauseInfo> {
     const res = await this.debugConn.execute(
       `DECLARE
@@ -508,13 +529,14 @@ export class DebugSession {
     return [];
   }
 
-  async stop(): Promise<void> {
-    // Close debugConn FIRST — this interrupts any pending SYNCHRONIZE or CONTINUE
-    // (closing the connection causes the blocking execute() to throw)
-    try { await this.debugConn.close(); } catch {}
-    // Then close targetConn — aborts the running anonymous block
-    try { await this.targetConn.close(); } catch {}
+  stop(): void {
     _debugSession = null;
+    // Fire-and-forget: don't await — awaiting close() while an execute() is pending
+    // on the same connection causes a mutual deadlock (close waits for execute, execute
+    // waits for Oracle event that never comes). Closing the TCP socket is near-instant
+    // and will cause the pending execute() to reject, unblocking synchronize/continue.
+    this.debugConn.close().catch(() => {});
+    this.targetConn.close().catch(() => {});
   }
 }
 
@@ -524,37 +546,69 @@ export type DebugStartParams = {
   script: string;
   binds: Record<string, unknown>;
   breakpoints: Array<{ owner: string; objectName: string; objectType: string; line: number }>;
+  // Object to auto-breakpoint on entry (required for first pause)
+  owner: string;
+  objectName: string;
+  objectType: string;
 };
 
 export async function debugStart(p: DebugStartParams): Promise<PauseInfo> {
-  if (_debugSession) await _debugSession.stop();
+  if (_debugSession) _debugSession.stop();
 
   const session = await DebugSession.create();
   await session.initialize();
 
+  // Set user-defined breakpoints
   for (const bp of p.breakpoints) {
     await session.setBreakpoint(bp.owner, bp.objectName, bp.objectType, bp.line);
   }
 
+  // Auto-set an entry breakpoint at line 1 of the target procedure.
+  // DBMS_DEBUG never auto-pauses on entry — without at least one breakpoint the
+  // anonymous block runs to completion and SYNCHRONIZE blocks forever.
+  // SET_BREAKPOINT moves line 1 to the first executable line automatically.
+  let entryBpId: number | null = null;
+  try {
+    entryBpId = await session.setBreakpoint(p.owner, p.objectName, p.objectType, 1);
+  } catch {
+    // If SET_BREAKPOINT fails (object not compiled for debug), proceed without it
+  }
+
   await session.enableOutput();
 
+  // Fire target asynchronously, then SYNCHRONIZE waits for the entry breakpoint.
   session.startTarget(p.script, p.binds);
-  // CONTINUE(BREAK_ANY_CALL) sets step-into mode and waits for the first pause event.
-  // SYNCHRONIZE alone doesn't set break mode so execution runs to completion without
-  // pausing. CONTINUE tells Oracle to stop when entering the next named subprogram.
+
   try {
-    return await session.continueExecution(BREAK_ANY_CALL);
+    const result = await session.synchronizeWithTimeout(30_000);
+
+    // Remove the auto-entry breakpoint after first pause so it's invisible to the user
+    if (entryBpId !== null) {
+      session.removeBreakpoint(entryBpId).catch(() => {});
+    }
+
+    return result;
   } catch {
-    // Connection was closed by stop() — treat as completed
     return { status: "completed", frame: null, reason: REASON_FINISHED };
   }
 }
 
 async function safeStep(flags: number): Promise<PauseInfo> {
   if (!_debugSession) throw new RpcCodedError(ORACLE_ERR, "No active debug session");
+  const session = _debugSession;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const timeoutClose = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      session.stop();
+      reject(new Error("CONTINUE timeout"));
+    }, 60_000);
+  });
   try {
-    return await _debugSession.continueExecution(flags);
+    const result = await Promise.race([session.continueExecution(flags), timeoutClose]);
+    if (timer !== null) clearTimeout(timer);
+    return result;
   } catch {
+    if (timer !== null) clearTimeout(timer);
     return { status: "completed", frame: null, reason: REASON_FINISHED };
   }
 }
@@ -564,8 +618,8 @@ export const debugStepOver  = () => safeStep(BREAK_NEXT_LINE);
 export const debugStepOut   = () => safeStep(BREAK_RETURN);
 export const debugContinue  = () => safeStep(0);
 
-export async function debugStop(): Promise<{ ok: boolean }> {
-  if (_debugSession) await _debugSession.stop();
+export function debugStop(): { ok: boolean } {
+  if (_debugSession) _debugSession.stop();
   return { ok: true };
 }
 
