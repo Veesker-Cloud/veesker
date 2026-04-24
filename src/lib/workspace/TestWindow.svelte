@@ -239,7 +239,8 @@
     {/if}
 
     <div class="tw-body">
-      {#if activeTab === 'script'}
+      <!-- Script pane always mounted so CodeMirror view persists across tab switches -->
+      <div class="tw-script-pane" class:tw-pane-hidden={activeTab !== 'script'}>
         <div class="tw-editor-wrap" bind:this={editorHost}></div>
         <div class="tw-vars">
           <VariableGrid
@@ -255,7 +256,8 @@
             disabled={true}
           />
         </div>
-      {:else if activeTab === 'output'}
+      </div>
+      {#if activeTab === 'output'}
         <div class="tw-output">
           {#if debugStore.dbmsOutput.length === 0}
             <span class="tw-output-empty">No output yet.</span>
@@ -265,7 +267,7 @@
             {/each}
           {/if}
         </div>
-      {:else}
+      {:else if activeTab === 'stats'}
         <p class="tw-placeholder">Statistics coming soon.</p>
       {/if}
     </div>
@@ -314,6 +316,8 @@
     color: var(--text-danger, #e74c3c); font-size: 12px; padding: 6px 12px;
   }
   .tw-body { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .tw-script-pane { display: flex; flex-direction: column; flex: 1; overflow: hidden; min-height: 0; }
+  .tw-pane-hidden { display: none; }
   .tw-editor-wrap { flex: 1; overflow: auto; min-height: 0; }
   .tw-editor-wrap :global(.cm-editor) { height: 100%; }
   .tw-vars { height: 200px; border-top: 1px solid var(--border); flex-shrink: 0; overflow: auto; }
