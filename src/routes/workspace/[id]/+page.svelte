@@ -11,6 +11,8 @@
   import { sqlEditor, addProcResults, activeResult } from "$lib/stores/sql-editor.svelte";
   import DashboardTab from "$lib/workspace/DashboardTab.svelte";
   import ProcExecModal from "$lib/workspace/ProcExecModal.svelte";
+  import TestWindow from "$lib/workspace/TestWindow.svelte";
+  import { debugStore } from "$lib/stores/debug.svelte";
   import {
     workspaceOpen,
     workspaceClose,
@@ -61,6 +63,7 @@
   let dataflowError = $state<string | null>(null);
   let related = $state<Loadable<TableRelated>>({ kind: "idle" });
   let activeWsTab = $state<"schema" | "dashboard">("schema");
+  let testWindowOpen = $state(false);
 
   // ── Panel resize (persisted) ─────────────────────────────────────────────────
   function loadPanelWidth(key: string, def: number): number {
@@ -259,6 +262,11 @@
   function onSelect(owner: string, name: string, kind: ObjectKind): void {
     if (selected) navHistory = [...navHistory, { owner: selected.owner, name: selected.name, kind: selected.kind }];
     selectObject(owner, name, kind);
+  }
+
+  async function onTestWindow(owner: string, name: string, kind: ObjectKind) {
+    testWindowOpen = true;
+    await debugStore.open(owner, name, kind, kind === "PACKAGE" ? name : null);
   }
 
   function onBack(): void {
@@ -476,6 +484,7 @@
           onExecuteProc={(owner, name, objectType) => {
             procExecTarget = { owner, name, objectType };
           }}
+          onTestWindow={onTestWindow}
         />
       </div>
       <div
@@ -584,6 +593,9 @@
         procExecTarget = null;
       }}
     />
+  {/if}
+  {#if testWindowOpen}
+    <TestWindow onClose={() => { testWindowOpen = false; void debugStore.stop(); }} />
   {/if}
 {/if}
 

@@ -19,12 +19,14 @@
     onRefresh?: () => void;
     refreshing?: boolean;
     onExecuteProc?: (owner: string, name: string, objectType: "PROCEDURE" | "FUNCTION") => void;
+    onTestWindow?: (owner: string, name: string, kind: ObjectKind) => void;
   };
-  let { schemas, selected, onToggle, onSelect, onRetry, onRefresh, refreshing = false, onExecuteProc }: Props = $props();
+  let { schemas, selected, onToggle, onSelect, onRetry, onRefresh, refreshing = false, onExecuteProc, onTestWindow }: Props = $props();
 
   let search = $state("");
   let hiddenKinds = $state<Set<ObjectKind>>(new Set());
   let showSystemSchemas = $state(false);
+  let contextMenu = $state<{ x: number; y: number; owner: string; name: string; kind: ObjectKind } | null>(null);
 
   const SYSTEM_SCHEMAS = new Set([
     "ANONYMOUS", "APPQOSYS", "AUDSYS", "CTXSYS", "DBSFWUSER", "DBSNMP",
@@ -242,6 +244,11 @@
                           class:selected={isSelected(s.name, o.name, kind)}
                           style={isSelected(s.name, o.name, kind) ? `--kc:${KIND_COLOR[kind]}` : ""}
                           onclick={() => onSelect(s.name, o.name, kind)}
+                          oncontextmenu={(e) => {
+                            if (!['PROCEDURE', 'FUNCTION', 'PACKAGE'].includes(kind as string)) return;
+                            e.preventDefault();
+                            contextMenu = { x: e.clientX, y: e.clientY, owner: s.name, name: o.name, kind: kind as ObjectKind };
+                          }}
                           title="{s.name}.{o.name}"
                         >
                           <span class="obj-name">{o.name}</span>
@@ -275,6 +282,39 @@
     </div>
     {/if}
   {/each}
+
+  {#if contextMenu}
+    <div
+      class="ctx-backdrop"
+      role="presentation"
+      onclick={() => { contextMenu = null; }}
+      onkeydown={() => { contextMenu = null; }}
+    ></div>
+    <div class="ctx-menu" style="left: {contextMenu.x}px; top: {contextMenu.y}px;">
+      {#if onTestWindow}
+        <button
+          class="ctx-item"
+          onclick={() => {
+            onTestWindow!(contextMenu!.owner, contextMenu!.name, contextMenu!.kind);
+            contextMenu = null;
+          }}
+        >
+          Test Window
+        </button>
+      {/if}
+      {#if (contextMenu.kind === 'PROCEDURE' || contextMenu.kind === 'FUNCTION') && onExecuteProc}
+        <button
+          class="ctx-item"
+          onclick={() => {
+            onExecuteProc!(contextMenu!.owner, contextMenu!.name, contextMenu!.kind as "PROCEDURE" | "FUNCTION");
+            contextMenu = null;
+          }}
+        >
+          Execute…
+        </button>
+      {/if}
+    </div>
+  {/if}
 </nav>
 
 <style>
@@ -582,4 +622,17 @@
   }
   .obj-row:hover .exec-btn { opacity: 1; }
   .exec-btn:hover { background: rgba(179,62,31,0.15); color: #f5a08a; }
+
+  .ctx-backdrop { position: fixed; inset: 0; z-index: 900; }
+  .ctx-menu {
+    position: fixed; z-index: 901; background: var(--bg-surface);
+    border: 1px solid var(--border); border-radius: 4px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4); min-width: 140px; padding: 4px 0;
+  }
+  .ctx-item {
+    display: block; width: 100%; background: none; border: none;
+    color: var(--text-primary); cursor: pointer; font-size: 12px;
+    padding: 6px 14px; text-align: left;
+  }
+  .ctx-item:hover { background: rgba(255,255,255,0.07); }
 </style>
