@@ -43,8 +43,8 @@ function applyAgg(values: number[], agg: ChartAggregation): number {
     case "sum": return values.reduce((a, b) => a + b, 0);
     case "avg": return values.reduce((a, b) => a + b, 0) / values.length;
     case "count": return values.length;
-    case "max": return Math.max(...values);
-    case "min": return Math.min(...values);
+    case "max": return values.reduce((a, b) => (b > a ? b : a), values[0]);
+    case "min": return values.reduce((a, b) => (b < a ? b : a), values[0]);
     default: return values[0];
   }
 }

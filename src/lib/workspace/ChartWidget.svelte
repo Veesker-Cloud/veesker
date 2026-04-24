@@ -19,12 +19,20 @@
     if (chart) { chart.destroy(); chart = null; }
   }
 
+  function cssVar(name: string): string {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || name;
+  }
+
   async function buildChart() {
     if (!canvas || !previewData) return;
     destroyChart();
     const data = previewData;
     const { Chart, registerables } = await import("chart.js");
     Chart.register(...registerables);
+
+    const colorPrimary = cssVar("--text-primary");
+    const colorMuted   = cssVar("--text-muted");
+    const colorBorder  = cssVar("--border");
 
     const isHorizontal = config.type === "bar-h";
     const isDoughnut   = config.type === "pie";
@@ -51,12 +59,12 @@
         maintainAspectRatio: true,
         indexAxis: isHorizontal ? "y" : "x",
         plugins: {
-          legend: { display: data.datasets.length > 1 || isDoughnut, labels: { color: "var(--text-primary)", font: { size: 10 } } },
+          legend: { display: data.datasets.length > 1 || isDoughnut, labels: { color: colorPrimary, font: { size: 10 } } },
           title: { display: false },
         },
         scales: isDoughnut ? {} : {
-          x: { ticks: { color: "var(--text-muted)", font: { size: 9 } }, grid: { color: "var(--border)" } },
-          y: { ticks: { color: "var(--text-muted)", font: { size: 9 } }, grid: { color: "var(--border)" } },
+          x: { ticks: { color: colorMuted, font: { size: 9 } }, grid: { color: colorBorder } },
+          y: { ticks: { color: colorMuted, font: { size: 9 } }, grid: { color: colorBorder } },
         },
       },
     });
