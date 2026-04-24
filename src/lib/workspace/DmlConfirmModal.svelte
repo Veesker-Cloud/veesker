@@ -28,14 +28,12 @@
   class="modal"
   open
   onclick={(e) => { if (e.target === e.currentTarget) onCancel(); }}
+  onkeydown={(e) => { if (e.key === "Escape") onCancel(); }}
 >
   <div
     class="modal-box"
     role="document"
-    onkeydown={(e) => {
-      if (e.key === "Escape") { onCancel(); return; }
-      e.stopPropagation();
-    }}
+    onkeydown={(e) => e.stopPropagation()}
     onclick={(e) => e.stopPropagation()}
   >
     <div class="modal-header" class:critical={worstSeverity === "critical"} class:destructive={worstSeverity === "destructive"} class:warning={worstSeverity === "warning"}>
