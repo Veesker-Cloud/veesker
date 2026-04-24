@@ -240,12 +240,18 @@ class DebugStore {
       packageName: this.packageName,
     });
 
+    // Guard: user may have clicked Stop while we were waiting for the RPC.
+    if (this.status === 'idle') return;
+
     if (!res.ok) {
       this.status = "error";
       this.errorMessage = res.error.message;
       if (res.error.code === SESSION_LOST) await this.stop();
       return;
     }
+
+    // Guard again after async gap
+    if (this.status === 'idle') return;
 
     await this._applyPauseInfo(res.data);
   }

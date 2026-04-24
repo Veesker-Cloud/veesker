@@ -310,17 +310,21 @@ export class DebugSession {
   }
 
   async initialize(): Promise<string> {
+    process.stderr.write("[debug] INITIALIZE called on target conn\n");
     const res = await this.targetConn.execute(
       `BEGIN :sid := DBMS_DEBUG.INITIALIZE(diagnostics => 0); END;`,
       { sid: { dir: oracledb.BIND_OUT, type: oracledb.STRING, maxSize: 100 } }
     );
     const sid = (res.outBinds as any).sid as string;
+    process.stderr.write(`[debug] INITIALIZE OK sid=${sid}\n`);
     // Oracle 23ai requires DEBUG_ON to activate step-through mode on the target session
     await this.targetConn.execute(`BEGIN DBMS_DEBUG.DEBUG_ON; END;`);
+    process.stderr.write("[debug] DEBUG_ON OK\n");
     await this.debugConn.execute(
       `BEGIN DBMS_DEBUG.ATTACH_SESSION(:sid, 0); END;`,
       { sid }
     );
+    process.stderr.write("[debug] ATTACH_SESSION OK\n");
     return sid;
   }
 
@@ -398,15 +402,23 @@ export class DebugSession {
   // If Oracle SYNCHRONIZE doesn't return within `ms` milliseconds, the debugConn
   // is closed (which causes the blocking execute to reject), and we return "completed".
   async synchronizeWithTimeout(ms: number): Promise<PauseInfo> {
+    process.stderr.write(`[debug] SYNCHRONIZE started, timeout=${ms}ms\n`);
     const completed: PauseInfo = { status: "completed", frame: null, reason: REASON_FINISHED };
     let timer: ReturnType<typeof setTimeout> | null = null;
 
     // Attach .catch so the synchronize() promise never becomes an unhandled rejection
     // if the timeout fires first and closes the connection.
-    const syncPromise = this.synchronize().catch(() => completed);
+    const syncPromise = this.synchronize().then((r) => {
+      process.stderr.write(`[debug] SYNCHRONIZE resolved: status=${r.status} reason=${r.reason} obj=${r.frame?.objectName ?? "null"} line=${r.frame?.line ?? "null"}\n`);
+      return r;
+    }).catch((err) => {
+      process.stderr.write(`[debug] SYNCHRONIZE rejected: ${String(err)}\n`);
+      return completed;
+    });
 
     const timeoutClose = new Promise<PauseInfo>((resolve) => {
       timer = setTimeout(() => {
+        process.stderr.write(`[debug] SYNCHRONIZE timed out after ${ms}ms — closing debugConn\n`);
         this.debugConn.close().catch(() => {});
         resolve(completed);
       }, ms);
@@ -581,12 +593,22 @@ export type DebugStartParams = {
 };
 
 export async function debugStart(p: DebugStartParams): Promise<PauseInfo> {
-  if (_debugSession) _debugSession.stop();
+  process.stderr.write(
+    `[debug] debugStart: owner=${p.owner} obj=${p.objectName} type=${p.objectType} pkg=${p.packageName ?? "null"} userBps=${p.breakpoints.length}\n`
+  );
+
+  if (_debugSession) {
+    process.stderr.write("[debug] stopping previous session\n");
+    _debugSession.stop();
+  }
 
   const session = await DebugSession.create();
+  process.stderr.write("[debug] connections created\n");
+
   try {
     await session.initialize();
   } catch (e) {
+    process.stderr.write(`[debug] initialize FAILED: ${String(e)}\n`);
     session.stop();
     throw e;
   }
@@ -594,9 +616,11 @@ export async function debugStart(p: DebugStartParams): Promise<PauseInfo> {
   // Set user-defined breakpoints; clean up session if any fail.
   try {
     for (const bp of p.breakpoints) {
+      process.stderr.write(`[debug] setting user bp: ${bp.objectName}:${bp.line}\n`);
       await session.setBreakpoint(bp.owner, bp.objectName, bp.objectType, bp.line);
     }
   } catch (e) {
+    process.stderr.write(`[debug] user breakpoint FAILED: ${String(e)}\n`);
     session.stop();
     throw e;
   }
@@ -610,19 +634,37 @@ export async function debugStart(p: DebugStartParams): Promise<PauseInfo> {
   const entryType   = p.packageName ? "PACKAGE BODY" : p.objectType;
   let entryBpId: number | null = null;
   try {
+    process.stderr.write(`[debug] setting entry bp: ${entryTarget} (${entryType}) line=1\n`);
     entryBpId = await session.setBreakpoint(p.owner, entryTarget, entryType, 1);
-  } catch {
-    // If SET_BREAKPOINT fails (object not compiled for debug), proceed without it
+    process.stderr.write(`[debug] entry bp OK, bpId=${entryBpId}\n`);
+  } catch (e) {
+    process.stderr.write(`[debug] entry bp FAILED: ${String(e)}\n`);
+    // If there are no user breakpoints either, fail immediately with a helpful message.
+    // Without any breakpoint, startTarget runs to completion and SYNCHRONIZE blocks
+    // for the full timeout (30s) with no feedback.
+    if (p.breakpoints.length === 0) {
+      session.stop();
+      throw new RpcCodedError(
+        ORACLE_ERR,
+        `${entryTarget} is not compiled for debug. Run:\n` +
+        `ALTER ${entryType} ${p.owner}.${entryTarget} COMPILE DEBUG;\n` +
+        `Also ensure: GRANT DEBUG CONNECT SESSION TO ${p.owner}; GRANT DEBUG ANY PROCEDURE TO ${p.owner};`
+      );
+    }
+    // else: proceed with just the user-defined breakpoints
   }
 
   try {
     await session.enableOutput();
+    process.stderr.write("[debug] DBMS_OUTPUT enabled\n");
   } catch (e) {
+    process.stderr.write(`[debug] enableOutput FAILED: ${String(e)}\n`);
     session.stop();
     throw e;
   }
 
   // Fire target asynchronously, then SYNCHRONIZE waits for the entry breakpoint.
+  process.stderr.write("[debug] firing startTarget\n");
   session.startTarget(p.script, p.binds);
 
   try {
@@ -633,8 +675,10 @@ export async function debugStart(p: DebugStartParams): Promise<PauseInfo> {
       session.removeBreakpoint(entryBpId).catch(() => {});
     }
 
+    process.stderr.write(`[debug] debugStart complete: ${result.status}\n`);
     return result;
-  } catch {
+  } catch (e) {
+    process.stderr.write(`[debug] synchronizeWithTimeout threw: ${String(e)}\n`);
     return { status: "completed", frame: null, reason: REASON_FINISHED };
   }
 }
