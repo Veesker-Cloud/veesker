@@ -211,9 +211,14 @@ class DebugStore {
     });
     if (res.ok) {
       this.dbmsOutput = res.data.output;
+      this.liveVars = Object.entries(res.data.outBinds).map(([name, value]) => ({
+        name: name.replace(/^out_/i, ""),
+        value: value ?? null,
+      }));
       this.status = "completed";
     } else {
       this.errorMessage = res.error.message;
+      if (res.error.code === SESSION_LOST) await this.stop();
       this.status = "error";
     }
   }

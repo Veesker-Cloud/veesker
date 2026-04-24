@@ -424,4 +424,4 @@ export const debugGetCallStackRpc = () =>
 export const debugRunRpc = (payload: {
   script: string;
   binds: Record<string, unknown>;
-}) => call<{ output: string[]; elapsedMs: number }>("debug_run", { payload });
+}) => call<{ output: string[]; elapsedMs: number; outBinds: Record<string, string | null> }>("debug_run", { payload });

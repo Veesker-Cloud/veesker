@@ -576,11 +576,24 @@ export async function debugGetCallStack(): Promise<{ frames: StackFrame[] }> {
 export async function debugRun(p: {
   script: string;
   binds: Record<string, unknown>;
-}): Promise<{ output: string[]; elapsedMs: number }> {
+}): Promise<{ output: string[]; elapsedMs: number; outBinds: Record<string, string | null> }> {
   const started = Date.now();
   return withActiveSession(async (conn) => {
     await conn.execute(`BEGIN DBMS_OUTPUT.ENABLE(1000000); END;`);
-    await conn.execute(p.script, p.binds);
+
+    // Separate IN binds (user-supplied values) from OUT binds (out_* prefix → need BIND_OUT)
+    const execBinds: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(p.binds)) {
+      if (key.startsWith("out_")) {
+        execBinds[key] = { dir: oracledb.BIND_OUT, type: oracledb.STRING, maxSize: 32767 };
+      } else {
+        execBinds[key] = val ?? null;
+      }
+    }
+
+    const execResult = await conn.execute(p.script, execBinds);
+    const rawOut = (execResult.outBinds ?? {}) as Record<string, string | null>;
+
     const lines: string[] = [];
     while (true) {
       const r = await conn.execute(
@@ -594,6 +607,6 @@ export async function debugRun(p: {
       if ((b.status as number) !== 0) break;
       lines.push((b.line as string) ?? "");
     }
-    return { output: lines, elapsedMs: Date.now() - started };
+    return { output: lines, elapsedMs: Date.now() - started, outBinds: rawOut };
   });
 }
