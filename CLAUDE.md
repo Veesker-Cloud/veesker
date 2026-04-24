@@ -145,13 +145,17 @@ Verify: `rustc -vV` — look for the `host:` line.
 
 ## Compile the sidecar binary (macOS)
 
+**Intel Mac (`x86_64-apple-darwin`):** the pre-compiled binary is committed to the repo at `src-tauri/binaries/veesker-sidecar-x86_64-apple-darwin`. You only need to recompile it if you change files under `sidecar/src/`.
+
+**Apple Silicon (`aarch64-apple-darwin`):** no pre-compiled binary is committed. You **must** compile before running `tauri dev` or `tauri build`.
+
 ```bash
 cd sidecar
 
-# Apple Silicon
+# Apple Silicon — required before every first run and after sidecar changes
 bun build src/index.ts --compile --minify --outfile ../src-tauri/binaries/veesker-sidecar-aarch64-apple-darwin
 
-# Intel Mac
+# Intel Mac — only needed after sidecar source changes
 bun build src/index.ts --compile --minify --outfile ../src-tauri/binaries/veesker-sidecar-x86_64-apple-darwin
 
 cd ..
@@ -159,11 +163,33 @@ cd ..
 
 The binary has no `.exe` extension on macOS. Tauri appends the target triple automatically.
 
+**Note:** `sidecar/package.json` has a `build` script that targets `x86_64-apple-darwin`. On Apple Silicon, run the command above directly — do not use `bun run build` inside the sidecar directory without editing the script first.
+
 After compiling, run normally:
 
 ```bash
 bun run tauri dev        # development
 bun run tauri build      # production (.dmg / .app in src-tauri/target/release/bundle/)
+```
+
+### macOS-specific behavior
+
+**Code signing:** `tauri.conf.json` uses `signingIdentity: "-"` (ad-hoc signing). No Apple Developer account or certificate is required for local builds. The `.dmg`/`.app` produced by `tauri build` will show a Gatekeeper warning on other machines — this is expected for pre-release builds.
+
+**Keychain:** The `keyring` crate uses macOS Keychain (`apple-native` feature) to store Oracle connection passwords. Entries appear under the Keychain app as items prefixed with `veesker:`. This is automatic — no configuration needed.
+
+**App data directory:** Tauri stores all persistent data (SQLite DB, wallet files, audit logs) at:
+```
+~/Library/Application Support/dev.veesker.app/
+```
+Key paths:
+- `veesker.db` — connection metadata and query history
+- `wallets/` — Oracle wallet zip files
+- `audit/` — SQL execution audit logs (`YYYY-MM-DD.jsonl`)
+
+**Zombie sidecar processes (macOS):** If `tauri dev` fails because the sidecar binary is locked, kill lingering processes:
+```bash
+pkill -f veesker-sidecar
 ```
 
 ---
