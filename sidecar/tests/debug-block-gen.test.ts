@@ -49,9 +49,8 @@ describe("generateTestBlock", () => {
       { name: "P_VAL", dataType: "NUMBER", inOut: "IN/OUT", position: 1 },
     ];
     const block = generateTestBlock("SC", "PROC", null, params);
-    expect(block).toContain("v_p_val NUMBER");
+    expect(block).toContain("v_p_val NUMBER := :p_val");
     expect(block).toContain(":p_val");
-    expect(block).toContain("v_p_val := :p_val");
     expect(block).toContain("p_val => v_p_val");
   });
 

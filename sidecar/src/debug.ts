@@ -1,7 +1,3 @@
-import oracledb from "oracledb";
-import { getActiveSession, setSession, clearSession, hasSession } from "./state";
-import { RpcCodedError, SESSION_LOST, ORACLE_ERR } from "./errors";
-
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export type ParamDef = {
@@ -71,9 +67,10 @@ export function generateTestBlock(
     const localVar = `v_${bind}`;
     const dt = p.dataType.toUpperCase();
 
-    if (dt === "BOOLEAN") {
+    if (dt === "BOOLEAN" || dt === "PL/SQL BOOLEAN") {
       declares.push(`  ${localVar} BOOLEAN;`);
       declares.push(
+        `  -- Convert :${bind} ('TRUE'/'FALSE'/NULL) to BOOLEAN\n` +
         `  ${localVar} := CASE UPPER(:${bind}) WHEN 'TRUE' THEN TRUE WHEN 'FALSE' THEN FALSE ELSE NULL END;`
       );
       callArgs.push(`    ${bind} => ${localVar}`);
@@ -95,13 +92,12 @@ export function generateTestBlock(
     } else {
       // IN/OUT
       const safeType =
-        dt === "NUMBER" || dt === "INTEGER"
+        dt === "NUMBER" || dt === "INTEGER" || dt === "BINARY_INTEGER"
           ? "NUMBER"
           : dt === "DATE"
             ? "DATE"
             : `VARCHAR2(32767)`;
-      declares.push(`  ${localVar} ${safeType};`);
-      declares.push(`  ${localVar} := :${bind};`);
+      declares.push(`  ${localVar} ${safeType} := :${bind};`);
       callArgs.push(`    ${bind} => ${localVar}`);
       postCall.push(`  :out_${bind} := ${localVar};`);
     }
