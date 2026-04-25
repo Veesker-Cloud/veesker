@@ -195,3 +195,9 @@ export async function ordsModuleGet(params: { owner: string; name: string }): Pr
     privileges,
   };
 }
+
+export async function ordsEnableSchema(_params: Record<string, unknown> = {}): Promise<{ ok: true }> {
+  const conn = getActiveSession();
+  await conn.execute(`BEGIN ORDS.ENABLE_SCHEMA(p_enabled => TRUE); COMMIT; END;`, []);
+  return { ok: true };
+}

@@ -219,6 +219,7 @@ pub fn run() {
             commands::ords_detect,
             commands::ords_modules_list,
             commands::ords_module_get,
+            commands::ords_enable_schema,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

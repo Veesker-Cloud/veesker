@@ -27,6 +27,7 @@
     schemaKindCounts,
     vectorTablesInSchema,
     ordsModulesList,
+    ordsEnableSchema,
     SESSION_LOST,
     type WorkspaceInfo,
     type ObjectKind,
@@ -649,8 +650,13 @@
       state={ordsStore.state}
       schemaName={schemas.find((s) => s.isCurrent)?.name ?? ""}
       onEnableSchema={async () => {
-        alert("Implementação em Task 2.5");
-        showOrdsBootstrap = false;
+        const res = await ordsEnableSchema();
+        if (!res.ok) {
+          alert("Falha ao habilitar schema: " + res.error.message);
+          return;
+        }
+        await ordsStore.refresh();
+        if (ordsStore.state?.currentSchemaEnabled) showOrdsBootstrap = false;
       }}
       onSetBaseUrl={(url) => {
         if (ordsStore.state) ordsStore.state.ordsBaseUrl = url;

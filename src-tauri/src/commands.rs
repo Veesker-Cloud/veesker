@@ -852,3 +852,9 @@ pub async fn ords_module_get(
 ) -> Result<serde_json::Value, ConnectionTestErr> {
     call_sidecar(&app, "ords.module.get", json!({ "owner": owner, "name": name })).await
 }
+
+#[tauri::command]
+pub async fn ords_enable_schema(app: AppHandle) -> Result<(), ConnectionTestErr> {
+    call_sidecar(&app, "ords.enable_schema", json!({})).await?;
+    Ok(())
+}
