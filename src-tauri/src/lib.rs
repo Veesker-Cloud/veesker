@@ -5,7 +5,7 @@ mod tray;
 
 use tauri::menu::{AboutMetadataBuilder, MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
 use tokio::sync::Mutex;
 
@@ -21,6 +21,10 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .menu(|app| {
+            let help_item = MenuItemBuilder::with_id("open_help", "Help")
+                .accelerator("F1")
+                .build(app)?;
+
             let about = SubmenuBuilder::new(app, "Veesker")
                 .about(Some(
                     AboutMetadataBuilder::new()
@@ -28,6 +32,8 @@ pub fn run() {
                         .comments(Some("Oracle 23ai Vector Search Studio"))
                         .build(),
                 ))
+                .separator()
+                .item(&help_item)
                 .separator()
                 .quit()
                 .build()?;
@@ -144,6 +150,12 @@ pub fn run() {
                                 });
                             }
                         });
+                }
+            });
+
+            app.on_menu_event(|app, event| {
+                if event.id().as_ref() == "open_help" {
+                    let _ = app.emit("open-help", ());
                 }
             });
 
