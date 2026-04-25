@@ -156,6 +156,9 @@ export const ordsRolesList = () =>
 export const ordsGenerateSql = (config: Record<string, unknown>) =>
   call<{ sql: string }>("ords_generate_sql", { config });
 
+export const ordsApply = (sql: string) =>
+  call<void>("ords_apply", { sql });
+
 export const objectsListPlsql = (owner: string, kind: string) =>
   call<ObjectRefWithStatus[]>("objects_list_plsql", { owner, kind });
 

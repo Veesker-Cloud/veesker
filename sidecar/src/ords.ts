@@ -269,6 +269,12 @@ export async function ordsRolesList(_params: Record<string, unknown> = {}): Prom
   return { roles: (res.rows ?? []).map((r: any) => (r.ROLE_NAME ?? r.role_name) as string) };
 }
 
+export async function ordsApply(params: { sql: string }): Promise<{ ok: true }> {
+  const conn = getActiveSession();
+  await conn.execute(params.sql, []);
+  return { ok: true };
+}
+
 function sqlString(s: string): string {
   return `'${s.replace(/'/g, "''")}'`;
 }
