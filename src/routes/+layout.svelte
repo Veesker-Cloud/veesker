@@ -1,12 +1,25 @@
 <script lang="ts">
   import "../app.css";
   import { theme } from "$lib/stores/theme.svelte";
+  import { onMount } from "svelte";
+  import { listen } from "@tauri-apps/api/event";
+  import HelpModal from "$lib/workspace/HelpModal.svelte";
   import type { Snippet } from "svelte";
 
   let { children }: { children: Snippet } = $props();
+  let showHelp = $state(false);
 
   $effect(() => {
     document.documentElement.dataset.theme = theme.current;
+  });
+
+  onMount(() => {
+    const unlistenPromise = listen("open-help", () => {
+      showHelp = true;
+    });
+    return () => {
+      unlistenPromise.then((fn) => fn());
+    };
   });
 </script>
 
@@ -20,3 +33,7 @@
 </svelte:head>
 
 {@render children()}
+
+{#if showHelp}
+  <HelpModal onClose={() => { showHelp = false; }} />
+{/if}
