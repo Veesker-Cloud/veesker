@@ -9,18 +9,47 @@ export type OrdsDetectResult = {
   ordsBaseUrl: string | null;
 };
 
+// ORA-00942: table or view does not exist
+// ORA-04043: object does not exist
+// PLS-00201: identifier must be declared
+function isOrdsNotAccessible(err: any): boolean {
+  const msg = String(err?.message ?? err);
+  return msg.includes("ORA-00942") || msg.includes("ORA-04043") || msg.includes("PLS-00201");
+}
+
 export async function ordsDetect(_params: Record<string, unknown> = {}): Promise<OrdsDetectResult> {
   const conn = getActiveSession();
 
-  const installedRes = await conn.execute<{ CNT: number; cnt?: number }>(
-    `SELECT COUNT(*) AS cnt FROM all_objects
-     WHERE owner='ORDS' AND object_name='ORDS' AND object_type='PACKAGE'`,
-    [],
-    { outFormat: oracledb.OUT_FORMAT_OBJECT }
-  );
-  const installedRow = installedRes.rows?.[0];
-  const installedCnt = (installedRow?.CNT ?? installedRow?.cnt ?? 0) as number;
-  const installed = installedCnt > 0;
+  // Probe whether the current user can actually use ORDS — tries the synonym
+  // visible to this session. Modern ORDS lives in ORDS_METADATA with PUBLIC
+  // synonyms granted per-schema; if the user can't see them, ORDS is unusable
+  // for them regardless of where the package physically lives.
+  let installed = false;
+  try {
+    await conn.execute(
+      `SELECT 1 FROM all_objects WHERE object_name='ORDS' AND object_type='PACKAGE' AND ROWNUM=1`,
+      [],
+      { outFormat: oracledb.OUT_FORMAT_OBJECT }
+    );
+    installed = true;
+  } catch {
+    installed = false;
+  }
+
+  // Even if the package is visible, the user may not have the views. Treat
+  // "user_ords_schemas absent" as "not installed for this schema" — the
+  // bootstrap modal then guides the user to grant + enable.
+  if (installed) {
+    try {
+      await conn.execute(
+        `SELECT 1 FROM user_ords_schemas WHERE ROWNUM=0`,
+        [],
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+      );
+    } catch (e) {
+      if (isOrdsNotAccessible(e)) installed = false;
+    }
+  }
 
   if (!installed) {
     return {
@@ -99,11 +128,17 @@ export async function ordsModulesList(params: { owner: string }): Promise<{ name
     FROM   all_ords_modules
     WHERE  parsing_schema = :owner
     ORDER  BY name`;
-  const res = await conn.execute<any>(
-    sql,
-    { owner: params.owner.toUpperCase() },
-    { outFormat: oracledb.OUT_FORMAT_OBJECT }
-  );
+  let res: any;
+  try {
+    res = await conn.execute<any>(
+      sql,
+      { owner: params.owner.toUpperCase() },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT }
+    );
+  } catch (e) {
+    if (isOrdsNotAccessible(e)) return [];
+    throw e;
+  }
   return (res.rows ?? []).map((r: any) => ({
     name: r.NAME ?? r.name,
     basePath: r.basePath ?? r.BASEPATH ?? r.BASE_PATH ?? r.base_path,
@@ -120,13 +155,21 @@ export async function ordsModuleGet(params: { owner: string; name: string }): Pr
 }> {
   const conn = getActiveSession();
 
-  const modRes = await conn.execute<any>(
-    `SELECT name, base_path, status, items_per_page, comments
-     FROM   all_ords_modules
-     WHERE  parsing_schema = :owner AND name = :name`,
-    { owner: params.owner.toUpperCase(), name: params.name },
-    { outFormat: oracledb.OUT_FORMAT_OBJECT }
-  );
+  let modRes: any;
+  try {
+    modRes = await conn.execute<any>(
+      `SELECT name, base_path, status, items_per_page, comments
+       FROM   all_ords_modules
+       WHERE  parsing_schema = :owner AND name = :name`,
+      { owner: params.owner.toUpperCase(), name: params.name },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT }
+    );
+  } catch (e) {
+    if (isOrdsNotAccessible(e)) {
+      throw { code: -32014, message: "ORDS not configured for this schema. Use the ORDS bootstrap modal to enable it." };
+    }
+    throw e;
+  }
   if (!modRes.rows || modRes.rows.length === 0) {
     throw { code: -32012, message: `Module ${params.name} not found` };
   }
@@ -261,17 +304,30 @@ export async function ordsModuleExportSql(params: { owner: string; name: string 
 
 export async function ordsRolesList(_params: Record<string, unknown> = {}): Promise<{ roles: string[] }> {
   const conn = getActiveSession();
-  const res = await conn.execute<any>(
-    `SELECT role_name FROM all_ords_roles ORDER BY role_name`,
-    [],
-    { outFormat: oracledb.OUT_FORMAT_OBJECT }
-  );
+  let res: any;
+  try {
+    res = await conn.execute<any>(
+      `SELECT role_name FROM all_ords_roles ORDER BY role_name`,
+      [],
+      { outFormat: oracledb.OUT_FORMAT_OBJECT }
+    );
+  } catch (e) {
+    if (isOrdsNotAccessible(e)) return { roles: [] };
+    throw e;
+  }
   return { roles: (res.rows ?? []).map((r: any) => (r.ROLE_NAME ?? r.role_name) as string) };
 }
 
 export async function ordsApply(params: { sql: string }): Promise<{ ok: true }> {
   const conn = getActiveSession();
-  await conn.execute(params.sql, []);
+  try {
+    await conn.execute(params.sql, []);
+  } catch (e) {
+    if (isOrdsNotAccessible(e)) {
+      throw { code: -32014, message: "ORDS package not accessible. Habilite o schema para ORDS antes de aplicar." };
+    }
+    throw e;
+  }
   return { ok: true };
 }
 
@@ -529,11 +585,17 @@ export type RestClient = {
 
 export async function ordsClientsList(_params: Record<string, unknown> = {}): Promise<{ clients: RestClient[] }> {
   const conn = getActiveSession();
-  const res = await conn.execute<any>(
-    `SELECT name, description, created_on FROM user_ords_clients ORDER BY name`,
-    [],
-    { outFormat: oracledb.OUT_FORMAT_OBJECT }
-  );
+  let res: any;
+  try {
+    res = await conn.execute<any>(
+      `SELECT name, description, created_on FROM user_ords_clients ORDER BY name`,
+      [],
+      { outFormat: oracledb.OUT_FORMAT_OBJECT }
+    );
+  } catch (e) {
+    if (isOrdsNotAccessible(e)) return { clients: [] };
+    throw e;
+  }
   return {
     clients: (res.rows ?? []).map((r: any) => ({
       name: r.NAME ?? r.name,
@@ -560,10 +622,17 @@ export async function ordsClientsCreate(params: {
       p_privilege_names => NULL);
     COMMIT;
   END;`;
-  await conn.execute(sqlCreate, {
-    name: params.name,
-    description: params.description ?? "",
-  });
+  try {
+    await conn.execute(sqlCreate, {
+      name: params.name,
+      description: params.description ?? "",
+    });
+  } catch (e) {
+    if (isOrdsNotAccessible(e)) {
+      throw { code: -32014, message: "ORDS/OAUTH packages not accessible to this schema. Habilite o schema para ORDS pelo modal de bootstrap." };
+    }
+    throw e;
+  }
 
   for (const role of params.roles) {
     await conn.execute(
