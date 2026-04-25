@@ -449,11 +449,73 @@ export function generateProcedureEndpoint(p: ProcedureEndpointParams): string {
 }
 
 // ── Dispatcher RPC ────────────────────────────────────────────────────────────
+// Translates from frontend BuilderConfig shape to generator-specific params.
+
+import { procDescribe } from "./oracle";
 
 export async function ordsGenerateSql(params: any): Promise<{ sql: string }> {
-  if (params.type === "auto-crud") return { sql: generateAutoCrudSql(params) };
-  if (params.type === "custom-sql") return { sql: generateCustomSqlEndpoint(params) };
-  if (params.type === "procedure") return { sql: generateProcedureEndpoint(params) };
+  if (params.type === "auto-crud") {
+    if (!params.sourceObject) {
+      throw { code: -32602, message: "Missing sourceObject for auto-crud endpoint" };
+    }
+    const objectType = params.sourceObject.kind === "VIEW" ? "VIEW" : "TABLE";
+    const alias = String(params.sourceObject.name).toLowerCase().replace(/_/g, "-");
+    return {
+      sql: generateAutoCrudSql({
+        schema: params.sourceObject.owner,
+        objectName: params.sourceObject.name,
+        objectType,
+        alias,
+        authMode: params.authMode ?? "none",
+        authRole: params.authRole ?? null,
+      }),
+    };
+  }
+
+  if (params.type === "custom-sql") {
+    return {
+      sql: generateCustomSqlEndpoint({
+        moduleName: params.moduleName,
+        basePath: params.basePath,
+        routePattern: params.routePattern,
+        method: params.method ?? "GET",
+        source: params.sourceSql ?? "",
+        authMode: params.authMode ?? "none",
+        authRole: params.authRole ?? null,
+      }),
+    };
+  }
+
+  if (params.type === "procedure") {
+    if (!params.sourceObject) {
+      throw { code: -32602, message: "Missing sourceObject for procedure endpoint" };
+    }
+    const desc = await procDescribe({
+      owner: params.sourceObject.owner,
+      name: params.sourceObject.name,
+    });
+    const procParams = (desc.params ?? []).map((p: any) => ({
+      name: p.name as string,
+      argMode: (p.direction === "IN/OUT" ? "IN/OUT" : (p.direction as "IN" | "OUT" | "IN/OUT")),
+      dataType: p.dataType as string,
+    }));
+    return {
+      sql: generateProcedureEndpoint({
+        moduleName: params.moduleName,
+        basePath: params.basePath,
+        routePattern: params.routePattern,
+        method: params.method ?? "POST",
+        schema: params.sourceObject.owner,
+        procName: params.sourceObject.name,
+        packageName: null,
+        params: procParams,
+        hasReturn: false,
+        authMode: params.authMode ?? "none",
+        authRole: params.authRole ?? null,
+      }),
+    };
+  }
+
   throw { code: -32602, message: `Unknown endpoint type: ${params.type}` };
 }
 

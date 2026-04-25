@@ -381,7 +381,13 @@
     const current = schemas.find((s) => s.isCurrent);
     if (current) expandIfNeeded(current);
     ordsStore.setConnectionId(meta.id);
-    void ordsStore.refresh();
+    void ordsStore.refresh().then(() => {
+      const s = ordsStore.state;
+      if (!s) return;
+      if (!s.installed || !s.currentSchemaEnabled || !s.hasAdminRole || !s.ordsBaseUrl) {
+        showOrdsBootstrap = true;
+      }
+    });
 
     if (current) {
       const [tablesRes, viewsRes] = await Promise.allSettled([

@@ -246,7 +246,7 @@
                           style={isSelected(s.name, o.name, kind) ? `--kc:${KIND_COLOR[kind]}` : ""}
                           onclick={() => onSelect(s.name, o.name, kind)}
                           oncontextmenu={(e) => {
-                            if (!['PROCEDURE', 'FUNCTION', 'PACKAGE'].includes(kind as string)) return;
+                            if (!['PROCEDURE', 'FUNCTION', 'PACKAGE', 'TABLE', 'VIEW'].includes(kind as string)) return;
                             e.preventDefault();
                             contextMenu = { x: e.clientX, y: e.clientY, owner: s.name, name: o.name, kind: kind as ObjectKind };
                           }}
