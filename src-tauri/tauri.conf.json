@@ -27,6 +27,7 @@
     "active": true,
     "targets": "all",
     "externalBin": ["binaries/veesker-sidecar"],
+    "createUpdaterArtifacts": true,
     "macOS": {
       "signingIdentity": "-"
     },
@@ -37,5 +38,16 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/geeviana/veesker/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlEMDczRjk3NEFFOTU2MDcKUldRSFZ1bEtsejhIblVYVTZKQS9YeXRGbWplUExiYVY5ZHFyTzlVMUpnd2lwN3lwcm1yYXJyTE0K",
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }
