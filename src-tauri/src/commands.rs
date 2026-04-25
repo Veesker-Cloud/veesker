@@ -880,3 +880,12 @@ pub async fn ords_generate_sql(
 ) -> Result<serde_json::Value, ConnectionTestErr> {
     call_sidecar(&app, "ords.generate_sql", config).await
 }
+
+#[tauri::command]
+pub async fn ords_apply(
+    app: AppHandle,
+    sql: String,
+) -> Result<(), ConnectionTestErr> {
+    call_sidecar(&app, "ords.apply", json!({ "sql": sql })).await?;
+    Ok(())
+}
