@@ -1,6 +1,6 @@
 [package]
 name = "veesker"
-version = "0.1.0"
+version = "0.2.0"
 description = "The studio for Oracle 23ai vector search"
 authors = ["Geraldo F. Viana Júnior <geefatec@gmail.com>"]
 edition = "2021"
