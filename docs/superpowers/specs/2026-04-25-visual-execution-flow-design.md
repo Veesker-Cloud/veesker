@@ -6,7 +6,7 @@
 
 ## Summary
 
-Add a side-panel visualization that animates the execution flow of a PL/SQL procedure/function/package method or a SQL statement's EXPLAIN PLAN, step-by-step, with NEXT/PREV navigation. The trace is captured once (replay-and-record) and the user navigates the recorded history locally — zero round-trips to Oracle during navigation.
+Add a side-panel visualization that animates the execution flow of a PL/SQL procedure/function/package method or a SQL statement's EXPLAIN PLAN, step-by-step, with NEXT/PREV navigation. The trace is captured once (trace-and-replay model) and the user navigates the recorded history locally — zero round-trips to Oracle during navigation.
 
 ## Goals
 
@@ -104,8 +104,9 @@ type TraceResult = {
 ### Constraints
 
 - `events.length` ≤ 5000 (configurable). If the trace would exceed this, the trace stops, `truncated: true` is set, and the panel shows a "trace was truncated" badge.
-- Each variable value is truncated to 1KB. Total variables payload per step capped at 64KB.
-- Source lines truncated to 200 characters (continuation marker if truncated).
+- Each variable value is truncated to 1KB. After per-value truncation, if the sum of values for a single step still exceeds 64KB, drop later variables in that step's `variables[]` and append a synthetic entry `{ name: "__truncated__", value: "<n more variables omitted>" }`.
+- Source lines truncated to 200 characters with a `…` continuation marker.
+- The complete `TraceResult` is held in the frontend Svelte store for the lifetime of the workspace tab. Closing the tab discards the trace. No on-disk persistence in this MVP.
 
 ## Sidecar capture
 
@@ -226,7 +227,7 @@ src/lib/stores/
 |---|---|
 | Procedure not compiled with debug | Inline tip in panel: "Object lacks debug symbols. Recompile with `ALTER ... COMPILE DEBUG;`" plus a one-click button to issue that ALTER. |
 | Trace exceeds 5000 steps | Stop, set `truncated: true`, render visible portion, show banner: "Trace truncated at 5000 steps. Future versions will support range-of-lines selection." |
-| Trace timeout (60s) | Abort, return partial trace, banner: "Trace timed out at <N> steps". |
+| Trace timeout (60s) | Abort, return partial trace, banner: "Trace timed out at <N> steps". The 60s budget starts AFTER the debugger session is attached and the entry breakpoint hits — not from `traceProc()` invocation. Setup time (typically 0.5–2s) is not counted against the timeout. |
 | EXPLAIN PLAN failed | Render error panel with Oracle code + message; no fluxo. |
 | `V$SQL_PLAN_STATISTICS_ALL` denied | Silently fall back to static EXPLAIN. Banner: "Runtime stats unavailable — showing static plan." |
 | User cancels mid-trace | `DebugSession.stop()` releases both connections; partial trace returned. |
@@ -266,9 +267,12 @@ src/lib/stores/
 
 `sidecar/tests/flow.integration.test.ts`:
 
-- Pre-canned procedure: `validate_record` with 3 paths (success / not-found / error). Trace each, assert event count and structure.
-- Pre-canned SQL: simple SELECT, JOIN, JOIN with index. EXPLAIN flow returns expected operation order.
+- Test creates its own fixture in `beforeAll`: a procedure `VEESKER_TEST_FLOW.validate_record` (compiled with `DEBUG`) with 3 paths (success / not-found / error), plus a fixture table `VEESKER_TEST_FLOW.test_records`. `afterAll` drops the schema/objects.
+- Trace each of the 3 paths via `traceProc`, assert event count and structure.
+- Pre-canned SQL: simple SELECT, JOIN, JOIN with index. `explainPlanFlow` static returns expected operation order.
 - With `withRuntimeStats: true`: `cardinalityActual` is non-null and matches actual rows.
+
+The container hostname/credentials come from `tests/.env.test` (gitignored), defaulting to the local `oracle23ai` container if the file is missing.
 
 ## Implementation phases
 
