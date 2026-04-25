@@ -25,6 +25,7 @@
     tableRelated,
     schemaKindCounts,
     vectorTablesInSchema,
+    ordsModulesList,
     SESSION_LOST,
     type WorkspaceInfo,
     type ObjectKind,
@@ -130,6 +131,7 @@
         PACKAGE: { kind: "idle" },
         TRIGGER: { kind: "idle" },
         TYPE: { kind: "idle" },
+        REST_MODULE: { kind: "idle" },
       },
     };
   }
@@ -137,7 +139,15 @@
   async function loadKind(node: SchemaNode, kind: ObjectKind): Promise<void> {
     node.kinds[kind] = { kind: "loading" };
     schemas = [...schemas];
-    if (PLSQL_KINDS.includes(kind)) {
+    if (kind === "REST_MODULE") {
+      const res = await ordsModulesList(node.name);
+      if (res.ok) {
+        node.kinds[kind] = { kind: "ok", value: res.data.map((m) => ({ name: m.name })) };
+      } else {
+        if (res.error.code === SESSION_LOST) sessionLost = true;
+        node.kinds[kind] = { kind: "err", message: res.error.message };
+      }
+    } else if (PLSQL_KINDS.includes(kind)) {
       const res = await objectsListPlsql(node.name, kind);
       if (res.ok) {
         node.kinds[kind] = { kind: "ok", value: res.data };
@@ -161,6 +171,7 @@
     const kinds: ObjectKind[] = [
       "TABLE", "VIEW", "SEQUENCE",
       "PROCEDURE", "FUNCTION", "PACKAGE", "TRIGGER", "TYPE",
+      "REST_MODULE",
     ];
     void Promise.all(
       kinds
