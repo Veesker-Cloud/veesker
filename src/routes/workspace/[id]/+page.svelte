@@ -380,6 +380,7 @@
     schemas = schemaRes.data.map((s) => newSchemaNode(s.name, s.isCurrent));
     const current = schemas.find((s) => s.isCurrent);
     if (current) expandIfNeeded(current);
+    ordsStore.setConnectionId(meta.id);
     void ordsStore.refresh();
 
     if (current) {
@@ -752,7 +753,7 @@
         if (ordsStore.state?.currentSchemaEnabled) showOrdsBootstrap = false;
       }}
       onSetBaseUrl={(url) => {
-        if (ordsStore.state) ordsStore.state.ordsBaseUrl = url;
+        ordsStore.setBaseUrl(url);
         showOrdsBootstrap = false;
       }}
       onClose={() => showOrdsBootstrap = false}
