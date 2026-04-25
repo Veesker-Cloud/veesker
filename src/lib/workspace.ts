@@ -159,6 +159,21 @@ export const ordsGenerateSql = (config: Record<string, unknown>) =>
 export const ordsApply = (sql: string) =>
   call<void>("ords_apply", { sql });
 
+export type OrdsTestResult = {
+  status: number;
+  headers: [string, string][];
+  body: string;
+  elapsedMs: number;
+};
+
+export const ordsTestHttp = (
+  method: string,
+  url: string,
+  allowedBaseUrl: string,
+  headers: [string, string][],
+  body: string | null,
+) => call<OrdsTestResult>("ords_test_http", { method, url, allowedBaseUrl, headers, body });
+
 export const objectsListPlsql = (owner: string, kind: string) =>
   call<ObjectRefWithStatus[]>("objects_list_plsql", { owner, kind });
 

@@ -224,6 +224,7 @@ pub fn run() {
             commands::ords_roles_list,
             commands::ords_generate_sql,
             commands::ords_apply,
+            commands::ords_test_http,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

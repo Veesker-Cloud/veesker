@@ -8,6 +8,8 @@
   import RestModuleDetails from "$lib/workspace/RestModuleDetails.svelte";
   import RestApiBuilder, { type BuilderConfig } from "$lib/workspace/RestApiBuilder.svelte";
   import RestApiPreview from "$lib/workspace/RestApiPreview.svelte";
+  import RestTestPanel from "$lib/workspace/RestTestPanel.svelte";
+  import { openUrl } from "@tauri-apps/plugin-opener";
   import SqlDrawer from "$lib/workspace/SqlDrawer.svelte";
   import CommandPalette from "$lib/workspace/CommandPalette.svelte";
   import SheepChat from "$lib/workspace/SheepChat.svelte";
@@ -79,6 +81,7 @@
   let showApiBuilder = $state(false);
   let apiBuilderInitial = $state<{ kind: "table" | "view" | "procedure" | "function"; obj: { owner: string; name: string } } | null>(null);
   let previewSql = $state<string | null>(null);
+  let testPanelOpen = $state<{ basePath: string } | null>(null);
 
   // ── Panel resize (persisted) ─────────────────────────────────────────────────
   function loadPanelWidth(key: string, def: number): number {
@@ -594,8 +597,18 @@
             <RestModuleDetails
               owner={selected.owner}
               moduleName={selected.name}
-              onTest={() => { /* Wired in Phase 4 — Test Panel */ }}
-              onOpenDocs={() => { /* Wired in Phase 4 — opens Swagger UI */ }}
+              onTest={(modulePath) => {
+                testPanelOpen = { basePath: modulePath };
+              }}
+              onOpenDocs={(modulePath) => {
+                const baseUrl = ordsStore.state?.ordsBaseUrl?.replace(/\/$/, "") ?? "";
+                const schema = (selected?.owner ?? "").toLowerCase();
+                if (!baseUrl) {
+                  alert("ORDS base URL não configurada. Abra o modal de bootstrap para definir.");
+                  return;
+                }
+                void openUrl(`${baseUrl}/${schema}/open-api-catalog${modulePath}`);
+              }}
               onAddEndpoint={() => openApiBuilder(null)}
               onExportSql={async () => {
                 if (!selected) return;
@@ -734,6 +747,16 @@
       onClose={() => showOrdsBootstrap = false}
     />
   {/if}
+  {#if testPanelOpen}
+    <div class="test-panel-wrap">
+      <RestTestPanel
+        baseUrl={ordsStore.state?.ordsBaseUrl ?? ""}
+        moduleBasePath={testPanelOpen.basePath}
+        schemaName={selected?.owner ?? ""}
+        onClose={() => testPanelOpen = null}
+      />
+    </div>
+  {/if}
 {/if}
 
 <style>
@@ -844,5 +867,11 @@
   .ws-tab.active {
     color: var(--text-primary);
     border-bottom-color: rgba(179, 62, 31, 0.7);
+  }
+  .test-panel-wrap {
+    position: fixed;
+    top: 0; right: 0; bottom: 0;
+    z-index: 900;
+    box-shadow: -8px 0 24px rgba(0,0,0,0.3);
   }
 </style>
