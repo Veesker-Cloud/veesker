@@ -81,7 +81,7 @@ github.com/veesker/veesker-cloud                   Private — SaaS backend + da
 
 github.com/veesker/veesker-site                    Public — marketing landing
 ├── pages: home, features, pricing, docs, contact
-└── deployed at veesker.dev
+└── deployed at veesker.cloud
 
 github.com/veesker/veesker-marketplace              Private — billing + license issuance
 └── (lambda or small Bun service)
@@ -171,7 +171,7 @@ Open-source Veesker exposes the [Plugin API](../src/lib/plugins.ts). At startup,
 - [ ] First feature: connection registry sync
 - [ ] Web dashboard (SvelteKit) for admins
 - [ ] Cloud sync plugin for desktop (paid add-on, included with Business+)
-- [ ] Hosted at `cloud.veesker.dev`
+- [ ] Hosted at `cloud.veesker.cloud`
 - [ ] Initial billing integration (Stripe or Mercado Pago)
 
 ### Phase E3 — Audit & SSO (4-6 weeks after E2)
@@ -195,7 +195,7 @@ The high-margin add-on you can build with deep domain expertise:
 
 ### Phase E5 — Marketplace + remaining add-ons (rolling)
 
-- [ ] Marketplace web UI at `marketplace.veesker.dev`
+- [ ] Marketplace web UI at `marketplace.veesker.cloud`
 - [ ] Add-on submission process (own + third-party)
 - [ ] Revenue-share for third-party add-ons (70/30)
 - [ ] AWR Analyzer
