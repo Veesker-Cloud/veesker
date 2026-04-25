@@ -110,7 +110,7 @@
     const c = canvas;
     const type = config.type;
     const pd = previewData;
-    if (!c || !type || type === "kpi" || type === "table" || !pd) return destroyChart;
+    if (!c || !type || type === "kpi" || type === "table" || !pd || pd.datasets.length === 0 || pd.labels.length === 0) return destroyChart;
     let raf = requestAnimationFrame(() => {
       const wrap = c.parentElement;
       const w = (wrap?.offsetWidth  || 320);
@@ -169,6 +169,10 @@
         </tbody>
       </table>
     </div>
+  {:else if !previewData && config.type !== "kpi" && config.type !== "table"}
+    <div class="empty-chart">
+      <p>Select a numeric column for the Y axis with Sum/Avg/Max/Min, or use Count for any column type.</p>
+    </div>
   {:else}
     <div class="canvas-wrap" bind:this={canvasWrap}>
       <canvas bind:this={canvas}></canvas>
@@ -187,6 +191,8 @@
   .kpi-label { font-size: 9px; color: var(--text-muted); margin-bottom: 4px; }
   .kpi-value { font-size: 18px; font-weight: 700; }
   .chart-widget.compact .kpi-value { font-size: 14px; }
+  .empty-chart { padding: 16px; color: var(--text-muted); font-size: 12px; text-align: center; border: 1px dashed var(--border); border-radius: 6px; background: var(--bg-surface-alt); }
+  .empty-chart p { margin: 0; line-height: 1.5; }
   .table-wrap { overflow: auto; max-height: 180px; }
   .cap-note { font-size: 9px; color: var(--text-muted); padding: 2px 6px 4px; font-style: italic; }
   table { width: 100%; border-collapse: collapse; font-size: 10px; color: var(--text-primary); }

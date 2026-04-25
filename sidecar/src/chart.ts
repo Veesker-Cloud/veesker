@@ -27,6 +27,18 @@ type ConfigureParams = {
   rows: unknown[][];
 };
 
+const NUMERIC_TYPES = new Set([
+  "NUMBER", "INTEGER", "FLOAT", "DECIMAL", "BINARY_FLOAT", "BINARY_DOUBLE",
+  "SMALLINT", "INT", "DOUBLE PRECISION", "REAL",
+]);
+
+function isNumericCol(columns: { name: string; dataType: string }[], colName: string): boolean {
+  const col = columns.find((c) => c.name === colName);
+  if (!col) return false;
+  const baseType = col.dataType.toUpperCase().split("(")[0].trim();
+  return NUMERIC_TYPES.has(baseType);
+}
+
 const MAX_SESSIONS = 64;
 const sessions = new Map<string, ChartConfig>();
 
@@ -85,6 +97,13 @@ function buildPreview(
     if (!seen.has(label)) {
       seen.add(label);
       labelSet.push(label);
+    }
+  }
+
+  if (config.aggregation && config.aggregation !== "count" && config.aggregation !== "none") {
+    const nonNumeric = config.yColumns.filter((yCol) => !isNumericCol(columns, yCol));
+    if (nonNumeric.length > 0) {
+      return null;
     }
   }
 

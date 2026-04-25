@@ -221,6 +221,21 @@
         pushAssistant("Something went wrong. Please try again.");
         return;
       }
+      if (r.ok && r.data.previewData === null && agg[1] !== "none" && agg[1] !== "count") {
+        const nonNumericY = (r.data.config.yColumns ?? []).filter((yc: string) => {
+          const col = payload.columns.find((c) => c.name === yc);
+          if (!col) return false;
+          return !/(NUMBER|INTEGER|FLOAT|DECIMAL|DOUBLE|BINARY_FLOAT|BINARY_DOUBLE|SMALLINT)/i.test(col.dataType);
+        });
+        if (nonNumericY.length > 0) {
+          pushAssistant(
+            `The Y column${nonNumericY.length > 1 ? "s" : ""} ${nonNumericY.join(", ")} ${nonNumericY.length > 1 ? "are" : "is"} not numeric. Sum/Avg/Max/Min only work on numeric columns. Try **Count** (works for any type), or pick a numeric column.`,
+            { config: r.data.config, previewData: null },
+            AGG_BTNS,
+          );
+          return;
+        }
+      }
       analyzeStep = "title";
       pushAssistant(
         `Aggregation: **${agg[1]}**\n\n**Give your chart a title:**`,

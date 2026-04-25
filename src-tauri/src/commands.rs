@@ -1133,20 +1133,28 @@ pub async fn ords_test_http(
     url: String,
     headers: Vec<(String, String)>,
     body: Option<String>,
+    fallback_base_url: Option<String>,
 ) -> Result<OrdsTestResult, ConnectionTestErr> {
     // Authoritative base URL comes from the sidecar (which derives it from the
     // currently-open Oracle session via ORDS metadata) — NOT from the renderer.
     // Closes a renderer-controlled-exfil hole where a compromised UI could pass
     // any allowed_base_url it wanted.
+    // Self-hosted ORDS where security.host.url isn't set falls back to the
+    // user-supplied base URL (validated as a well-formed http/https URL).
     let detect = call_sidecar(&app, "ords.detect", json!({})).await?;
     let detected_base = detect
         .get("ordsBaseUrl")
         .and_then(|v| v.as_str())
         .map(|s| s.to_string())
         .filter(|s| !s.is_empty())
+        .or_else(|| {
+            fallback_base_url
+                .filter(|s| !s.is_empty())
+                .filter(|s| reqwest::Url::parse(s).map(|u| matches!(u.scheme(), "http" | "https")).unwrap_or(false))
+        })
         .ok_or_else(|| ConnectionTestErr {
             code: -32603,
-            message: "ORDS base URL not detected for the current connection".to_string(),
+            message: "ORDS base URL not detected and no valid fallback provided".to_string(),
         })?;
 
     let url_obj = reqwest::Url::parse(&url).map_err(|_| ConnectionTestErr {

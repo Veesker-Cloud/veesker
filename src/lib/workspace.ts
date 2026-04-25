@@ -179,7 +179,8 @@ export const ordsTestHttp = (
   url: string,
   headers: [string, string][],
   body: string | null,
-) => call<OrdsTestResult>("ords_test_http", { method, url, headers, body });
+  fallbackBaseUrl?: string,
+) => call<OrdsTestResult>("ords_test_http", { method, url, headers, body, fallbackBaseUrl });
 
 export type RestClient = {
   name: string;
