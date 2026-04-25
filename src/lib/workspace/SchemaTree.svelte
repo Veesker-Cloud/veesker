@@ -20,8 +20,9 @@
     refreshing?: boolean;
     onExecuteProc?: (owner: string, name: string, objectType: "PROCEDURE" | "FUNCTION") => void;
     onTestWindow?: (owner: string, name: string, kind: ObjectKind) => void;
+    onExposeAsRest?: (owner: string, name: string, kind: "TABLE" | "VIEW" | "PROCEDURE" | "FUNCTION") => void;
   };
-  let { schemas, selected, onToggle, onSelect, onRetry, onRefresh, refreshing = false, onExecuteProc, onTestWindow }: Props = $props();
+  let { schemas, selected, onToggle, onSelect, onRetry, onRefresh, refreshing = false, onExecuteProc, onTestWindow, onExposeAsRest }: Props = $props();
 
   let search = $state("");
   let hiddenKinds = $state<Set<ObjectKind>>(new Set());
@@ -311,6 +312,21 @@
           }}
         >
           Execute…
+        </button>
+      {/if}
+      {#if (contextMenu.kind === 'TABLE' || contextMenu.kind === 'VIEW' || contextMenu.kind === 'PROCEDURE' || contextMenu.kind === 'FUNCTION') && onExposeAsRest}
+        <button
+          class="ctx-item"
+          onclick={() => {
+            onExposeAsRest!(
+              contextMenu!.owner,
+              contextMenu!.name,
+              contextMenu!.kind as "TABLE" | "VIEW" | "PROCEDURE" | "FUNCTION"
+            );
+            contextMenu = null;
+          }}
+        >
+          {contextMenu.kind === 'TABLE' || contextMenu.kind === 'VIEW' ? 'Expor como API REST…' : 'Expor como endpoint REST…'}
         </button>
       {/if}
     </div>
