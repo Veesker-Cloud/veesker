@@ -7,6 +7,15 @@
   let { event }: Props = $props();
 
   let expanded = $state(true);
+  let lastKind = $state<string | null>(null);
+
+  $effect(() => {
+    const k = event?.kind ?? null;
+    if (k !== lastKind) {
+      expanded = k !== "explain.node";
+      lastKind = k;
+    }
+  });
 
   const variables = $derived.by(() => {
     if (!event || event.kind !== "plsql.frame") return [];

@@ -45,7 +45,7 @@
     />
 
     <div class="info">
-      <strong>Step {visualFlow.currentStepIndex + 1} / {visualFlow.totalSteps}</strong>
+      <strong>{visualFlow.totalSteps === 0 ? "No steps captured" : `Step ${visualFlow.currentStepIndex + 1} / ${visualFlow.totalSteps}`}</strong>
       <span class="muted">{headerLabel} {elapsedLabel ? `· ${elapsedLabel}` : ""}</span>
     </div>
 

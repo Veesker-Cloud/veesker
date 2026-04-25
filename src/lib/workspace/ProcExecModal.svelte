@@ -18,6 +18,7 @@
   let loading = $state(true);
   let executing = $state(false);
   let execError = $state<string | null>(null);
+  let tracing = $state(false);
 
   onMount(async () => {
     const res = await procDescribeGet(owner, name);
@@ -49,24 +50,33 @@
   }
 
   async function runWithVisualFlow(): Promise<void> {
-    // Send the same param shape the regular procExecute uses — sidecar fetches the
-    // rest of the metadata via procDescribe (so OUT params are bound automatically).
     const paramsToSend = params
       .filter((p) => p.direction !== "OUT")
       .map((p) => ({ name: p.name, value: values[p.name] ?? "" }));
-    const result = await flowTraceProc({
-      owner,
-      name,
-      params: paramsToSend,
-      maxSteps: 5000,
-      timeoutMs: 60_000,
-    });
-    if (!result.ok) {
-      execError = `Visual Flow failed: ${result.error.message}`;
-      return;
+    tracing = true;
+    try {
+      const result = await flowTraceProc({
+        owner,
+        name,
+        params: paramsToSend,
+        maxSteps: 5000,
+        timeoutMs: 60_000,
+      });
+      if (!result.ok) {
+        if (result.error.code === -32020) {
+          execError = `${result.error.message}\n\nClick "Compile" button on the editor toolbar to see and fix the errors.`;
+        } else if (result.error.code === -32021) {
+          execError = `${result.error.message}\n\nRun this SQL to fix:\n  ALTER PROCEDURE ${owner}.${name} COMPILE DEBUG;`;
+        } else {
+          execError = `Visual Flow failed: ${result.error.message}`;
+        }
+        return;
+      }
+      visualFlow.open(result.data);
+      onClose();
+    } finally {
+      tracing = false;
     }
-    visualFlow.open(result.data);
-    onClose();
   }
 
   let inputParams = $derived(params.filter((p) => p.direction !== "OUT"));
@@ -124,8 +134,8 @@
         {#if executing}<span class="spinner"></span>{/if}
         Execute
       </button>
-      <button type="button" class="btn-execute btn-visual-flow" onclick={runWithVisualFlow} disabled={executing || loading}>
-        ▶ Run with Visual Flow
+      <button type="button" class="btn-execute btn-visual-flow" onclick={runWithVisualFlow} disabled={executing || loading || tracing}>
+        {#if tracing}Capturing trace…{:else}▶ Run with Visual Flow{/if}
       </button>
     </div>
   </div>

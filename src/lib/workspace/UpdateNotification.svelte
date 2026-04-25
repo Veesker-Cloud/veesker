@@ -1,15 +1,15 @@
 <script lang="ts">
   import { check, type Update } from "@tauri-apps/plugin-updater";
   import { relaunch } from "@tauri-apps/plugin-process";
-  import { onMount } from "svelte";
 
   let update = $state<Update | null>(null);
   let stage = $state<"hidden" | "available" | "downloading" | "installing" | "ready" | "error">("hidden");
   let progress = $state({ downloaded: 0, total: 0 });
   let errorMessage = $state<string | null>(null);
 
-  onMount(async () => {
-    setTimeout(() => void checkForUpdate(), 2000);
+  $effect(() => {
+    const t = setTimeout(() => void checkForUpdate(), 2000);
+    return () => clearTimeout(t);
   });
 
   async function checkForUpdate() {
@@ -70,8 +70,8 @@
   <div class="update-toast">
     {#if stage === "available"}
       <div class="head">
-        <span class="title">🚀 Nova versão disponível</span>
-        <button class="close" onclick={dismiss} aria-label="Dispensar">✕</button>
+        <span class="title">New version available</span>
+        <button class="close" onclick={dismiss} aria-label="Dismiss">✕</button>
       </div>
       <div class="body">
         <div class="version">Veesker {update?.version ?? "?"}</div>
@@ -79,13 +79,13 @@
           <div class="notes">{update.body.slice(0, 240)}{update.body.length > 240 ? "…" : ""}</div>
         {/if}
         <div class="actions">
-          <button class="btn" onclick={dismiss}>Depois</button>
-          <button class="btn primary" onclick={() => void installUpdate()}>Atualizar agora</button>
+          <button class="btn" onclick={dismiss}>Later</button>
+          <button class="btn primary" onclick={() => void installUpdate()}>Update now</button>
         </div>
       </div>
     {:else if stage === "downloading"}
       <div class="head">
-        <span class="title">Baixando atualização…</span>
+        <span class="title">Downloading update…</span>
       </div>
       <div class="body">
         <div class="progress-bar">
@@ -100,32 +100,32 @@
       </div>
     {:else if stage === "installing"}
       <div class="head">
-        <span class="title">Instalando…</span>
+        <span class="title">Installing…</span>
       </div>
       <div class="body">
-        <div class="hint">Aguarde, aplicando atualização.</div>
+        <div class="hint">Please wait, applying update.</div>
       </div>
     {:else if stage === "ready"}
       <div class="head">
-        <span class="title">✅ Atualização instalada</span>
+        <span class="title">Update installed</span>
       </div>
       <div class="body">
-        <div class="hint">Reinicie o Veesker pra aplicar a nova versão.</div>
+        <div class="hint">Restart Veesker to apply the new version.</div>
         <div class="actions">
-          <button class="btn" onclick={dismiss}>Depois</button>
-          <button class="btn primary" onclick={() => void restart()}>Reiniciar agora</button>
+          <button class="btn" onclick={dismiss}>Later</button>
+          <button class="btn primary" onclick={() => void restart()}>Restart now</button>
         </div>
       </div>
     {:else if stage === "error"}
       <div class="head">
-        <span class="title">⚠ Falha na atualização</span>
-        <button class="close" onclick={dismiss} aria-label="Dispensar">✕</button>
+        <span class="title">Update failed</span>
+        <button class="close" onclick={dismiss} aria-label="Dismiss">✕</button>
       </div>
       <div class="body">
         <div class="error-msg">{errorMessage}</div>
         <div class="actions">
-          <button class="btn" onclick={dismiss}>Fechar</button>
-          <button class="btn primary" onclick={() => void installUpdate()}>Tentar de novo</button>
+          <button class="btn" onclick={dismiss}>Close</button>
+          <button class="btn primary" onclick={() => void installUpdate()}>Try again</button>
         </div>
       </div>
     {/if}

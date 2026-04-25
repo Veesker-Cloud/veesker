@@ -106,9 +106,16 @@
   }
 
   async function explainWithVisualFlow(withRuntimeStats: boolean): Promise<void> {
-    flowError = null;
     const sql = active?.sql ?? "";
     if (!sql.trim()) return;
+
+    const head = sql.replace(/^\s*\/\*[\s\S]*?\*\//g, "").replace(/^\s*--[^\n]*\n?/g, "").trim().slice(0, 32).toUpperCase();
+    if (/^(CREATE|ALTER|DROP|GRANT|REVOKE|TRUNCATE|RENAME|BEGIN|DECLARE)\b/.test(head)) {
+      flowError = "This is procedure/DDL code — Visual Flow buttons here are for SELECT/DML only. To trace a procedure's execution, open it from the schema browser and use 'Run with Visual Flow' in the Execute modal.";
+      return;
+    }
+
+    flowError = null;
     const result = await flowTraceSql({ sql, withRuntimeStats });
     if (!result.ok) {
       flowError = `Visual Flow failed: ${result.error.message}`;
@@ -419,7 +426,7 @@
   .strip {
     height: 28px;
     width: 100%;
-    background: #1e1a16;
+    background: var(--bg-page);
     border: none;
     border-top: 1px solid rgba(255,255,255,0.06);
     color: rgba(255,255,255,0.4);
@@ -434,7 +441,7 @@
     cursor: pointer;
     transition: background 0.1s, color 0.1s;
   }
-  .strip:hover { background: #252018; color: rgba(255,255,255,0.7); }
+  .strip:hover { background: var(--bg-surface-alt); color: rgba(255,255,255,0.7); }
 
   /* ── Top resize handle ─────────────────────────────────────────────────── */
   .top-handle {
@@ -455,7 +462,7 @@
   /* ── Drawer ─────────────────────────────────────────────────────────────── */
   .drawer {
     min-height: 120px;
-    background: #fff;
+    background: var(--bg-surface);
     border-top: 1px solid rgba(179, 62, 31, 0.5);
     display: flex;
     flex-direction: column;
@@ -470,7 +477,7 @@
   .tabbar {
     display: flex;
     align-items: stretch;
-    background: #1e1a16;
+    background: var(--bg-page);
     border-bottom: 1px solid rgba(255,255,255,0.06);
   }
   .tabs {
