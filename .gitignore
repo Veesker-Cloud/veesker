@@ -21,4 +21,14 @@ src-tauri/gen/
 src-tauri/binaries/veesker-sidecar-*
 !src-tauri/binaries/.gitkeep
 .superpowers/
-.superpowers/
+
+# NOTE: addons/ folder contains paid add-ons (NOT under Apache 2.0).
+# Before turning this repo public, MOVE addons/ to a separate private repo
+# (github.com/veesker/veesker-addons) and add `addons/` to this gitignore.
+# See docs/ENTERPRISE.md for the open-core boundary.
+
+# Veesker signing keys (NEVER commit)
+.veesker/
+*-key
+*-key.pub
+!ssh-keys/

@@ -6,24 +6,26 @@
   import HelpModal from "$lib/workspace/HelpModal.svelte";
   import UpdateNotification from "$lib/workspace/UpdateNotification.svelte";
   import CommercialUseModal from "$lib/workspace/CommercialUseModal.svelte";
+  import PluginManagerPanel from "$lib/workspace/PluginManagerPanel.svelte";
   import { license } from "$lib/stores/license.svelte";
   import type { Snippet } from "svelte";
 
   let { children }: { children: Snippet } = $props();
   let showHelp = $state(false);
   let showCommercialModal = $state(license.needsFirstLaunchPrompt);
+  let showPluginManager = $state(false);
+
+  onMount(() => {
+    const unlistenHelp = listen("open-help", () => { showHelp = true; });
+    const unlistenPlugins = listen("open-plugins", () => { showPluginManager = true; });
+    return () => {
+      unlistenHelp.then((fn) => fn());
+      unlistenPlugins.then((fn) => fn());
+    };
+  });
 
   $effect(() => {
     document.documentElement.dataset.theme = theme.current;
-  });
-
-  onMount(() => {
-    const unlistenPromise = listen("open-help", () => {
-      showHelp = true;
-    });
-    return () => {
-      unlistenPromise.then((fn) => fn());
-    };
   });
 </script>
 
@@ -46,4 +48,8 @@
 
 {#if showCommercialModal}
   <CommercialUseModal onClose={() => { showCommercialModal = false; }} />
+{/if}
+
+{#if showPluginManager}
+  <PluginManagerPanel onClose={() => { showPluginManager = false; }} />
 {/if}
