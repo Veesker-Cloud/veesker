@@ -6,7 +6,7 @@ use tauri::AppHandle;
 use tauri::Manager;
 
 use crate::sidecar::{ensure, SidecarState};
-use crate::tray::{self, TrayState, ActiveConnection};
+use crate::tray::{self, ActiveConnection, TrayState};
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "authType")]
@@ -123,10 +123,7 @@ pub async fn connection_list(app: AppHandle) -> Result<Vec<ConnectionMeta>, Conn
 }
 
 #[tauri::command]
-pub async fn connection_get(
-    app: AppHandle,
-    id: String,
-) -> Result<ConnectionFull, ConnectionError> {
+pub async fn connection_get(app: AppHandle, id: String) -> Result<ConnectionFull, ConnectionError> {
     let svc = app.state::<ConnectionService>();
     svc.get(&id)
 }
@@ -204,21 +201,34 @@ pub struct TableDetails {
     pub row_count: Option<i64>,
 }
 
-async fn call_sidecar(app: &AppHandle, method: &str, params: Value) -> Result<Value, ConnectionTestErr> {
+async fn call_sidecar(
+    app: &AppHandle,
+    method: &str,
+    params: Value,
+) -> Result<Value, ConnectionTestErr> {
     if let Err(err) = ensure(app).await {
-        return Err(ConnectionTestErr { code: -32003, message: err });
+        return Err(ConnectionTestErr {
+            code: -32003,
+            message: err,
+        });
     }
     let state = app.state::<SidecarState>();
     let guard = state.0.lock().await;
     let sidecar = guard.as_ref().expect("sidecar ensured");
-    sidecar.call(method, params).await.map_err(|e| ConnectionTestErr {
-        code: e.code,
-        message: e.message,
-    })
+    sidecar
+        .call(method, params)
+        .await
+        .map_err(|e| ConnectionTestErr {
+            code: e.code,
+            message: e.message,
+        })
 }
 
 fn map_err(e: ConnectionError) -> ConnectionTestErr {
-    ConnectionTestErr { code: e.code, message: e.message }
+    ConnectionTestErr {
+        code: e.code,
+        message: e.message,
+    }
 }
 
 #[tauri::command]
@@ -229,10 +239,14 @@ pub async fn workspace_open(
     let (params, conn_name) = {
         let svc = app.state::<ConnectionService>();
         let params = svc.sidecar_params(&connection_id).map_err(map_err)?;
-        let name = svc.get(&connection_id).ok().map(|f| match f.meta {
-            crate::persistence::connections::ConnectionMeta::Basic { name, .. } => name,
-            crate::persistence::connections::ConnectionMeta::Wallet { name, .. } => name,
-        }).unwrap_or_else(|| connection_id.clone());
+        let name = svc
+            .get(&connection_id)
+            .ok()
+            .map(|f| match f.meta {
+                crate::persistence::connections::ConnectionMeta::Basic { name, .. } => name,
+                crate::persistence::connections::ConnectionMeta::Wallet { name, .. } => name,
+            })
+            .unwrap_or_else(|| connection_id.clone());
         (params, name)
     };
 
@@ -259,7 +273,10 @@ pub async fn workspace_open(
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string();
-    Ok(WorkspaceInfo { server_version, current_schema })
+    Ok(WorkspaceInfo {
+        server_version,
+        current_schema,
+    })
 }
 
 #[tauri::command]
@@ -273,7 +290,11 @@ pub async fn workspace_close(app: AppHandle) -> Result<(), ConnectionTestErr> {
 #[tauri::command]
 pub async fn schema_list(app: AppHandle) -> Result<Vec<SchemaRow>, ConnectionTestErr> {
     let res = call_sidecar(&app, "schema.list", json!({})).await?;
-    let arr = res.get("schemas").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+    let arr = res
+        .get("schemas")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
     Ok(arr
         .into_iter()
         .filter_map(|v| {
@@ -297,10 +318,18 @@ pub async fn objects_list(
         json!({ "owner": owner, "type": kind }),
     )
     .await?;
-    let arr = res.get("objects").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+    let arr = res
+        .get("objects")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
     Ok(arr
         .into_iter()
-        .filter_map(|v| Some(ObjectRef { name: v.get("name")?.as_str()?.to_string() }))
+        .filter_map(|v| {
+            Some(ObjectRef {
+                name: v.get("name")?.as_str()?.to_string(),
+            })
+        })
         .collect())
 }
 
@@ -381,8 +410,14 @@ pub async fn query_cancel(
     request_id: String,
 ) -> Result<QueryCancelResult, ConnectionTestErr> {
     let res = call_sidecar(&app, "query.cancel", json!({ "requestId": request_id })).await?;
-    let cancelled = res.get("cancelled").and_then(|v| v.as_bool()).unwrap_or(false);
-    let returned_id = res.get("requestId").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let cancelled = res
+        .get("cancelled")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let returned_id = res
+        .get("requestId")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
     Ok(QueryCancelResult {
         cancelled,
         request_id: returned_id,
@@ -427,10 +462,7 @@ fn write_audit_entry(app_data_dir: &std::path::Path, input: &HistorySaveInput) {
 }
 
 #[tauri::command]
-pub async fn history_save(
-    app: AppHandle,
-    input: HistorySaveInput,
-) -> Result<i64, ConnectionError> {
+pub async fn history_save(app: AppHandle, input: HistorySaveInput) -> Result<i64, ConnectionError> {
     if let Ok(data_dir) = app.path().app_data_dir() {
         write_audit_entry(&data_dir, &input);
     }
@@ -466,7 +498,11 @@ pub async fn objects_list_plsql(
         json!({ "owner": owner, "kind": kind }),
     )
     .await?;
-    let arr = res.get("objects").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+    let arr = res
+        .get("objects")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
     let objects = arr
         .into_iter()
         .filter_map(|v| {
@@ -499,7 +535,11 @@ pub async fn compile_errors_get(
         json!({ "objectType": object_type, "objectName": object_name }),
     )
     .await?;
-    let arr = res.get("errors").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+    let arr = res
+        .get("errors")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
     let errors = arr
         .into_iter()
         .filter_map(|v| {
@@ -575,7 +615,11 @@ pub async fn objects_search(
     query: String,
 ) -> Result<Vec<SearchResultRow>, ConnectionTestErr> {
     let res = call_sidecar(&app, "objects.search", json!({ "query": query })).await?;
-    let arr = res.get("objects").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+    let arr = res
+        .get("objects")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
     Ok(arr
         .into_iter()
         .filter_map(|v| {
@@ -589,10 +633,7 @@ pub async fn objects_search(
 }
 
 #[tauri::command]
-pub async fn schema_kind_counts(
-    app: AppHandle,
-    owner: String,
-) -> Result<Value, ConnectionTestErr> {
+pub async fn schema_kind_counts(app: AppHandle, owner: String) -> Result<Value, ConnectionTestErr> {
     let res = call_sidecar(&app, "schema.kind_counts", json!({ "owner": owner })).await?;
     Ok(res)
 }
@@ -613,7 +654,10 @@ pub async fn ai_suggest_endpoint(
 }
 
 #[tauri::command]
-pub async fn vector_index_create(app: AppHandle, payload: Value) -> Result<Value, ConnectionTestErr> {
+pub async fn vector_index_create(
+    app: AppHandle,
+    payload: Value,
+) -> Result<Value, ConnectionTestErr> {
     let res = call_sidecar(&app, "vector.create_index", payload).await?;
     Ok(res)
 }
@@ -625,7 +669,10 @@ pub async fn vector_index_drop(app: AppHandle, payload: Value) -> Result<Value, 
 }
 
 #[tauri::command]
-pub async fn embed_count_pending(app: AppHandle, payload: Value) -> Result<Value, ConnectionTestErr> {
+pub async fn embed_count_pending(
+    app: AppHandle,
+    payload: Value,
+) -> Result<Value, ConnectionTestErr> {
     let res = call_sidecar(&app, "embed.count_pending", payload).await?;
     Ok(res)
 }
@@ -659,10 +706,7 @@ pub async fn connection_rollback(app: AppHandle) -> Result<(), ConnectionTestErr
 }
 
 #[tauri::command]
-pub async fn vector_search(
-    app: AppHandle,
-    payload: Value,
-) -> Result<Value, ConnectionTestErr> {
+pub async fn vector_search(app: AppHandle, payload: Value) -> Result<Value, ConnectionTestErr> {
     let res = call_sidecar(&app, "vector.search", payload).await?;
     Ok(res)
 }
@@ -722,7 +766,12 @@ pub async fn proc_describe(
     owner: String,
     name: String,
 ) -> Result<Value, ConnectionTestErr> {
-    let res = call_sidecar(&app, "proc.describe", json!({ "owner": owner, "name": name })).await?;
+    let res = call_sidecar(
+        &app,
+        "proc.describe",
+        json!({ "owner": owner, "name": name }),
+    )
+    .await?;
     Ok(res)
 }
 
@@ -795,13 +844,19 @@ pub async fn debug_continue(app: AppHandle) -> Result<Value, ConnectionTestErr> 
 }
 
 #[tauri::command]
-pub async fn debug_set_breakpoint(app: AppHandle, payload: Value) -> Result<Value, ConnectionTestErr> {
+pub async fn debug_set_breakpoint(
+    app: AppHandle,
+    payload: Value,
+) -> Result<Value, ConnectionTestErr> {
     let res = call_sidecar(&app, "debug.set_breakpoint", payload).await?;
     Ok(res)
 }
 
 #[tauri::command]
-pub async fn debug_remove_breakpoint(app: AppHandle, payload: Value) -> Result<Value, ConnectionTestErr> {
+pub async fn debug_remove_breakpoint(
+    app: AppHandle,
+    payload: Value,
+) -> Result<Value, ConnectionTestErr> {
     let res = call_sidecar(&app, "debug.remove_breakpoint", payload).await?;
     Ok(res)
 }
@@ -861,7 +916,12 @@ pub async fn ords_module_get(
     owner: String,
     name: String,
 ) -> Result<serde_json::Value, ConnectionTestErr> {
-    call_sidecar(&app, "ords.module.get", json!({ "owner": owner, "name": name })).await
+    call_sidecar(
+        &app,
+        "ords.module.get",
+        json!({ "owner": owner, "name": name }),
+    )
+    .await
 }
 
 #[tauri::command]
@@ -876,7 +936,12 @@ pub async fn ords_module_export_sql(
     owner: String,
     name: String,
 ) -> Result<serde_json::Value, ConnectionTestErr> {
-    call_sidecar(&app, "ords.module.export_sql", json!({ "owner": owner, "name": name })).await
+    call_sidecar(
+        &app,
+        "ords.module.export_sql",
+        json!({ "owner": owner, "name": name }),
+    )
+    .await
 }
 
 #[tauri::command]
@@ -893,10 +958,7 @@ pub async fn ords_generate_sql(
 }
 
 #[tauri::command]
-pub async fn ords_apply(
-    app: AppHandle,
-    sql: String,
-) -> Result<(), ConnectionTestErr> {
+pub async fn ords_apply(app: AppHandle, sql: String) -> Result<(), ConnectionTestErr> {
     call_sidecar(&app, "ords.apply", json!({ "sql": sql })).await?;
     Ok(())
 }
@@ -929,7 +991,10 @@ pub async fn ords_test_http(
     if !url.starts_with(&allowed_base_url) {
         return Err(ConnectionTestErr {
             code: -32603,
-            message: format!("URL not allowed by allowlist (must start with: {})", allowed_base_url),
+            message: format!(
+                "URL not allowed by allowlist (must start with: {})",
+                allowed_base_url
+            ),
         });
     }
 
@@ -938,7 +1003,10 @@ pub async fn ords_test_http(
         .timeout(Duration::from_secs(30))
         .danger_accept_invalid_certs(true)
         .build()
-        .map_err(|e| ConnectionTestErr { code: -32603, message: format!("HTTP client error: {}", e) })?;
+        .map_err(|e| ConnectionTestErr {
+            code: -32603,
+            message: format!("HTTP client error: {}", e),
+        })?;
 
     let req_method = match method.to_uppercase().as_str() {
         "GET" => reqwest::Method::GET,
@@ -946,7 +1014,12 @@ pub async fn ords_test_http(
         "PUT" => reqwest::Method::PUT,
         "DELETE" => reqwest::Method::DELETE,
         "PATCH" => reqwest::Method::PATCH,
-        _ => return Err(ConnectionTestErr { code: -32602, message: format!("Method not supported: {}", method) }),
+        _ => {
+            return Err(ConnectionTestErr {
+                code: -32602,
+                message: format!("Method not supported: {}", method),
+            })
+        }
     };
 
     let mut req = client.request(req_method, &url);
@@ -964,14 +1037,20 @@ pub async fn ords_test_http(
         message: format!("Request failed: {}", e),
     })?;
     let status = resp.status().as_u16();
-    let resp_headers: Vec<(String, String)> = resp.headers()
+    let resp_headers: Vec<(String, String)> = resp
+        .headers()
         .iter()
         .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
         .collect();
     let body = resp.text().await.unwrap_or_default();
     let elapsed_ms = start.elapsed().as_millis() as u64;
 
-    Ok(OrdsTestResult { status, headers: resp_headers, body, elapsed_ms })
+    Ok(OrdsTestResult {
+        status,
+        headers: resp_headers,
+        body,
+        elapsed_ms,
+    })
 }
 
 #[tauri::command]
@@ -990,14 +1069,12 @@ pub async fn ords_clients_create(
         &app,
         "ords.clients.create",
         json!({ "name": name, "description": description, "roles": roles }),
-    ).await
+    )
+    .await
 }
 
 #[tauri::command]
-pub async fn ords_clients_revoke(
-    app: AppHandle,
-    name: String,
-) -> Result<(), ConnectionTestErr> {
+pub async fn ords_clients_revoke(app: AppHandle, name: String) -> Result<(), ConnectionTestErr> {
     call_sidecar(&app, "ords.clients.revoke", json!({ "name": name })).await?;
     Ok(())
 }

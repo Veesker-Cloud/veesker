@@ -291,7 +291,12 @@ mod tests {
         insert(&c, &ok_input("conn-1", "SELECT 1 FROM dual_x")).unwrap();
         insert(&c, &ok_input("conn-1", "SELECT 1 FROM dual")).unwrap();
         let rows = list(&c, "conn-1", 10, 0, Some("dual_x")).unwrap();
-        assert_eq!(rows.len(), 1, "expected exactly 1 row for 'dual_x' search, got {:?}", rows.iter().map(|r| &r.sql).collect::<Vec<_>>());
+        assert_eq!(
+            rows.len(),
+            1,
+            "expected exactly 1 row for 'dual_x' search, got {:?}",
+            rows.iter().map(|r| &r.sql).collect::<Vec<_>>()
+        );
         assert_eq!(rows[0].sql, "SELECT 1 FROM dual_x");
     }
 

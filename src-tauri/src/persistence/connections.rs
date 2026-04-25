@@ -264,10 +264,25 @@ impl ConnectionService {
         };
 
         match meta {
-            ConnectionMeta::Basic { host, port, service_name, username, .. } => {
-                Ok(basic_params(&host, port, &service_name, &username, &password))
-            }
-            ConnectionMeta::Wallet { connect_alias, username, id: meta_id, .. } => {
+            ConnectionMeta::Basic {
+                host,
+                port,
+                service_name,
+                username,
+                ..
+            } => Ok(basic_params(
+                &host,
+                port,
+                &service_name,
+                &username,
+                &password,
+            )),
+            ConnectionMeta::Wallet {
+                connect_alias,
+                username,
+                id: meta_id,
+                ..
+            } => {
                 let wallet_password = match secrets::get_wallet_password(&row_id) {
                     Ok(p) => p,
                     Err(e) if secrets::is_missing(&e) => return Err(ConnectionError::invalid(
@@ -277,7 +292,13 @@ impl ConnectionService {
                 };
                 let _ = auth;
                 let dir = self.wallet_dir(&meta_id);
-                Ok(wallet_params(&dir, &wallet_password, &connect_alias, &username, &password))
+                Ok(wallet_params(
+                    &dir,
+                    &wallet_password,
+                    &connect_alias,
+                    &username,
+                    &password,
+                ))
             }
         }
     }
@@ -379,9 +400,7 @@ impl ConnectionService {
                         ));
                     }
                     let body = std::fs::read_to_string(wallet_dir.join("tnsnames.ora"))
-                        .map_err(|e| {
-                            ConnectionError::invalid(format!("read tnsnames.ora: {e}"))
-                        })?;
+                        .map_err(|e| ConnectionError::invalid(format!("read tnsnames.ora: {e}")))?;
                     let aliases = tnsnames::parse_aliases(&body);
                     if !aliases
                         .iter()
@@ -405,6 +424,7 @@ impl ConnectionService {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn assemble_basic_row(
         &self,
         id: Option<&str>,

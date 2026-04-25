@@ -421,8 +421,8 @@ async function drainDbmsOutput(conn: oracledb.Connection): Promise<string[] | nu
           status: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
         }
       );
-      const ob = r.outBinds as { LINE: string | null; STATUS: number };
-      if (ob.STATUS !== 0) break;
+      const ob = r.outBinds as { LINE: string | null; STATUS: number } | undefined;
+      if (!ob || ob.STATUS !== 0) break;
       lines.push(ob.LINE ?? "");
     }
     return lines;
@@ -1360,11 +1360,31 @@ export type ExplainNode = {
 };
 
 export async function explainPlan(p: { sql: string }): Promise<{ nodes: ExplainNode[] }> {
+  // Defense in depth: EXPLAIN PLAN concatenates p.sql into the dynamic statement.
+  // Reject anything that splits into >1 statement to prevent appended DDL/DML side effects.
+  const split = splitSql(p.sql);
+  const stmts = split.statements.filter((s) => s.trim().length > 0);
+  if (stmts.length === 0) {
+    throw { code: -32602, message: "EXPLAIN PLAN: no statement" };
+  }
+  if (stmts.length > 1) {
+    throw { code: -32602, message: "EXPLAIN PLAN: only single-statement queries allowed" };
+  }
+  // Reject DDL — EXPLAIN PLAN is only for queries and DML.
+  const head = stmts[0]
+    .replace(/^\s*\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*--[^\n]*\n?/g, "")
+    .trim()
+    .slice(0, 32)
+    .toUpperCase();
+  if (/^(CREATE|DROP|ALTER|GRANT|REVOKE|TRUNCATE|RENAME|BEGIN|DECLARE)\b/.test(head)) {
+    throw { code: -32602, message: "EXPLAIN PLAN: only SELECT/INSERT/UPDATE/DELETE/MERGE statements allowed" };
+  }
   return withActiveSession(async (conn) => {
     const sid = `V${crypto.randomUUID().replace(/-/g, "").slice(0, 29)}`;
     // EXPLAIN PLAN requires STATEMENT_ID as a string literal — Oracle does not accept a bind variable here (ORA-01780).
     // sid is generated internally so direct interpolation is safe.
-    await conn.execute(`EXPLAIN PLAN SET STATEMENT_ID = '${sid}' FOR ${p.sql}`);
+    await conn.execute(`EXPLAIN PLAN SET STATEMENT_ID = '${sid}' FOR ${stmts[0]}`);
     let res: oracledb.Result<{
       ID: number;
       PARENT_ID: number | null;
@@ -1509,7 +1529,15 @@ export async function procExecute(p: {
     const binds: Record<string, oracledb.BindDefinition> = {};
     const callArgs: string[] = [];
 
+    // Defense in depth: pm.name comes from ALL_ARGUMENTS but a malicious DBA could in theory
+    // store an identifier with dollar/hash combinations that, while legal Oracle, would behave
+    // oddly when concatenated below. Reject anything outside a strict Oracle identifier shape.
+    const ORACLE_IDENT_RE = /^[A-Za-z][A-Za-z0-9_$#]{0,127}$/;
+
     for (const pm of paramMeta) {
+      if (!ORACLE_IDENT_RE.test(pm.name)) {
+        throw { code: -32602, message: `Invalid parameter name from ALL_ARGUMENTS: ${pm.name}` };
+      }
       const isRefCursor = pm.dataType === "REF CURSOR";
       if (pm.direction === "IN") {
         const v = p.params.find((x) => x.name === pm.name);

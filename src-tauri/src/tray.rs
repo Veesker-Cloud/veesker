@@ -1,7 +1,7 @@
-use std::sync::Mutex;
-use tauri::{AppHandle, Manager};
-use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem};
 use crate::persistence::connections::{ConnectionMeta, ConnectionService};
+use std::sync::Mutex;
+use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem};
+use tauri::{AppHandle, Manager};
 
 // ── Public state types ─────────────────────────────────────────────────────
 
@@ -20,6 +20,8 @@ pub struct ActiveConnection(pub tokio::sync::Mutex<Option<String>>);
 pub struct TrayHandle(pub Mutex<Option<tauri::tray::TrayIcon<tauri::Wry>>>);
 
 /// Returns the most severe state from a list. Empty list → Idle.
+/// Kept for future multi-window aggregation — covered by tests in this module.
+#[allow(dead_code)]
 pub fn worst_state(states: &[TrayState]) -> TrayState {
     states.iter().max().cloned().unwrap_or(TrayState::Idle)
 }
@@ -66,15 +68,11 @@ pub fn build_tray_menu(
     app: &AppHandle,
     active_name: Option<&str>,
 ) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
-    let connections = app
-        .state::<ConnectionService>()
-        .list()
-        .unwrap_or_default();
+    let connections = app.state::<ConnectionService>().list().unwrap_or_default();
 
-    let connections_label =
-        MenuItemBuilder::with_id("connections_label", "CONNECTIONS")
-            .enabled(false)
-            .build(app)?;
+    let connections_label = MenuItemBuilder::with_id("connections_label", "CONNECTIONS")
+        .enabled(false)
+        .build(app)?;
 
     let mut conn_items: Vec<tauri::menu::MenuItem<tauri::Wry>> = Vec::new();
 
@@ -101,10 +99,9 @@ pub fn build_tray_menu(
         }
     }
 
-    let actions_label =
-        MenuItemBuilder::with_id("actions_label", "ACTIONS")
-            .enabled(false)
-            .build(app)?;
+    let actions_label = MenuItemBuilder::with_id("actions_label", "ACTIONS")
+        .enabled(false)
+        .build(app)?;
     let new_query = MenuItemBuilder::with_id("new_query", "New Query").build(app)?;
     let schema_browser = MenuItemBuilder::with_id("schema_browser", "Schema Browser").build(app)?;
     let open_app = MenuItemBuilder::with_id("open_app", "Open Veesker").build(app)?;
@@ -134,12 +131,7 @@ pub const BASE_ICON: &[u8] = include_bytes!("../icons/32x32.png");
 /// Recomputes the tray icon and menu based on current state.
 /// Call this after any connection state change.
 pub async fn update_tray(app: &AppHandle, state: TrayState) {
-    let active_name = app
-        .state::<ActiveConnection>()
-        .0
-        .lock()
-        .await
-        .clone();
+    let active_name = app.state::<ActiveConnection>().0.lock().await.clone();
 
     let icon = composite_icon(BASE_ICON, &state);
 
@@ -171,7 +163,11 @@ mod tests {
 
     #[test]
     fn worst_state_error_wins() {
-        let states = vec![TrayState::Connected, TrayState::Error, TrayState::Connecting];
+        let states = vec![
+            TrayState::Connected,
+            TrayState::Error,
+            TrayState::Connecting,
+        ];
         assert_eq!(worst_state(&states), TrayState::Error);
     }
 
@@ -184,7 +180,12 @@ mod tests {
     #[test]
     fn composite_icon_does_not_panic_for_all_states() {
         let base = include_bytes!("../icons/32x32.png");
-        for state in [TrayState::Idle, TrayState::Connecting, TrayState::Connected, TrayState::Error] {
+        for state in [
+            TrayState::Idle,
+            TrayState::Connecting,
+            TrayState::Connected,
+            TrayState::Error,
+        ] {
             let _icon = composite_icon(base, &state);
         }
     }

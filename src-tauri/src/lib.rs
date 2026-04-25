@@ -26,8 +26,8 @@ pub fn run() {
             let help_item = MenuItemBuilder::with_id("open_help", "Help")
                 .accelerator("F1")
                 .build(app)?;
-            let plugins_item = MenuItemBuilder::with_id("open_plugins", "Plugins & License…")
-                .build(app)?;
+            let plugins_item =
+                MenuItemBuilder::with_id("open_plugins", "Plugins & License…").build(app)?;
 
             let about = SubmenuBuilder::new(app, "Veesker")
                 .about(Some(
@@ -44,7 +44,11 @@ pub fn run() {
                 .build()?;
 
             let file = SubmenuBuilder::new(app, "File")
-                .item(&MenuItemBuilder::with_id("new_connection", "New Connection").accelerator("CmdOrCtrl+N").build(app)?)
+                .item(
+                    &MenuItemBuilder::with_id("new_connection", "New Connection")
+                        .accelerator("CmdOrCtrl+N")
+                        .build(app)?,
+                )
                 .separator()
                 .close_window()
                 .build()?;
@@ -68,8 +72,8 @@ pub fn run() {
             let app_data = app.path().app_data_dir().expect("app data dir");
             let db_path = app_data.join("veesker.db");
             let wallets_root = app_data.join("wallets");
-            let svc = ConnectionService::open(&db_path, wallets_root)
-                .expect("open connection store");
+            let svc =
+                ConnectionService::open(&db_path, wallets_root).expect("open connection store");
             app.manage(svc);
 
             let base_icon = crate::tray::composite_icon(crate::tray::BASE_ICON, &TrayState::Idle);
@@ -99,8 +103,18 @@ pub fn run() {
                     tauri::async_runtime::spawn(async move {
                         match id.as_str() {
                             "quit" => {
-                                let _ = crate::sidecar::call_raw(&app_clone, "debug.stop", serde_json::json!({})).await;
-                                let _ = crate::sidecar::call_raw(&app_clone, "workspace.close", serde_json::json!({})).await;
+                                let _ = crate::sidecar::call_raw(
+                                    &app_clone,
+                                    "debug.stop",
+                                    serde_json::json!({}),
+                                )
+                                .await;
+                                let _ = crate::sidecar::call_raw(
+                                    &app_clone,
+                                    "workspace.close",
+                                    serde_json::json!({}),
+                                )
+                                .await;
                                 app_clone.exit(0);
                             }
                             "open_app" | "new_query" | "schema_browser" => {
@@ -149,8 +163,18 @@ pub fn run() {
                             } else {
                                 let app3 = app2.clone();
                                 tauri::async_runtime::spawn(async move {
-                                    let _ = crate::sidecar::call_raw(&app3, "debug.stop", serde_json::json!({})).await;
-                                    let _ = crate::sidecar::call_raw(&app3, "workspace.close", serde_json::json!({})).await;
+                                    let _ = crate::sidecar::call_raw(
+                                        &app3,
+                                        "debug.stop",
+                                        serde_json::json!({}),
+                                    )
+                                    .await;
+                                    let _ = crate::sidecar::call_raw(
+                                        &app3,
+                                        "workspace.close",
+                                        serde_json::json!({}),
+                                    )
+                                    .await;
                                     app3.exit(0);
                                 });
                             }
@@ -158,12 +182,14 @@ pub fn run() {
                 }
             });
 
-            app.on_menu_event(|app, event| {
-                match event.id().as_ref() {
-                    "open_help" => { let _ = app.emit("open-help", ()); }
-                    "open_plugins" => { let _ = app.emit("open-plugins", ()); }
-                    _ => {}
+            app.on_menu_event(|app, event| match event.id().as_ref() {
+                "open_help" => {
+                    let _ = app.emit("open-help", ());
                 }
+                "open_plugins" => {
+                    let _ = app.emit("open-plugins", ());
+                }
+                _ => {}
             });
 
             Ok(())

@@ -54,6 +54,8 @@ pub fn get_api_key(service: &str) -> keyring::Result<Option<String>> {
     }
 }
 
+/// Public API kept for the upcoming Settings → Clear API key UI flow.
+#[allow(dead_code)]
 pub fn delete_api_key(service: &str) -> keyring::Result<()> {
     delete_account(&api_key_account(service))
 }

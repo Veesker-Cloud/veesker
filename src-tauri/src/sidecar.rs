@@ -30,7 +30,10 @@ pub struct Response {
 pub struct RpcError {
     pub code: i32,
     pub message: String,
+    // Per JSON-RPC 2.0: optional Primitive/Structured error metadata. Not currently
+    // surfaced to the renderer but kept for protocol completeness and future telemetry.
     #[serde(default)]
+    #[allow(dead_code)]
     pub data: Option<Value>,
 }
 
@@ -177,9 +180,21 @@ pub async fn ensure(app: &AppHandle) -> Result<(), String> {
 }
 
 /// Public helper so tray and other non-command modules can call the sidecar.
-pub async fn call_raw(app: &AppHandle, method: &str, params: serde_json::Value) -> Result<serde_json::Value, RpcError> {
-    ensure(app).await.map_err(|msg| RpcError { code: -32003, message: msg, data: None })?;
+pub async fn call_raw(
+    app: &AppHandle,
+    method: &str,
+    params: serde_json::Value,
+) -> Result<serde_json::Value, RpcError> {
+    ensure(app).await.map_err(|msg| RpcError {
+        code: -32003,
+        message: msg,
+        data: None,
+    })?;
     let state = app.state::<SidecarState>();
     let guard = state.0.lock().await;
-    guard.as_ref().expect("sidecar ensured").call(method, params).await
+    guard
+        .as_ref()
+        .expect("sidecar ensured")
+        .call(method, params)
+        .await
 }

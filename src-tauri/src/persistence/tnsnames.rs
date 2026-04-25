@@ -15,10 +15,7 @@ pub fn parse_aliases(content: &str) -> Vec<String> {
         if alias.is_empty() {
             continue;
         }
-        if !alias
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_')
-        {
+        if !alias.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
             continue;
         }
         let rest = line[eq_idx + 1..].trim_start();
