@@ -1,4 +1,4 @@
-# Veesker REST API Studio — Design Spec
+# VRAS — Veesker REST API Studio — Design Spec
 
 **Goal:** Permitir que usuários do Veesker exponham tabelas, views, queries SQL e procedures Oracle como APIs REST consumíveis, gerando configuração nativa do Oracle ORDS (REST Data Services) via UI guiada — sem deixar o IDE.
 
@@ -555,9 +555,7 @@ Tamanho similar ao PL/SQL Debugger (já implementado).
 
 ## Naming
 
-**Veesker REST API Studio** — mencionado nas conversas; nome final pendente de confirmação do usuário.
-
-Alternativas consideradas: "API Builder", "REST Designer", "ORDS Studio".
+**VRAS — Veesker REST API Studio** (locked).
 
 ---
 
