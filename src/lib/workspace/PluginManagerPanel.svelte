@@ -18,7 +18,7 @@
   }
 
   function openPricing() {
-    void openUrl("https://veesker.dev/pricing");
+    void openUrl("https://veesker.cloud/pricing");
   }
 
   function openCommercialPolicy() {
@@ -144,7 +144,7 @@
           </p>
           <p class="empty">
             Plugin marketplace is launching soon. Visit
-            <button class="link" onclick={() => void openUrl('https://veesker.dev/plugins')}>veesker.dev/plugins</button>
+            <button class="link" onclick={() => void openUrl('https://veesker.cloud/plugins')}>veesker.cloud/plugins</button>
             for the first add-ons (Audit Log Shipper, Oracle EBS Pack, etc.)
           </p>
         {/if}

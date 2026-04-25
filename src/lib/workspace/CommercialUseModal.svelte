@@ -15,7 +15,7 @@
   }
 
   function openPricing() {
-    void openUrl("https://veesker.dev/pricing");
+    void openUrl("https://veesker.cloud/pricing");
   }
 </script>
 

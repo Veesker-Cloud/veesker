@@ -71,7 +71,7 @@ This model funds open-source development without compromising the open-source na
 
 ## How to subscribe
 
-Visit [veesker.dev/pricing](https://veesker.dev/pricing) (when available) or contact **geefatec@gmail.com** for an invoice/PO process.
+Visit [veesker.cloud/pricing](https://veesker.cloud/pricing) (when available) or contact **geefatec@gmail.com** for an invoice/PO process.
 
 For trial periods, custom on-prem deployments, white-label arrangements, or volume pricing, please reach out directly.
 

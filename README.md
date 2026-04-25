@@ -10,7 +10,7 @@ A native desktop IDE for Oracle 23ai that combines a multi-statement SQL editor,
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-E85D3C.svg)](LICENSE) [![Built with Tauri 2](https://img.shields.io/badge/built%20with-Tauri%202-24C8D8?logo=tauri&logoColor=white)](https://tauri.app) [![Svelte 5](https://img.shields.io/badge/Svelte-5-FF3E00?logo=svelte&logoColor=white)](https://svelte.dev) [![Oracle 23ai](https://img.shields.io/badge/Oracle-23ai-F80000?logo=oracle&logoColor=white)](https://oracle.com) [![Pre-release](https://img.shields.io/badge/status-pre--release-orange.svg)]()
 
-[veesker.dev](https://veesker.dev) · [Install](#install) · [Features](#features) · [Build from source](#build-from-source) · [License & disclaimer](#license--disclaimer)
+[veesker.cloud](https://veesker.cloud) · [Install](#install) · [Features](#features) · [Build from source](#build-from-source) · [License & disclaimer](#license--disclaimer)
 
 </div>
 
@@ -365,6 +365,6 @@ For security issues, please report privately via [SECURITY.md](SECURITY.md).
 
 Made with ❤️ in São Paulo, Brazil — by [Geraldo Viana Júnior](https://github.com/geeviana)
 
-[veesker.dev](https://veesker.dev) · [GitHub](https://github.com/geeviana/veesker) · [Issues](https://github.com/geeviana/veesker/issues)
+[veesker.cloud](https://veesker.cloud) · [GitHub](https://github.com/geeviana/veesker) · [Issues](https://github.com/geeviana/veesker/issues)
 
 </div>
