@@ -5,6 +5,7 @@
   import StatusBar from "$lib/workspace/StatusBar.svelte";
   import SchemaTree, { type SchemaNode } from "$lib/workspace/SchemaTree.svelte";
   import ObjectDetails from "$lib/workspace/ObjectDetails.svelte";
+  import RestModuleDetails from "$lib/workspace/RestModuleDetails.svelte";
   import SqlDrawer from "$lib/workspace/SqlDrawer.svelte";
   import CommandPalette from "$lib/workspace/CommandPalette.svelte";
   import SheepChat from "$lib/workspace/SheepChat.svelte";
@@ -269,6 +270,10 @@
     if (kind === "SEQUENCE") {
       details = { kind: "idle" };
       void loadDataflow(owner, kind, name);
+      return;
+    }
+    if (kind === "REST_MODULE") {
+      details = { kind: "idle" };
       return;
     }
     void loadDetails(owner, name, kind);
@@ -541,28 +546,39 @@
           >📊 Dashboard</button>
         </div>
         {#if activeWsTab === "schema"}
-          <ObjectDetails
-            {selected}
-            {details}
-            {related}
-            onRetry={onRetryDetails}
-            onReconnect={onReconnect}
-            sessionLost={sessionLost}
-            detailError={detailError}
-            dataflow={dataflow}
-            dataflowLoading={dataflowLoading}
-            dataflowError={dataflowError}
-            canGoBack={navHistory.length > 0}
-            backLabel={navHistory.length > 0 ? navHistory[navHistory.length - 1].name : undefined}
-            onBack={onBack}
-            onNavigateDataflow={(owner, objectType, name) => onSelect(owner, name, objectType as ObjectKind)}
-            onNavigate={(owner, kind, name) => onSelect(owner, name, kind as ObjectKind)}
-            onViewDdl={async (owner, kind, name) => {
-              const res = await objectDdlGet(owner, kind as any, name);
-              if (res.ok) sqlEditor.openWithDdl(`${owner}.${name}`, res.data);
-              else if (res.error.code === SESSION_LOST) sessionLost = true;
-            }}
-          />
+          {#if selected && selected.kind === "REST_MODULE"}
+            <RestModuleDetails
+              owner={selected.owner}
+              moduleName={selected.name}
+              onTest={() => { /* Wired in Phase 4 — Test Panel */ }}
+              onOpenDocs={() => { /* Wired in Phase 4 — opens Swagger UI */ }}
+              onAddEndpoint={() => { /* Wired in Phase 3 — opens API Builder */ }}
+              onExportSql={() => { /* Wired in Task 2.6 */ }}
+            />
+          {:else}
+            <ObjectDetails
+              {selected}
+              {details}
+              {related}
+              onRetry={onRetryDetails}
+              onReconnect={onReconnect}
+              sessionLost={sessionLost}
+              detailError={detailError}
+              dataflow={dataflow}
+              dataflowLoading={dataflowLoading}
+              dataflowError={dataflowError}
+              canGoBack={navHistory.length > 0}
+              backLabel={navHistory.length > 0 ? navHistory[navHistory.length - 1].name : undefined}
+              onBack={onBack}
+              onNavigateDataflow={(owner, objectType, name) => onSelect(owner, name, objectType as ObjectKind)}
+              onNavigate={(owner, kind, name) => onSelect(owner, name, kind as ObjectKind)}
+              onViewDdl={async (owner, kind, name) => {
+                const res = await objectDdlGet(owner, kind as any, name);
+                if (res.ok) sqlEditor.openWithDdl(`${owner}.${name}`, res.data);
+                else if (res.error.code === SESSION_LOST) sessionLost = true;
+              }}
+            />
+          {/if}
         {/if}
         {#if activeWsTab === "dashboard"}
           <DashboardTab />
