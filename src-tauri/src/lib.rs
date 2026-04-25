@@ -26,6 +26,8 @@ pub fn run() {
             let help_item = MenuItemBuilder::with_id("open_help", "Help")
                 .accelerator("F1")
                 .build(app)?;
+            let plugins_item = MenuItemBuilder::with_id("open_plugins", "Plugins & License…")
+                .build(app)?;
 
             let about = SubmenuBuilder::new(app, "Veesker")
                 .about(Some(
@@ -35,6 +37,7 @@ pub fn run() {
                         .build(),
                 ))
                 .separator()
+                .item(&plugins_item)
                 .item(&help_item)
                 .separator()
                 .quit()
@@ -156,8 +159,10 @@ pub fn run() {
             });
 
             app.on_menu_event(|app, event| {
-                if event.id().as_ref() == "open_help" {
-                    let _ = app.emit("open-help", ());
+                match event.id().as_ref() {
+                    "open_help" => { let _ = app.emit("open-help", ()); }
+                    "open_plugins" => { let _ = app.emit("open-plugins", ()); }
+                    _ => {}
                 }
             });
 

@@ -1,0 +1,24 @@
+{
+  "id": "audit-shipper",
+  "name": "Audit Log Shipper",
+  "version": "0.1.0",
+  "author": "Veesker Inc",
+  "publisher": "veesker",
+  "description": "Ship Veesker audit log entries to Splunk HEC, Datadog Logs, generic webhooks, or AWS S3 for compliance and observability.",
+  "minVeeskerVersion": "0.2.0",
+  "permissions": [
+    "audit-read",
+    "network",
+    "settings"
+  ],
+  "extensionPoints": [
+    "audit-destination"
+  ],
+  "license": {
+    "required": true,
+    "validator": "veesker-license-server"
+  },
+  "homepage": "https://veesker.dev/plugins/audit-shipper",
+  "changelog": "https://veesker.dev/plugins/audit-shipper/changelog",
+  "support": "geefatec@gmail.com"
+}
