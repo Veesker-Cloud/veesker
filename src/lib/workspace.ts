@@ -573,3 +573,64 @@ export const debugRunRpc = (payload: {
   outBinds: Record<string, string | null>;
   refCursors: DebugRunCursor[];
 }>("debug_run", { payload });
+
+// ── Visual Execution Flow ─────────────────────────────────────────────────────
+
+export type StackEntry = { name: string; line: number };
+
+export type FlowVariable = { name: string; type: string; value: string };
+
+export type PlsqlFrameEvent = {
+  kind: "plsql.frame";
+  stepIndex: number;
+  objectOwner: string;
+  objectName: string;
+  lineNumber: number;
+  sourceLine: string;
+  enteredAtMs: number;
+  exitedAtMs: number | null;
+  stack: StackEntry[];
+  variables: FlowVariable[];
+  branchTaken?: "then" | "else" | "loop" | "exit";
+};
+
+export type ExplainNodeEvent = {
+  kind: "explain.node";
+  stepIndex: number;
+  planId: number;
+  operation: string;
+  objectOwner: string | null;
+  objectName: string | null;
+  cost: number | null;
+  cardinalityEstimated: number | null;
+  cardinalityActual: number | null;
+  bytesEstimated: number | null;
+  elapsedMsActual: number | null;
+  bufferGets: number | null;
+  childIds: number[];
+};
+
+export type FlowTraceEvent = PlsqlFrameEvent | ExplainNodeEvent;
+
+export type FlowTraceResult = {
+  kind: "plsql" | "sql";
+  startedAt: string;
+  totalElapsedMs: number;
+  events: FlowTraceEvent[];
+  finalResult?: { rowCount?: number; outBinds?: Record<string, unknown> };
+  truncated?: boolean;
+  error?: { code: number; message: string; atStep?: number };
+};
+
+export const flowTraceProc = (payload: {
+  owner: string;
+  name: string;
+  args: Record<string, unknown>;
+  maxSteps?: number;
+  timeoutMs?: number;
+}) => call<FlowTraceResult>("flow_trace_proc", { payload });
+
+export const flowTraceSql = (payload: {
+  sql: string;
+  withRuntimeStats?: boolean;
+}) => call<FlowTraceResult>("flow_trace_sql", { payload });

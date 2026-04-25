@@ -235,6 +235,8 @@ pub fn run() {
             commands::explain_plan_get,
             commands::proc_describe,
             commands::proc_execute,
+            commands::flow_trace_proc,
+            commands::flow_trace_sql,
             commands::chart_configure,
             commands::chart_reset,
             commands::debug_open,
