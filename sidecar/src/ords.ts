@@ -436,6 +436,13 @@ export type ProcedureEndpointParams = {
   authRole?: string | null;
 };
 
+function normalizePlsqlType(dt: string): string {
+  const t = dt.toUpperCase().trim();
+  if (t === "REF CURSOR" || t === "PL/SQL CURSOR" || t === "CURSOR") return "SYS_REFCURSOR";
+  if (t === "VARCHAR2" || t === "VARCHAR" || t === "CHAR" || t === "NVARCHAR2") return `${t}(4000)`;
+  return t;
+}
+
 export function generateProcedureEndpoint(p: ProcedureEndpointParams): string {
   const lines: string[] = ["BEGIN"];
   lines.push("  ORDS.DEFINE_MODULE(");
@@ -451,7 +458,7 @@ export function generateProcedureEndpoint(p: ProcedureEndpointParams): string {
 
   const declareLines: string[] = [];
   for (const op of outParams) {
-    declareLines.push(`  v_${op.name.toLowerCase()} ${op.dataType};`);
+    declareLines.push(`  v_${op.name.toLowerCase()} ${normalizePlsqlType(op.dataType)};`);
   }
   if (p.hasReturn) declareLines.push("  v_result NUMBER;");
 
@@ -462,14 +469,15 @@ export function generateProcedureEndpoint(p: ProcedureEndpointParams): string {
     return `    ${par.name} => :${lower}`;
   });
 
+  // Build JSON output via APEX_JSON — handles VARCHAR2, NUMBER, DATE,
+  // BOOLEAN, and SYS_REFCURSOR natively (cursors become JSON arrays).
   const printLines: string[] = [];
-  printLines.push("  HTP.print('{');");
-  outParams.forEach((op, i) => {
+  printLines.push("  APEX_JSON.open_object;");
+  for (const op of outParams) {
     const lower = op.name.toLowerCase();
-    const sep = i < outParams.length - 1 ? " || ','" : "";
-    printLines.push(`  HTP.print('"${lower}":' || NVL(TO_CHAR(v_${lower}), 'null')${sep});`);
-  });
-  printLines.push("  HTP.print('}');");
+    printLines.push(`  APEX_JSON.write('${lower}', v_${lower});`);
+  }
+  printLines.push("  APEX_JSON.close_object;");
 
   const wrapper = [
     "DECLARE",
