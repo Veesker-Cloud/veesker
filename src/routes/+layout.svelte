@@ -7,6 +7,7 @@
   import UpdateNotification from "$lib/workspace/UpdateNotification.svelte";
   import CommercialUseModal from "$lib/workspace/CommercialUseModal.svelte";
   import PluginManagerPanel from "$lib/workspace/PluginManagerPanel.svelte";
+  import VisualFlowPanel from "$lib/workspace/VisualFlowPanel.svelte";
   import { license } from "$lib/stores/license.svelte";
   import type { Snippet } from "svelte";
 
@@ -53,3 +54,4 @@
 {#if showPluginManager}
   <PluginManagerPanel onClose={() => { showPluginManager = false; }} />
 {/if}
+<VisualFlowPanel />

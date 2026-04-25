@@ -49,6 +49,7 @@ import {
   debugGetCallStack,
   debugRun,
 } from "./debug";
+import { traceProc, explainPlanFlow } from "./flow";
 
 const handlers: HandlerMap = {
   "connection.test": (params) => connectionTest(params as any),
@@ -111,6 +112,8 @@ const handlers: HandlerMap = {
   "debug.get_values":        (params) => debugGetValues(params as any),
   "debug.get_call_stack":    () => debugGetCallStack(),
   "debug.run":               (params) => debugRun(params as any),
+  "flow.trace_proc": (params) => traceProc(params as any),
+  "flow.trace_sql":  (params) => explainPlanFlow(params as any),
   ping: async () => ({ pong: true }),
 };
 

@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import type { ProcParam, ProcExecuteResult } from "$lib/workspace";
-  import { procDescribeGet, procExecuteRun } from "$lib/workspace";
+  import { procDescribeGet, procExecuteRun, flowTraceProc } from "$lib/workspace";
+  import { visualFlow } from "$lib/stores/visual-flow.svelte";
 
   type Props = {
     owner: string;
@@ -45,6 +46,26 @@
     } finally {
       executing = false;
     }
+  }
+
+  async function runWithVisualFlow(): Promise<void> {
+    const args: Record<string, unknown> = {};
+    for (const p of params.filter((p) => p.direction !== "OUT")) {
+      args[p.name] = values[p.name] ?? "";
+    }
+    const result = await flowTraceProc({
+      owner,
+      name,
+      args,
+      maxSteps: 5000,
+      timeoutMs: 60_000,
+    });
+    if (!result.ok) {
+      execError = `Visual Flow failed: ${result.error.message}`;
+      return;
+    }
+    visualFlow.open(result.data);
+    onClose();
   }
 
   let inputParams = $derived(params.filter((p) => p.direction !== "OUT"));
@@ -102,6 +123,9 @@
         {#if executing}<span class="spinner"></span>{/if}
         Execute
       </button>
+      <button type="button" class="btn-execute btn-visual-flow" onclick={runWithVisualFlow} disabled={executing || loading}>
+        ▶ Run with Visual Flow
+      </button>
     </div>
   </div>
 </dialog>
@@ -150,6 +174,7 @@
     background: #b33e1f; color: #fff; display: flex; align-items: center; gap: 6px;
   }
   .btn-execute:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-visual-flow { background: #1f5bb3; }
   .spinner {
     width: 10px; height: 10px; border: 2px solid rgba(255,255,255,0.3);
     border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite;

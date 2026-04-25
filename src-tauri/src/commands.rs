@@ -902,6 +902,22 @@ pub async fn proc_execute(app: AppHandle, payload: Value) -> Result<Value, Conne
 }
 
 #[tauri::command]
+pub async fn flow_trace_proc(
+    app: AppHandle,
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, ConnectionTestErr> {
+    call_sidecar(&app, "flow.trace_proc", payload).await
+}
+
+#[tauri::command]
+pub async fn flow_trace_sql(
+    app: AppHandle,
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, ConnectionTestErr> {
+    call_sidecar(&app, "flow.trace_sql", payload).await
+}
+
+#[tauri::command]
 pub async fn chart_configure(app: AppHandle, payload: Value) -> Result<Value, ConnectionTestErr> {
     let res = call_sidecar(&app, "chart.configure", payload).await?;
     Ok(res)

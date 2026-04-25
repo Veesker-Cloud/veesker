@@ -1,5 +1,7 @@
 <script lang="ts">
   import { sqlEditor, COMPILE_REGEX, runExplain, setActiveResult } from "$lib/stores/sql-editor.svelte";
+  import { flowTraceSql } from "$lib/workspace";
+  import { visualFlow } from "$lib/stores/visual-flow.svelte";
   import SqlEditor from "./SqlEditor.svelte";
   import DmlConfirmModal from "./DmlConfirmModal.svelte";
   import ResultGrid from "./ResultGrid.svelte";
@@ -20,6 +22,7 @@
   let drawerEl: HTMLDivElement | undefined = $state();
   let tabbarEl: HTMLDivElement | undefined = $state();
   let editorRef: SqlEditor | null = $state(null);
+  let flowError = $state<string | null>(null);
 
   // ── Active result ────────────────────────────────────────────────────────────
   const active = $derived(sqlEditor.active);
@@ -100,6 +103,18 @@
 
   function triggerExplain(sql: string) {
     if (sql.trim()) void runExplain(sql);
+  }
+
+  async function explainWithVisualFlow(withRuntimeStats: boolean): Promise<void> {
+    flowError = null;
+    const sql = active?.sql ?? "";
+    if (!sql.trim()) return;
+    const result = await flowTraceSql({ sql, withRuntimeStats });
+    if (!result.ok) {
+      flowError = `Visual Flow failed: ${result.error.message}`;
+      return;
+    }
+    visualFlow.open(result.data);
   }
 </script>
 
@@ -237,6 +252,24 @@
         >
           Explain
         </button>
+        <button
+          class="file-btn"
+          title="Visual Flow — static execution trace"
+          aria-label="Visual Flow (static)"
+          disabled={!active?.sql?.trim()}
+          onclick={() => void explainWithVisualFlow(false)}
+        >
+          Visual Flow (static)
+        </button>
+        <button
+          class="file-btn"
+          title="Visual Flow — with runtime statistics"
+          aria-label="Visual Flow with stats"
+          disabled={!active?.sql?.trim()}
+          onclick={() => void explainWithVisualFlow(true)}
+        >
+          Visual Flow + Stats
+        </button>
       </div>
       <div class="txn-actions">
         <button
@@ -327,6 +360,9 @@
               errors={activeTabResult.compileErrors}
               onGoto={(line) => editorRef?.gotoLine(line)}
             />
+          {/if}
+          {#if flowError}
+            <div class="flow-error">{flowError}</div>
           {/if}
 
           <!-- Middle resize handle -->
@@ -623,5 +659,13 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
+  }
+  .flow-error {
+    padding: 4px 12px;
+    font-size: 11px;
+    color: #e74c3c;
+    background: rgba(231, 76, 60, 0.08);
+    border-top: 1px solid rgba(231, 76, 60, 0.2);
+    flex-shrink: 0;
   }
 </style>
