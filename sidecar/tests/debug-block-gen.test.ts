@@ -9,7 +9,7 @@ describe("generateTestBlock", () => {
     ];
     const block = generateTestBlock("MYSCHEMA", "MY_PROC", null, params);
     expect(block).toContain("BEGIN");
-    expect(block).toContain("MYSCHEMA.MY_PROC(");
+    expect(block).toContain('"MYSCHEMA"."MY_PROC"(');
     expect(block).toContain("p_id => :p_id");
     expect(block).toContain("p_name => :p_name");
     expect(block).toContain("END;");
@@ -31,7 +31,7 @@ describe("generateTestBlock", () => {
       { name: "P_ID", dataType: "NUMBER", inOut: "IN", position: 1 },
     ];
     const block = generateTestBlock("SC", "PROC_NAME", "PKG_NAME", params);
-    expect(block).toContain("SC.PKG_NAME.PROC_NAME(");
+    expect(block).toContain('"SC"."PKG_NAME"."PROC_NAME"(');
   });
 
   test("generates BOOLEAN param via local variable with CASE", () => {
@@ -56,6 +56,6 @@ describe("generateTestBlock", () => {
 
   test("no params produces a simple BEGIN/END block", () => {
     const block = generateTestBlock("SC", "PROC", null, []);
-    expect(block).toMatch(/BEGIN\s+SC\.PROC\(\);\s+END;/s);
+    expect(block).toMatch(/BEGIN\s+"SC"\."PROC"\(\);\s+END;/s);
   });
 });

@@ -1,5 +1,5 @@
 import oracledb from "oracledb";
-import { withActiveSession, buildConnection } from "./oracle";
+import { withActiveSession, buildConnection, quoteIdent } from "./oracle";
 import { getSessionParams } from "./state";
 import { RpcCodedError, ORACLE_ERR } from "./errors";
 
@@ -61,8 +61,8 @@ export function generateTestBlock(
   params: ParamDef[]
 ): string {
   const callTarget = packageName
-    ? `${owner}.${packageName}.${procName}`
-    : `${owner}.${procName}`;
+    ? `${quoteIdent(owner)}.${quoteIdent(packageName)}.${quoteIdent(procName)}`
+    : `${quoteIdent(owner)}.${quoteIdent(procName)}`;
 
   if (params.length === 0) {
     return `BEGIN\n  ${callTarget}();\nEND;`;
@@ -414,6 +414,12 @@ export class DebugSession {
     const out = res.outBinds as Record<string, number>;
     const retcode = out.retcode as number;
     if (retcode !== 0) {
+      if (retcode === 16) {
+        throw new RpcCodedError(
+          -32021,
+          `Object ${owner}.${objectName} lacks debug symbols. Recompile with: ALTER ${objectType} ${owner}.${objectName} COMPILE DEBUG;`,
+        );
+      }
       throw new RpcCodedError(ORACLE_ERR, `SET_BREAKPOINT failed: retcode=${retcode} (object not compiled for debug?)`);
     }
     const oracleBpNum = out.bpnum as number;
