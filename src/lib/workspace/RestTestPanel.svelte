@@ -185,7 +185,7 @@
 
     {#if method !== "GET"}
       <h4>Body (JSON)</h4>
-      <textarea class="body-area" bind:value={bodyText} rows="4" placeholder='{"key": "value"}'></textarea>
+      <textarea class="body-area" bind:value={bodyText} rows="4" placeholder={'{"key": "value"}'}></textarea>
     {/if}
 
     <button class="send-btn" onclick={() => void send()} disabled={sending}>
