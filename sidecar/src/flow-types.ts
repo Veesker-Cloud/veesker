@@ -60,7 +60,9 @@ export type TraceResult = {
 export type TraceProcParams = {
   owner: string;
   name: string;
-  args: Record<string, unknown>;
+  // params is the same shape ProcExecuteParams uses — only IN/INOUT need values;
+  // OUT params are looked up from procDescribe metadata.
+  params: { name: string; value: string }[];
   maxSteps?: number;
   timeoutMs?: number;
 };

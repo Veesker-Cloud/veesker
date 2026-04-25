@@ -625,7 +625,7 @@ export type FlowTraceResult = {
 export const flowTraceProc = (payload: {
   owner: string;
   name: string;
-  args: Record<string, unknown>;
+  params: { name: string; value: string }[];
   maxSteps?: number;
   timeoutMs?: number;
 }) => call<FlowTraceResult>("flow_trace_proc", { payload });

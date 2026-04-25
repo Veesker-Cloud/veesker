@@ -51,6 +51,8 @@ export function truncateVariablesForStep(vars: Variable[]): Variable[] {
 import type { StackEntry, TraceResult, PlsqlFrameEvent, TraceProcParams } from "./flow-types";
 import { DEFAULT_MAX_STEPS, DEFAULT_TIMEOUT_MS } from "./flow-types";
 import { DebugSession as RealDebugSession } from "./debug";
+import oracledb from "oracledb";
+import { procDescribe, oracleTypeFor, convertInputValue } from "./oracle";
 
 // BREAK_ANY_CALL = step-into (line + descend into any sub-call).
 // Spec wording suggested BREAK_ANY_LINE which would step over calls — but for a
@@ -72,13 +74,10 @@ async function createDebugSession() {
   return await RealDebugSession.create();
 }
 
-function buildAnonymousBlock(owner: string, name: string, args: Record<string, unknown>): string {
-  const argList = Object.keys(args)
-    .map((k) => `${k} => :${k}`)
-    .join(", ");
-  return argList.length > 0
-    ? `BEGIN ${owner}.${name}(${argList}); END;`
-    : `BEGIN ${owner}.${name}; END;`;
+type ProcDescribeFn = (p: { owner: string; name: string }) => Promise<{ params: any[] }>;
+let _procDescribeForTest: ProcDescribeFn | null = null;
+export function setProcDescribeForTest(fn: ProcDescribeFn | null): void {
+  _procDescribeForTest = fn;
 }
 
 export async function traceProc(p: TraceProcParams): Promise<TraceResult> {
@@ -103,16 +102,67 @@ export async function traceProc(p: TraceProcParams): Promise<TraceResult> {
       throw e;
     }
     await session.setBreakpoint(p.owner.toUpperCase(), p.name.toUpperCase(), "PROCEDURE", 1);
-    const block = buildAnonymousBlock(p.owner, p.name, p.args);
-    session.startTarget(block, p.args, []);
+
+    // Fetch procedure metadata so we can build a typed bind map matching ALL params
+    // (Oracle requires every parameter — IN, OUT, IN/OUT — to appear in named-arg calls).
+    const procDescribeFn = _procDescribeForTest ?? procDescribe;
+    const desc = await procDescribeFn({ owner: p.owner, name: p.name });
+    const paramMeta = (desc.params ?? []) as Array<{ name: string; dataType: string; direction: string }>;
+
+    const ORACLE_IDENT_RE = /^[A-Za-z][A-Za-z0-9_$#]{0,127}$/;
+    const binds: Record<string, oracledb.BindDefinition> = {};
+    const callArgs: string[] = [];
+    const cursorBindNames: string[] = [];
+
+    for (const pm of paramMeta) {
+      if (!ORACLE_IDENT_RE.test(pm.name)) {
+        throw { code: -32602, message: `Invalid parameter name from ALL_ARGUMENTS: ${pm.name}` };
+      }
+      const isRefCursor = pm.dataType === "REF CURSOR";
+      if (pm.direction === "IN") {
+        const v = p.params.find((x) => x.name === pm.name);
+        binds[`i_${pm.name}`] = {
+          dir: oracledb.BIND_IN,
+          val: convertInputValue(v?.value ?? "", pm.dataType),
+        };
+        callArgs.push(`${pm.name} => :i_${pm.name}`);
+      } else if (pm.direction === "OUT" && !isRefCursor) {
+        binds[`o_${pm.name}`] = {
+          dir: oracledb.BIND_OUT,
+          type: oracleTypeFor(pm.dataType),
+          maxSize: 32767,
+        };
+        callArgs.push(`${pm.name} => :o_${pm.name}`);
+      } else if (pm.direction === "OUT" && isRefCursor) {
+        binds[`o_${pm.name}`] = { dir: oracledb.BIND_OUT, type: oracledb.CURSOR };
+        cursorBindNames.push(`o_${pm.name}`);
+        callArgs.push(`${pm.name} => :o_${pm.name}`);
+      } else if (pm.direction === "IN/OUT") {
+        const v = p.params.find((x) => x.name === pm.name);
+        binds[`io_${pm.name}`] = {
+          dir: oracledb.BIND_INOUT,
+          val: convertInputValue(v?.value ?? "", pm.dataType),
+          type: oracleTypeFor(pm.dataType),
+          maxSize: 32767,
+        };
+        callArgs.push(`${pm.name} => :io_${pm.name}`);
+      }
+    }
+
+    const block = callArgs.length > 0
+      ? `BEGIN ${p.owner}.${p.name}(${callArgs.join(", ")}); END;`
+      : `BEGIN ${p.owner}.${p.name}; END;`;
+    session.startTarget(block, binds, cursorBindNames);
 
     let info = await session.synchronizeWithTimeout(30_000);
 
     traceTimeoutHandle = setTimeout(() => { traceTimedOut = true; }, timeoutMs);
 
-    // MVP variable strategy: poll the procedure parameter names at every step.
+    // MVP variable strategy: poll IN/IN-OUT parameter names at every step.
     // Local v_* discovery requires PL/Scope (ALL_IDENTIFIERS) which is deferred to v0.4.
-    const candidateNames = Object.keys(p.args);
+    const candidateNames = paramMeta
+      .filter((pm) => pm.direction === "IN" || pm.direction === "IN/OUT")
+      .map((pm) => pm.name);
 
     let stepIndex = 0;
     while (info.status === "paused" && info.frame !== null) {
