@@ -321,29 +321,104 @@ export async function ordsRolesList(_params: Record<string, unknown> = {}): Prom
   return { roles: (res.rows ?? []).map((r: any) => (r.ROLE_NAME ?? r.role_name) as string) };
 }
 
-export async function ordsApply(params: { sql: string }): Promise<{ ok: true }> {
+/**
+ * Applies an ORDS endpoint by REGENERATING the SQL server-side from the same
+ * config that was passed to ordsGenerateSql. This closes a privilege-escalation
+ * hole where a compromised renderer could submit arbitrary PL/SQL via the
+ * earlier `{ sql: string }` contract — bypassing every validator in the
+ * generators above.
+ *
+ * The frontend passes back the original config (not a SQL string) and the
+ * server is the single source of truth for what executes.
+ */
+export async function ordsApply(params: any): Promise<{ ok: true; sql: string }> {
+  const { sql } = await ordsGenerateSql(params);
   const conn = getActiveSession();
   try {
-    await conn.execute(params.sql, []);
+    await conn.execute(sql, []);
   } catch (e) {
     if (isOrdsNotAccessible(e)) {
-      throw { code: -32014, message: "ORDS package not accessible. Habilite o schema para ORDS antes de aplicar." };
+      throw {
+        code: -32014,
+        message: "ORDS package not accessible. Enable the schema for ORDS first (Bootstrap ORDS).",
+      };
     }
     throw e;
   }
-  return { ok: true };
+  return { ok: true, sql };
 }
 
 function sqlString(s: string): string {
+  if (s === null || s === undefined) return "''";
+  // Escape single quotes by doubling. Reject control characters and embedded NULs
+  // that would break the SQL parser or produce surprising behavior.
+  if (/[ --]/.test(s)) {
+    throw { code: -32602, message: "ORDS string contains illegal control characters" };
+  }
   return `'${s.replace(/'/g, "''")}'`;
 }
 
 function sqlMultiline(s: string): string {
   if (s === null || s === undefined) return "''";
-  if (!s.includes("]'")) {
-    return `q'[${s}]'`;
+  // q'[...]'  — choose a closer the source body cannot contain. Try several brackets
+  // before falling back to single-quote escaping. Plus reject NUL bytes.
+  if (/ /.test(s)) {
+    throw { code: -32602, message: "ORDS source body contains NUL byte" };
+  }
+  for (const [open, close] of [["[", "]"], ["{", "}"], ["(", ")"], ["<", ">"]]) {
+    if (!s.includes(`${close}'`)) {
+      return `q'${open}${s}${close}'`;
+    }
   }
   return sqlString(s);
+}
+
+/**
+ * Validates that `s` is a safe Oracle identifier (schema/object/alias/module name)
+ * before being interpolated into a generator. Rejects empty strings, leading
+ * digits, and anything outside [A-Za-z0-9_$#-/]. The leniency on '-' and '/' is
+ * required for ORDS aliases and route patterns; everything else is strict
+ * Oracle identifier shape.
+ */
+function validateOrdsName(kind: string, s: unknown): string {
+  if (typeof s !== "string" || s.length === 0) {
+    throw { code: -32602, message: `ORDS ${kind} is required` };
+  }
+  if (s.length > 128) {
+    throw { code: -32602, message: `ORDS ${kind} too long (max 128 chars)` };
+  }
+  if (!/^[A-Za-z0-9_$#\-./]+$/.test(s)) {
+    throw {
+      code: -32602,
+      message: `ORDS ${kind} contains illegal characters (allowed: A-Z 0-9 _ $ # - . /)`,
+    };
+  }
+  return s;
+}
+
+/**
+ * Normalizes an authMode + authRole pair, defaulting to oauth when not specified
+ * (defense-in-depth — never publish unauthenticated endpoints by accident).
+ * Use `none` only when params.authConfirmedNone === true AND authMode is explicitly "none".
+ */
+function normalizeAuth(params: any): { authMode: "none" | "role" | "oauth"; authRole: string | null } {
+  const requested = params?.authMode;
+  if (requested === "none") {
+    if (params.authConfirmedNone !== true) {
+      throw {
+        code: -32602,
+        message:
+          "Refusing to publish unauthenticated ORDS endpoint without explicit confirmation. Pass authConfirmedNone:true to override.",
+      };
+    }
+    return { authMode: "none", authRole: null };
+  }
+  if (requested === "role") {
+    const role = validateOrdsName("authRole", params?.authRole);
+    return { authMode: "role", authRole: role };
+  }
+  // Default: oauth (safest)
+  return { authMode: "oauth", authRole: null };
 }
 
 // ── SQL Generators ────────────────────────────────────────────────────────────
@@ -521,34 +596,46 @@ export function generateProcedureEndpoint(p: ProcedureEndpointParams): string {
 import { procDescribe } from "./oracle";
 
 export async function ordsGenerateSql(params: any): Promise<{ sql: string }> {
+  const auth = normalizeAuth(params);
+
   if (params.type === "auto-crud") {
     if (!params.sourceObject) {
       throw { code: -32602, message: "Missing sourceObject for auto-crud endpoint" };
     }
+    const schema = validateOrdsName("schema", params.sourceObject.owner);
+    const objectName = validateOrdsName("objectName", params.sourceObject.name);
     const objectType = params.sourceObject.kind === "VIEW" ? "VIEW" : "TABLE";
-    const alias = String(params.sourceObject.name).toLowerCase().replace(/_/g, "-");
+    const aliasRaw = String(params.sourceObject.name).toLowerCase().replace(/_/g, "-");
+    const alias = validateOrdsName("alias", aliasRaw);
     return {
       sql: generateAutoCrudSql({
-        schema: params.sourceObject.owner,
-        objectName: params.sourceObject.name,
+        schema,
+        objectName,
         objectType,
         alias,
-        authMode: params.authMode ?? "none",
-        authRole: params.authRole ?? null,
+        authMode: auth.authMode,
+        authRole: auth.authRole,
       }),
     };
   }
 
   if (params.type === "custom-sql") {
+    const moduleName = validateOrdsName("moduleName", params.moduleName);
+    const basePath = validateOrdsName("basePath", params.basePath);
+    const routePattern = validateOrdsName("routePattern", params.routePattern);
+    const method = String(params.method ?? "GET").toUpperCase();
+    if (!["GET", "POST", "PUT", "DELETE", "PATCH"].includes(method)) {
+      throw { code: -32602, message: `Invalid HTTP method: ${method}` };
+    }
     return {
       sql: generateCustomSqlEndpoint({
-        moduleName: params.moduleName,
-        basePath: params.basePath,
-        routePattern: params.routePattern,
-        method: params.method ?? "GET",
+        moduleName,
+        basePath,
+        routePattern,
+        method,
         source: params.sourceSql ?? "",
-        authMode: params.authMode ?? "none",
-        authRole: params.authRole ?? null,
+        authMode: auth.authMode,
+        authRole: auth.authRole,
       }),
     };
   }
@@ -557,28 +644,38 @@ export async function ordsGenerateSql(params: any): Promise<{ sql: string }> {
     if (!params.sourceObject) {
       throw { code: -32602, message: "Missing sourceObject for procedure endpoint" };
     }
-    const desc = await procDescribe({
-      owner: params.sourceObject.owner,
-      name: params.sourceObject.name,
+    const moduleName = validateOrdsName("moduleName", params.moduleName);
+    const basePath = validateOrdsName("basePath", params.basePath);
+    const routePattern = validateOrdsName("routePattern", params.routePattern);
+    const schema = validateOrdsName("schema", params.sourceObject.owner);
+    const procName = validateOrdsName("procName", params.sourceObject.name);
+    const method = String(params.method ?? "POST").toUpperCase();
+    if (!["GET", "POST", "PUT", "DELETE", "PATCH"].includes(method)) {
+      throw { code: -32602, message: `Invalid HTTP method: ${method}` };
+    }
+    const desc = await procDescribe({ owner: schema, name: procName });
+    const procParams = (desc.params ?? []).map((p: any) => {
+      // Procedure parameter names also flow into PL/SQL — validate them too.
+      const name = validateOrdsName("procParam", p.name);
+      return {
+        name,
+        argMode: (p.direction === "IN/OUT" ? "IN/OUT" : (p.direction as "IN" | "OUT" | "IN/OUT")),
+        dataType: p.dataType as string,
+      };
     });
-    const procParams = (desc.params ?? []).map((p: any) => ({
-      name: p.name as string,
-      argMode: (p.direction === "IN/OUT" ? "IN/OUT" : (p.direction as "IN" | "OUT" | "IN/OUT")),
-      dataType: p.dataType as string,
-    }));
     return {
       sql: generateProcedureEndpoint({
-        moduleName: params.moduleName,
-        basePath: params.basePath,
-        routePattern: params.routePattern,
-        method: params.method ?? "POST",
-        schema: params.sourceObject.owner,
-        procName: params.sourceObject.name,
+        moduleName,
+        basePath,
+        routePattern,
+        method,
+        schema,
+        procName,
         packageName: null,
         params: procParams,
         hasReturn: false,
-        authMode: params.authMode ?? "none",
-        authRole: params.authRole ?? null,
+        authMode: auth.authMode,
+        authRole: auth.authRole,
       }),
     };
   }
@@ -640,7 +737,7 @@ export async function ordsClientsCreate(params: {
     });
   } catch (e) {
     if (isOrdsNotAccessible(e)) {
-      throw { code: -32014, message: "ORDS/OAUTH packages not accessible to this schema. Habilite o schema para ORDS pelo modal de bootstrap." };
+      throw { code: -32014, message: "ORDS/OAUTH packages not accessible to this schema. Enable the schema for ORDS via the Bootstrap modal." };
     }
     throw e;
   }

@@ -42,3 +42,21 @@ export function setSessionParams(p: OpenSessionParams): void {
 export function getSessionParams(): OpenSessionParams | null {
   return _sessionParams;
 }
+
+// Serializes openSession/closeSession across the process so concurrent
+// requests cannot race and orphan a connection.
+let _sessionMutex: Promise<void> = Promise.resolve();
+
+export async function withSessionLock<T>(fn: () => Promise<T>): Promise<T> {
+  const prior = _sessionMutex;
+  let release!: () => void;
+  _sessionMutex = new Promise<void>((res) => {
+    release = res;
+  });
+  try {
+    await prior;
+    return await fn();
+  } finally {
+    release();
+  }
+}

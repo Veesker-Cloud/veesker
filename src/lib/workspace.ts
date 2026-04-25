@@ -157,8 +157,15 @@ export const ordsRolesList = () =>
 export const ordsGenerateSql = (config: Record<string, unknown>) =>
   call<{ sql: string }>("ords_generate_sql", { config });
 
-export const ordsApply = (sql: string) =>
-  call<void>("ords_apply", { sql });
+export type OrdsApplyResult = { ok: true; sql: string };
+
+/**
+ * Apply an ORDS endpoint by passing the same config that was sent to ordsGenerateSql.
+ * The server regenerates SQL from the config and executes it — the previewSql shown
+ * in the UI is informational only.
+ */
+export const ordsApply = (config: Record<string, unknown>) =>
+  call<OrdsApplyResult>("ords_apply", { config });
 
 export type OrdsTestResult = {
   status: number;
@@ -170,10 +177,9 @@ export type OrdsTestResult = {
 export const ordsTestHttp = (
   method: string,
   url: string,
-  allowedBaseUrl: string,
   headers: [string, string][],
   body: string | null,
-) => call<OrdsTestResult>("ords_test_http", { method, url, allowedBaseUrl, headers, body });
+) => call<OrdsTestResult>("ords_test_http", { method, url, headers, body });
 
 export type RestClient = {
   name: string;

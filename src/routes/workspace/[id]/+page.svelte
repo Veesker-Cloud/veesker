@@ -298,24 +298,31 @@
     selectObject(owner, name, kind);
   }
 
+  // Hold the last config used for preview so we can pass it (not the SQL string)
+  // to ordsApply — server regenerates SQL from the config to prevent the renderer
+  // from submitting a different/modified PL/SQL block than what was previewed.
+  let previewConfig: BuilderConfig | null = $state(null);
+
   async function handleBuilderPreview(config: BuilderConfig) {
     const res = await ordsGenerateSql(config as unknown as Record<string, unknown>);
     if (res.ok) {
       previewSql = res.data.sql;
+      previewConfig = config;
     } else {
-      alert("Falha ao gerar SQL: " + res.error.message);
+      alert("Failed to generate SQL: " + res.error.message);
     }
   }
 
   async function handlePreviewApply(): Promise<void> {
-    if (!previewSql) return;
-    const res = await ordsApply(previewSql);
+    if (!previewConfig) return;
+    const res = await ordsApply(previewConfig as unknown as Record<string, unknown>);
     if (!res.ok) {
       throw new Error(res.error.message);
     }
     const current = schemas.find((s) => s.isCurrent);
     if (current) await loadKind(current, "REST_MODULE");
     previewSql = null;
+    previewConfig = null;
     showApiBuilder = false;
     apiBuilderInitial = null;
   }

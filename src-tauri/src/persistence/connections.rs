@@ -128,7 +128,7 @@ impl ConnectionError {
             message: msg.into(),
         }
     }
-    fn invalid(msg: impl Into<String>) -> Self {
+    pub(crate) fn invalid(msg: impl Into<String>) -> Self {
         Self {
             code: 400,
             message: msg.into(),

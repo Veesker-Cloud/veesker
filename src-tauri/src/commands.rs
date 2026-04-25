@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::fs::OpenOptions;
 use std::io::Write as IoWrite;
+use std::path::{Path, PathBuf};
 use tauri::AppHandle;
 use tauri::Manager;
 
@@ -116,6 +117,36 @@ use crate::persistence::connections::{
 };
 use crate::persistence::history::{HistoryEntry, HistorySaveInput};
 
+/// Returns the canonicalized path if `path` (as supplied by the renderer) resolves to a
+/// location under one of the user-data scopes ($DOCUMENT, $DESKTOP, $DOWNLOAD, $HOME,
+/// app data dir, app config dir). Anything else is rejected to prevent a compromised
+/// renderer from feeding arbitrary system paths to a #[tauri::command] handler that
+/// bypasses the renderer-side `fs:scope` capability allow-list.
+fn validate_user_path(app: &AppHandle, path: &str) -> Result<PathBuf, ConnectionError> {
+    let p = Path::new(path);
+    let canon = p
+        .canonicalize()
+        .map_err(|_| ConnectionError::invalid("file not accessible"))?;
+    let candidates = [
+        app.path().document_dir().ok(),
+        app.path().desktop_dir().ok(),
+        app.path().download_dir().ok(),
+        app.path().home_dir().ok(),
+        app.path().app_data_dir().ok(),
+        app.path().app_config_dir().ok(),
+    ];
+    for root in candidates.iter().flatten() {
+        if let Ok(canon_root) = root.canonicalize() {
+            if canon.starts_with(&canon_root) {
+                return Ok(canon);
+            }
+        }
+    }
+    Err(ConnectionError::invalid(
+        "path outside allowed user folders (Documents, Desktop, Downloads, Home)",
+    ))
+}
+
 #[tauri::command]
 pub async fn connection_list(app: AppHandle) -> Result<Vec<ConnectionMeta>, ConnectionError> {
     let svc = app.state::<ConnectionService>();
@@ -131,8 +162,14 @@ pub async fn connection_get(app: AppHandle, id: String) -> Result<ConnectionFull
 #[tauri::command]
 pub async fn connection_save(
     app: AppHandle,
-    input: ConnectionInput,
+    mut input: ConnectionInput,
 ) -> Result<ConnectionMeta, ConnectionError> {
+    // If a wallet zip path is being supplied, validate it lives under an allowed
+    // user folder before the persistence layer touches it.
+    if let ConnectionInput::Wallet { wallet_zip_path: Some(ref mut path), .. } = input {
+        let canon = validate_user_path(&app, path)?;
+        *path = canon.to_string_lossy().into_owned();
+    }
     let svc = app.state::<ConnectionService>();
     svc.save(input)
 }
@@ -148,8 +185,9 @@ pub async fn wallet_inspect(
     app: AppHandle,
     zip_path: String,
 ) -> Result<WalletInfo, ConnectionError> {
+    let canon = validate_user_path(&app, &zip_path)?;
     let svc = app.state::<ConnectionService>();
-    svc.inspect_wallet(&zip_path)
+    svc.inspect_wallet(&canon.to_string_lossy())
 }
 
 #[derive(Debug, Serialize)]
@@ -388,13 +426,95 @@ pub async fn query_execute(
     request_id: String,
     split_multi: Option<bool>,
 ) -> Result<Value, ConnectionTestErr> {
-    let res = call_sidecar(
+    let started = std::time::Instant::now();
+    let result = call_sidecar(
         &app,
         "query.execute",
         json!({ "sql": sql, "requestId": request_id, "splitMulti": split_multi.unwrap_or(false) }),
     )
-    .await?;
-    Ok(res)
+    .await;
+    let elapsed_ms = started.elapsed().as_millis() as i64;
+
+    // Authoritative audit write: happens here, server-side, regardless of whether
+    // the renderer remembers to call history_save afterwards. A compromised renderer
+    // can no longer skip audit just by not calling history_save.
+    if let Ok(data_dir) = app.path().app_data_dir() {
+        let active_name = app
+            .state::<ActiveConnection>()
+            .0
+            .lock()
+            .await
+            .clone()
+            .unwrap_or_default();
+        let (conn_id, host, username) = lookup_active_connection_meta(&app, &active_name);
+        let (success, error_message) = match &result {
+            Ok(v) => {
+                let multi_failed = v
+                    .get("results")
+                    .and_then(|rs| rs.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .any(|r| r.get("status").and_then(|s| s.as_str()) == Some("error"))
+                    })
+                    .unwrap_or(false);
+                (!multi_failed, None)
+            }
+            Err(e) => (false, Some(e.message.clone())),
+        };
+        let synthetic_input = HistorySaveInput {
+            connection_id: conn_id,
+            sql: sql.clone(),
+            success,
+            row_count: None,
+            elapsed_ms,
+            error_code: None,
+            error_message,
+            username: Some(username),
+            host: Some(host),
+        };
+        write_audit_entry(&data_dir, &synthetic_input);
+    }
+
+    result
+}
+
+/// Best-effort lookup of (connection_id, host, username) for the currently
+/// active connection name. Returns empty strings if not found — the audit
+/// row is still written with whatever metadata is known.
+fn lookup_active_connection_meta(app: &AppHandle, active_name: &str) -> (String, String, String) {
+    if active_name.is_empty() {
+        return (String::new(), String::new(), String::new());
+    }
+    let svc = app.state::<ConnectionService>();
+    let metas = match svc.list() {
+        Ok(m) => m,
+        Err(_) => return (String::new(), String::new(), String::new()),
+    };
+    use crate::persistence::connections::ConnectionMeta;
+    for meta in metas {
+        match meta {
+            ConnectionMeta::Basic {
+                id,
+                name,
+                host,
+                username,
+                ..
+            } if name == active_name => {
+                return (id, host, username);
+            }
+            ConnectionMeta::Wallet {
+                id,
+                name,
+                connect_alias,
+                username,
+                ..
+            } if name == active_name => {
+                return (id, connect_alias, username);
+            }
+            _ => continue,
+        }
+    }
+    (String::new(), String::new(), String::new())
 }
 
 #[derive(Debug, Serialize)]
@@ -958,9 +1078,13 @@ pub async fn ords_generate_sql(
 }
 
 #[tauri::command]
-pub async fn ords_apply(app: AppHandle, sql: String) -> Result<(), ConnectionTestErr> {
-    call_sidecar(&app, "ords.apply", json!({ "sql": sql })).await?;
-    Ok(())
+pub async fn ords_apply(
+    app: AppHandle,
+    config: serde_json::Value,
+) -> Result<serde_json::Value, ConnectionTestErr> {
+    // Server regenerates SQL from config and executes — closes the
+    // privilege-escalation hole where the renderer could submit arbitrary PL/SQL.
+    call_sidecar(&app, "ords.apply", config).await
 }
 
 use std::time::Duration;
@@ -974,34 +1098,67 @@ pub struct OrdsTestResult {
     pub elapsed_ms: u64,
 }
 
+/// Headers the renderer is permitted to set on outbound ORDS test requests.
+/// Anything else is silently dropped to prevent a compromised renderer from
+/// using this command as a generic HTTP exfil tool with attacker-controlled
+/// auth/cookies.
+const ORDS_TEST_ALLOWED_HEADERS: &[&str] = &[
+    "accept",
+    "accept-language",
+    "authorization",
+    "content-type",
+    "x-requested-with",
+];
+
 #[tauri::command]
 pub async fn ords_test_http(
+    app: AppHandle,
     method: String,
     url: String,
-    allowed_base_url: String,
     headers: Vec<(String, String)>,
     body: Option<String>,
 ) -> Result<OrdsTestResult, ConnectionTestErr> {
-    if allowed_base_url.is_empty() {
-        return Err(ConnectionTestErr {
+    // Authoritative base URL comes from the sidecar (which derives it from the
+    // currently-open Oracle session via ORDS metadata) — NOT from the renderer.
+    // Closes a renderer-controlled-exfil hole where a compromised UI could pass
+    // any allowed_base_url it wanted.
+    let detect = call_sidecar(&app, "ords.detect", json!({})).await?;
+    let detected_base = detect
+        .get("ordsBaseUrl")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| ConnectionTestErr {
             code: -32603,
-            message: "Allowed base URL is empty".to_string(),
+            message: "ORDS base URL not detected for the current connection".to_string(),
+        })?;
+
+    let url_obj = reqwest::Url::parse(&url).map_err(|_| ConnectionTestErr {
+        code: -32602,
+        message: "URL is not a valid absolute HTTPS/HTTP URL".to_string(),
+    })?;
+    let scheme = url_obj.scheme();
+    if scheme != "http" && scheme != "https" {
+        return Err(ConnectionTestErr {
+            code: -32602,
+            message: "Only http/https URLs are allowed".to_string(),
         });
     }
-    if !url.starts_with(&allowed_base_url) {
+    if !url.starts_with(&detected_base) {
         return Err(ConnectionTestErr {
             code: -32603,
             message: format!(
-                "URL not allowed by allowlist (must start with: {})",
-                allowed_base_url
+                "URL not under detected ORDS base ({}). Compromised renderer or stale config.",
+                detected_base
             ),
         });
     }
 
     let start = std::time::Instant::now();
+    // Cert verification ON (no .danger_accept_invalid_certs).  Self-signed dev ORDS
+    // installs need a proper trust store entry; we don't open the door for MITM.
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
-        .danger_accept_invalid_certs(true)
         .build()
         .map_err(|e| ConnectionTestErr {
             code: -32603,
@@ -1024,9 +1181,12 @@ pub async fn ords_test_http(
 
     let mut req = client.request(req_method, &url);
     for (k, v) in &headers {
-        if !k.is_empty() {
+        let name = k.to_ascii_lowercase();
+        if !name.is_empty() && ORDS_TEST_ALLOWED_HEADERS.contains(&name.as_str()) {
             req = req.header(k, v);
         }
+        // Silently drop disallowed headers — renderer should never have been able
+        // to set Cookie, Host, X-Forwarded-*, etc. on an outbound HTTP request.
     }
     if let Some(b) = body {
         req = req.body(b);

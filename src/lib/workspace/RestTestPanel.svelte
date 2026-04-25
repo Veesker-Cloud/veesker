@@ -39,7 +39,6 @@
     const res = await ordsTestHttp(
       method,
       fullUrl,
-      baseUrl.replace(/\/$/, ""),
       cleanHeaders,
       method !== "GET" && bodyText.trim() ? bodyText : null,
     );
@@ -82,7 +81,6 @@
     const res = await ordsTestHttp(
       "POST",
       tokenUrl,
-      cleanBase,
       [
         ["Authorization", auth],
         ["Content-Type", "application/x-www-form-urlencoded"],

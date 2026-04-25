@@ -464,12 +464,18 @@ export class DebugSession {
     if (this._completionResultsExtracted || !this._targetExecution) {
       return { refCursors: [], outBinds: {} };
     }
-    this._completionResultsExtracted = true;
+    let timer: ReturnType<typeof setTimeout> | null = null;
     const exec = await Promise.race([
       this._targetExecution,
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), 5000);
+      }),
     ]);
+    if (timer !== null) clearTimeout(timer);
+    // Only mark extracted if we actually got the data — a timeout means the
+    // target is still running and a later call should still try to collect.
     if (!exec) return { refCursors: [], outBinds: {} };
+    this._completionResultsExtracted = true;
 
     const rawOut = ((exec as any).outBinds ?? {}) as Record<string, unknown>;
     const refCursors: RefCursorResult[] = [];
@@ -550,6 +556,9 @@ export class DebugSession {
     process.stderr.write(`[debug] sync loop final: ${JSON.stringify(result)}\n`);
     if (result.status === "completed") {
       const extras = await this.extractCompletionResults();
+      // Target program finished — release Oracle connections so we don't leak
+      // 2 sessions per step that reaches end-of-program.
+      this.stop();
       return { ...result, refCursors: extras.refCursors, outBinds: extras.outBinds };
     }
     return result;
@@ -690,14 +699,31 @@ export class DebugSession {
     return [];
   }
 
+  // Tracks the close-promises so re-entrant debugStart can await teardown
+  // without deadlocking on a pending execute (Oracle waits for events that never come).
+  private _closing: Promise<void> | null = null;
+
   stop(): void {
-    _debugSession = null;
-    // Fire-and-forget: don't await — awaiting close() while an execute() is pending
-    // on the same connection causes a mutual deadlock (close waits for execute, execute
-    // waits for Oracle event that never comes). Closing the TCP socket is near-instant
-    // and will cause the pending execute() to reject, unblocking synchronize/continue.
-    this.debugConn.close().catch(() => {});
-    this.targetConn.close().catch(() => {});
+    if (_debugSession === this) _debugSession = null;
+    if (this._closing) return;
+    // Fire-and-forget close: closing the TCP socket is near-instant and rejects any pending
+    // execute(), unblocking synchronize/continue. We expose the join via closingPromise()
+    // so debugStart can await full teardown without deadlocking.
+    const dbg = this.debugConn.close().catch(() => {});
+    const tgt = this.targetConn.close().catch(() => {});
+    this._closing = Promise.allSettled([dbg, tgt]).then(() => undefined);
+  }
+
+  /**
+   * Returns a promise that resolves once both Oracle connections have finished
+   * closing (or rejected). Bounded with a 5s timeout to prevent indefinite stalls.
+   */
+  async closingPromise(): Promise<void> {
+    if (!this._closing) return;
+    await Promise.race([
+      this._closing,
+      new Promise<void>((res) => setTimeout(res, 5_000)),
+    ]);
   }
 }
 
@@ -715,14 +741,35 @@ export type DebugStartParams = {
   packageName?: string | null;
 };
 
+// Serializes debugStart so two concurrent invocations cannot both see a null
+// _debugSession and orphan the loser's connections.
+let _debugStartLock: Promise<void> = Promise.resolve();
+
 export async function debugStart(p: DebugStartParams): Promise<PauseInfo> {
   process.stderr.write(
     `[debug] debugStart: owner=${p.owner} obj=${p.objectName} type=${p.objectType} pkg=${p.packageName ?? "null"} userBps=${p.breakpoints.length}\n`
   );
 
+  // Acquire start lock so any prior debugStart finishes its setup before this one runs.
+  const prior = _debugStartLock;
+  let release!: () => void;
+  _debugStartLock = new Promise<void>((res) => { release = res; });
+  try {
+    await prior;
+    return await _debugStartImpl(p);
+  } finally {
+    release();
+  }
+}
+
+async function _debugStartImpl(p: DebugStartParams): Promise<PauseInfo> {
   if (_debugSession) {
     process.stderr.write("[debug] stopping previous session\n");
-    _debugSession.stop();
+    const previous = _debugSession;
+    previous.stop();
+    // Wait for previous session's connections to actually close before creating new ones.
+    // Bounded by 5s in closingPromise so we never stall indefinitely.
+    await previous.closingPromise();
   }
 
   const session = await DebugSession.create();
@@ -830,6 +877,8 @@ async function safeStep(flags: number): Promise<PauseInfo> {
   if (timer !== null) clearTimeout(timer);
   if (result.status === "completed") {
     const extras = await session.extractCompletionResults();
+    // Target finished — release the 2 Oracle connections held by this debug session.
+    session.stop();
     return { ...result, refCursors: extras.refCursors, outBinds: extras.outBinds };
   }
   return result;

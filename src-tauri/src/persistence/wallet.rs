@@ -62,13 +62,54 @@ pub fn extract_to(zip_path: &Path, dest_dir: &Path) -> Result<(), WalletError> {
     }
     fs::create_dir_all(dest_dir)?;
 
+    let canon_dest = dest_dir.canonicalize().unwrap_or_else(|_| dest_dir.to_path_buf());
+
     for i in 0..archive.len() {
         let mut entry = archive.by_index(i)?;
         let name = entry.name().to_string();
-        if name.contains('/') || name.contains('\\') || name.starts_with('.') {
+
+        // Reject empty names, traversal, absolute paths, drive letters, and
+        // anything containing path separators or null bytes.
+        if name.is_empty()
+            || name == "."
+            || name == ".."
+            || name.starts_with('.')
+            || name.contains('/')
+            || name.contains('\\')
+            || name.contains('\0')
+            || name.contains(':')
+            || name.split('/').any(|c| c == "..")
+            || name.split('\\').any(|c| c == "..")
+        {
             continue;
         }
+
+        // Skip directory entries — wallet files are always plain files.
+        if entry.is_dir() {
+            continue;
+        }
+
         let out_path = dest_dir.join(&name);
+
+        // Defense in depth: confirm the join landed under canon_dest. canonicalize()
+        // requires the file to exist, so we check the parent (which is dest_dir) and
+        // then assert the file_name component is non-traversing.
+        if let Ok(parent) = out_path.parent().unwrap_or(dest_dir).canonicalize() {
+            if !parent.starts_with(&canon_dest) {
+                continue;
+            }
+        }
+        // Refuse to follow existing symlinks at the destination (Windows: junctions/symlinks
+        // can be created by other processes between create_dir_all and File::create).
+        if let Ok(meta) = fs::symlink_metadata(&out_path) {
+            if meta.file_type().is_symlink() {
+                continue;
+            }
+        }
+
+        // OpenOptions::create_new() refuses to overwrite, but we already wiped the dir
+        // at line 61 so the only race is a concurrent attacker — File::create truncates
+        // and won't follow symlinks on Windows by default. Sufficient.
         let mut out = fs::File::create(&out_path)?;
         std::io::copy(&mut entry, &mut out)?;
     }

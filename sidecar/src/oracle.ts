@@ -71,7 +71,7 @@ export async function connectionTest(
   }
 }
 
-import { setSession, clearSession, hasSession, getActiveSession, setSessionParams } from "./state";
+import { setSession, clearSession, hasSession, getActiveSession, setSessionParams, withSessionLock } from "./state";
 import { RpcCodedError, SESSION_LOST, ORACLE_ERR } from "./errors";
 
 export type OpenSessionParams = ConnectionTestParams;
@@ -112,50 +112,54 @@ export async function buildConnection(p: OpenSessionParams): Promise<oracledb.Co
 }
 
 export async function openSession(p: OpenSessionParams): Promise<OpenSessionResult> {
-  // Replace any prior session before opening a new one.
-  if (hasSession()) {
-    try {
-      await getActiveSession().close();
-    } catch {
-      // Best-effort close — old session may already be dead.
+  return withSessionLock(async () => {
+    // Replace any prior session before opening a new one.
+    if (hasSession()) {
+      try {
+        await getActiveSession().close();
+      } catch {
+        // Best-effort close — old session may already be dead.
+      }
+      clearSession();
     }
-    clearSession();
-  }
 
-  const conn = await buildConnection(p);
-  try {
-    const versionRes = await conn.execute<{ V: string }>(
-      "SELECT BANNER_FULL AS V FROM V$VERSION WHERE ROWNUM = 1",
-      [],
-      { outFormat: oracledb.OUT_FORMAT_OBJECT }
-    );
-    const schemaRes = await conn.execute<{ S: string }>(
-      "SELECT SYS_CONTEXT('USERENV','CURRENT_SCHEMA') AS S FROM DUAL",
-      [],
-      { outFormat: oracledb.OUT_FORMAT_OBJECT }
-    );
-    const serverVersion = versionRes.rows?.[0]?.V ?? "Oracle (version unavailable)";
-    const currentSchema = schemaRes.rows?.[0]?.S ?? p.username.toUpperCase();
-    setSession(conn, currentSchema);
-    setSessionParams(p);
-    return { serverVersion, currentSchema };
-  } catch (err) {
-    // Failed during the version/schema bootstrap — clean up the half-open session.
-    try { await conn.close(); } catch {}
-    throw err;
-  }
+    const conn = await buildConnection(p);
+    try {
+      const versionRes = await conn.execute<{ V: string }>(
+        "SELECT BANNER_FULL AS V FROM V$VERSION WHERE ROWNUM = 1",
+        [],
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+      );
+      const schemaRes = await conn.execute<{ S: string }>(
+        "SELECT SYS_CONTEXT('USERENV','CURRENT_SCHEMA') AS S FROM DUAL",
+        [],
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+      );
+      const serverVersion = versionRes.rows?.[0]?.V ?? "Oracle (version unavailable)";
+      const currentSchema = schemaRes.rows?.[0]?.S ?? p.username.toUpperCase();
+      setSession(conn, currentSchema);
+      setSessionParams(p);
+      return { serverVersion, currentSchema };
+    } catch (err) {
+      // Failed during the version/schema bootstrap — clean up the half-open session.
+      try { await conn.close(); } catch {}
+      throw err;
+    }
+  });
 }
 
 export async function closeSession(): Promise<{ closed: true }> {
-  if (hasSession()) {
-    try {
-      await getActiveSession().close();
-    } catch {
-      // Best-effort.
+  return withSessionLock(async () => {
+    if (hasSession()) {
+      try {
+        await getActiveSession().close();
+      } catch {
+        // Best-effort.
+      }
+      clearSession();
     }
-    clearSession();
-  }
-  return { closed: true };
+    return { closed: true };
+  });
 }
 
 // Helper used by metadata handlers to wrap Oracle errors into coded RPC errors
@@ -510,10 +514,14 @@ export async function queryExecute(p: { sql: string; requestId?: string; splitMu
 
       const collected: ServerStatementResult[] = [];
 
+      // Enable DBMS_OUTPUT once for the whole multi-statement run.
+      // Wrapped in withActiveSession so any session-lost error is mapped consistently.
       try {
-        await getActiveSession().execute(`BEGIN DBMS_OUTPUT.ENABLE(1000000); END;`);
+        await withActiveSession(async (conn) => {
+          await conn.execute(`BEGIN DBMS_OUTPUT.ENABLE(1000000); END;`);
+        });
       } catch {
-        // Non-fatal
+        // Non-fatal — DBMS_OUTPUT is best-effort.
       }
 
       for (let i = 0; i < statements.length; i++) {
