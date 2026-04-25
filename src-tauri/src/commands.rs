@@ -867,3 +867,8 @@ pub async fn ords_module_export_sql(
 ) -> Result<serde_json::Value, ConnectionTestErr> {
     call_sidecar(&app, "ords.module.export_sql", json!({ "owner": owner, "name": name })).await
 }
+
+#[tauri::command]
+pub async fn ords_roles_list(app: AppHandle) -> Result<serde_json::Value, ConnectionTestErr> {
+    call_sidecar(&app, "ords.roles.list", json!({})).await
+}

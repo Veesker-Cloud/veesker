@@ -259,6 +259,16 @@ export async function ordsModuleExportSql(params: { owner: string; name: string 
   return { sql: lines.join("\n") };
 }
 
+export async function ordsRolesList(_params: Record<string, unknown> = {}): Promise<{ roles: string[] }> {
+  const conn = getActiveSession();
+  const res = await conn.execute<any>(
+    `SELECT role_name FROM all_ords_roles ORDER BY role_name`,
+    [],
+    { outFormat: oracledb.OUT_FORMAT_OBJECT }
+  );
+  return { roles: (res.rows ?? []).map((r: any) => (r.ROLE_NAME ?? r.role_name) as string) };
+}
+
 function sqlString(s: string): string {
   return `'${s.replace(/'/g, "''")}'`;
 }
