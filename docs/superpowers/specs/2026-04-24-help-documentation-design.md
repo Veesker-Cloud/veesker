@@ -116,7 +116,7 @@ type HelpModule = {
 - Result Grid — virtual scrolling, column widths, copy cell
 - Execution Log — DBMS_OUTPUT, row counts, elapsed time
 - Query History — replay previous queries
-- EXPLAIN PLAN (`Ctrl+E`) and sending it to Sheep AI
+- EXPLAIN PLAN (`F6`) and sending it to Sheep AI
 
 **4. Object Inspector**
 - Selecting a table/view — Columns tab (types, nullable, search)
