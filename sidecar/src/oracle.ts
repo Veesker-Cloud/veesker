@@ -1511,14 +1511,14 @@ export type ProcExecuteResult = {
   dbmsOutput: string[];
 };
 
-function oracleTypeFor(dataType: string): number {
+export function oracleTypeFor(dataType: string): number {
   const t = dataType.toUpperCase();
   if (t.includes("NUMBER") || t.includes("INTEGER") || t.includes("FLOAT")) return oracledb.NUMBER;
   if (t.includes("DATE") || t.includes("TIMESTAMP")) return oracledb.DATE;
   return oracledb.STRING;
 }
 
-function convertInputValue(v: string, dataType: string): unknown {
+export function convertInputValue(v: string, dataType: string): unknown {
   if (!v || v.toUpperCase() === "NULL") return null;
   const t = dataType.toUpperCase();
   if (t.includes("NUMBER") || t.includes("INTEGER") || t.includes("FLOAT")) return Number(v);

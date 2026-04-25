@@ -49,14 +49,15 @@
   }
 
   async function runWithVisualFlow(): Promise<void> {
-    const args: Record<string, unknown> = {};
-    for (const p of params.filter((p) => p.direction !== "OUT")) {
-      args[p.name] = values[p.name] ?? "";
-    }
+    // Send the same param shape the regular procExecute uses — sidecar fetches the
+    // rest of the metadata via procDescribe (so OUT params are bound automatically).
+    const paramsToSend = params
+      .filter((p) => p.direction !== "OUT")
+      .map((p) => ({ name: p.name, value: values[p.name] ?? "" }));
     const result = await flowTraceProc({
       owner,
       name,
-      args,
+      params: paramsToSend,
       maxSteps: 5000,
       timeoutMs: 60_000,
     });

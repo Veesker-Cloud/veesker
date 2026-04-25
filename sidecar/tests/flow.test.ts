@@ -71,7 +71,7 @@ describe("truncateVariablesForStep", () => {
   });
 });
 
-import { traceProc, setTraceProcDebugSessionFactoryForTest } from "../src/flow";
+import { traceProc, setTraceProcDebugSessionFactoryForTest, setProcDescribeForTest } from "../src/flow";
 import type { PlsqlFrameEvent, TraceResult, Variable } from "../src/flow-types";
 
 describe("traceProc", () => {
@@ -82,11 +82,14 @@ describe("traceProc", () => {
       { line: 3, owner: "HR", objectName: "VALIDATE", objectType: "PROCEDURE", vars: [{ name: "p_id", type: "NUMBER", value: "100" }, { name: "v_count", type: "NUMBER", value: "5" }] },
     ];
     setTraceProcDebugSessionFactoryForTest(() => createFakeDebugSession(fakeSteps));
+    setProcDescribeForTest(async () => ({
+      params: [{ name: "p_id", dataType: "NUMBER", direction: "IN", position: 1 }],
+    }));
 
     const result: TraceResult = await traceProc({
       owner: "HR",
       name: "VALIDATE",
-      args: { p_id: 100 },
+      params: [{ name: "p_id", value: "100" }],
       maxSteps: 100,
       timeoutMs: 5000,
     });
@@ -102,6 +105,7 @@ describe("traceProc", () => {
     expect(result.error).toBeUndefined();
 
     setTraceProcDebugSessionFactoryForTest(null);
+    setProcDescribeForTest(null);
   });
 });
 
@@ -115,10 +119,12 @@ describe("traceProc edge cases", () => {
       vars: [],
     }));
     setTraceProcDebugSessionFactoryForTest(() => createFakeDebugSession(lots));
-    const result = await traceProc({ owner: "HR", name: "VALIDATE", args: {}, maxSteps: 5, timeoutMs: 5000 });
+    setProcDescribeForTest(async () => ({ params: [] }));
+    const result = await traceProc({ owner: "HR", name: "VALIDATE", params: [], maxSteps: 5, timeoutMs: 5000 });
     expect(result.events).toHaveLength(5);
     expect(result.truncated).toBe(true);
     setTraceProcDebugSessionFactoryForTest(null);
+    setProcDescribeForTest(null);
   });
 
   it("sets error.code=-32004 when timeoutMs elapses", async () => {
@@ -138,10 +144,12 @@ describe("traceProc edge cases", () => {
       };
     };
     setTraceProcDebugSessionFactoryForTest(slowFactory);
-    const result = await traceProc({ owner: "HR", name: "X", args: {}, maxSteps: 100, timeoutMs: 50 });
+    setProcDescribeForTest(async () => ({ params: [] }));
+    const result = await traceProc({ owner: "HR", name: "X", params: [], maxSteps: 100, timeoutMs: 50 });
     expect(result.error?.code).toBe(-32004);
     expect(result.error?.message).toMatch(/timed out/i);
     setTraceProcDebugSessionFactoryForTest(null);
+    setProcDescribeForTest(null);
   });
 
   it("returns error when DebugSession.initialize throws (object not compiled with debug)", async () => {
@@ -151,15 +159,17 @@ describe("traceProc edge cases", () => {
       closingPromise: async () => {},
     });
     setTraceProcDebugSessionFactoryForTest(failingFactory as any);
+    setProcDescribeForTest(async () => ({ params: [] }));
     let caught: unknown = null;
     try {
-      await traceProc({ owner: "HR", name: "X", args: {}, maxSteps: 100, timeoutMs: 5000 });
+      await traceProc({ owner: "HR", name: "X", params: [], maxSteps: 100, timeoutMs: 5000 });
     } catch (e) {
       caught = e;
     }
     expect(caught).not.toBeNull();
     expect(String(caught)).toMatch(/ORA-00904/);
     setTraceProcDebugSessionFactoryForTest(null);
+    setProcDescribeForTest(null);
   });
 });
 
