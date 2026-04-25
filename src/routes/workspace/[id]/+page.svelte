@@ -569,6 +569,10 @@
             procExecTarget = { owner, name, objectType };
           }}
           onTestWindow={onTestWindow}
+          onExposeAsRest={(owner, name, kind) => {
+            const lower = kind.toLowerCase() as "table" | "view" | "procedure" | "function";
+            openApiBuilder({ kind: lower, obj: { owner, name } });
+          }}
         />
       </div>
       <div
