@@ -835,3 +835,20 @@ pub async fn ords_detect(app: AppHandle) -> Result<OrdsDetectResult, ConnectionT
         message: format!("ords_detect parse error: {}", e),
     })
 }
+
+#[tauri::command]
+pub async fn ords_modules_list(
+    app: AppHandle,
+    owner: String,
+) -> Result<serde_json::Value, ConnectionTestErr> {
+    call_sidecar(&app, "ords.modules.list", json!({ "owner": owner })).await
+}
+
+#[tauri::command]
+pub async fn ords_module_get(
+    app: AppHandle,
+    owner: String,
+    name: String,
+) -> Result<serde_json::Value, ConnectionTestErr> {
+    call_sidecar(&app, "ords.module.get", json!({ "owner": owner, "name": name })).await
+}
