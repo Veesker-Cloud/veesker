@@ -17,6 +17,12 @@
   let sending = $state(false);
   let error = $state<string | null>(null);
 
+  let showOAuthHelper = $state(false);
+  let oauthClientId = $state("");
+  let oauthClientSecret = $state("");
+  let oauthFetching = $state(false);
+  let oauthError = $state<string | null>(null);
+
   const fullUrl = $derived.by(() => {
     const cleanBase = baseUrl.replace(/\/$/, "");
     const schemaSegment = schemaName ? `/${schemaName.toLowerCase()}` : "";
@@ -60,6 +66,60 @@
     headers = next;
   }
 
+  async function fetchToken() {
+    if (!oauthClientId.trim() || !oauthClientSecret.trim()) return;
+    oauthFetching = true;
+    oauthError = null;
+
+    const cleanBase = baseUrl.replace(/\/$/, "");
+    const tokenUrl = schemaName
+      ? `${cleanBase}/${schemaName.toLowerCase()}/oauth/token`
+      : `${cleanBase}/oauth/token`;
+
+    const body = "grant_type=client_credentials";
+    const auth = "Basic " + btoa(`${oauthClientId.trim()}:${oauthClientSecret.trim()}`);
+
+    const res = await ordsTestHttp(
+      "POST",
+      tokenUrl,
+      cleanBase,
+      [
+        ["Authorization", auth],
+        ["Content-Type", "application/x-www-form-urlencoded"],
+      ],
+      body,
+    );
+
+    oauthFetching = false;
+    if (!res.ok) {
+      oauthError = res.error.message;
+      return;
+    }
+    if (res.data.status >= 400) {
+      oauthError = `Token request failed (${res.data.status}): ${res.data.body.slice(0, 300)}`;
+      return;
+    }
+
+    let token: string | null = null;
+    try {
+      const parsed = JSON.parse(res.data.body);
+      token = parsed.access_token ?? null;
+    } catch {
+      oauthError = "Resposta sem JSON válido: " + res.data.body.slice(0, 200);
+      return;
+    }
+    if (!token) {
+      oauthError = "Resposta não contém access_token";
+      return;
+    }
+
+    const filtered = headers.filter(([k]) => k.toLowerCase() !== "authorization");
+    headers = [["Authorization", `Bearer ${token}`], ...filtered];
+    showOAuthHelper = false;
+    oauthClientId = "";
+    oauthClientSecret = "";
+  }
+
   const prettyBody = $derived.by(() => {
     if (!response) return "";
     try {
@@ -94,6 +154,34 @@
       </div>
     {/each}
     <button class="add-btn" onclick={addHeader}>+ adicionar header</button>
+
+    <button class="oauth-btn" onclick={() => showOAuthHelper = !showOAuthHelper}>
+      {showOAuthHelper ? "▾ Ocultar OAuth" : "▸ Obter Bearer token (OAuth)"}
+    </button>
+
+    {#if showOAuthHelper}
+      <div class="oauth-card">
+        <div class="oauth-row">
+          <span class="oauth-label">Client ID:</span>
+          <input class="input sm" bind:value={oauthClientId} placeholder="..." />
+        </div>
+        <div class="oauth-row">
+          <span class="oauth-label">Client Secret:</span>
+          <input class="input sm" type="password" bind:value={oauthClientSecret} placeholder="..." />
+        </div>
+        {#if oauthError}<div class="oauth-err">{oauthError}</div>{/if}
+        <button
+          class="oauth-fetch"
+          onclick={() => void fetchToken()}
+          disabled={oauthFetching || !oauthClientId.trim() || !oauthClientSecret.trim()}
+        >
+          {oauthFetching ? "Solicitando…" : "Solicitar token e injetar header"}
+        </button>
+        <div class="oauth-hint">
+          O token será obtido via <code>POST /oauth/token</code> (grant <code>client_credentials</code>) e adicionado como <code>Authorization: Bearer ...</code> nos headers.
+        </div>
+      </div>
+    {/if}
 
     {#if method !== "GET"}
       <h4>Body (JSON)</h4>
@@ -214,5 +302,36 @@
     font-family: "JetBrains Mono", monospace; font-size: 10.5px;
     max-height: 400px; overflow: auto; white-space: pre-wrap;
     margin: 0;
+  }
+  .oauth-btn {
+    background: none; border: 1px dashed var(--border);
+    color: var(--text-muted); padding: 4px 10px; border-radius: 4px;
+    cursor: pointer; font-size: 10.5px; margin-top: 8px;
+  }
+  .oauth-btn:hover { color: var(--text-primary); border-color: var(--text-muted); }
+  .oauth-card {
+    background: var(--bg-surface-alt); border: 1px solid var(--border);
+    border-radius: 4px; padding: 8px; margin-top: 6px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .oauth-row { display: flex; gap: 6px; align-items: center; }
+  .oauth-label { color: var(--text-muted); font-size: 10.5px; min-width: 90px; }
+  .oauth-err {
+    background: rgba(179,62,31,0.15); border: 1px solid rgba(179,62,31,0.3);
+    color: #f5a08a; padding: 4px 6px; border-radius: 3px; font-size: 10px;
+  }
+  .oauth-fetch {
+    background: rgba(179,62,31,0.18); border: 1px solid rgba(179,62,31,0.4);
+    color: #f5a08a; padding: 4px 8px; border-radius: 4px; cursor: pointer;
+    font-size: 11px; font-weight: 600;
+  }
+  .oauth-fetch:hover:not(:disabled) { background: rgba(179,62,31,0.32); }
+  .oauth-fetch:disabled { opacity: 0.5; cursor: default; }
+  .oauth-hint {
+    font-size: 10px; color: var(--text-muted);
+  }
+  .oauth-hint code {
+    font-family: monospace; background: var(--bg-page);
+    padding: 1px 4px; border-radius: 2px; font-size: 9.5px;
   }
 </style>
