@@ -384,7 +384,7 @@
     void ordsStore.refresh().then(() => {
       const s = ordsStore.state;
       if (!s) return;
-      if (!s.installed || !s.currentSchemaEnabled || !s.hasAdminRole || !s.ordsBaseUrl) {
+      if (!s.installed || !s.userHasAccess || !s.currentSchemaEnabled || !s.hasAdminRole || !s.ordsBaseUrl) {
         showOrdsBootstrap = true;
       }
     });
@@ -776,7 +776,10 @@
     </div>
   {/if}
   {#if showOAuthPanel}
-    <OAuthClientsPanel onClose={() => showOAuthPanel = false} />
+    <OAuthClientsPanel
+      onClose={() => showOAuthPanel = false}
+      onOpenBootstrap={() => { showOAuthPanel = false; showOrdsBootstrap = true; }}
+    />
   {/if}
 {/if}
 

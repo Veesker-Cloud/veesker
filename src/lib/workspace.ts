@@ -96,6 +96,7 @@ export const compileErrorsGet = (objectType: string, objectName: string) =>
 
 export type OrdsDetectResult = {
   installed: boolean;
+  userHasAccess: boolean;
   version: string | null;
   currentSchemaEnabled: boolean;
   hasAdminRole: boolean;

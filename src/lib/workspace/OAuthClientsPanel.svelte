@@ -7,8 +7,11 @@
     type RestClient,
   } from "$lib/workspace";
 
-  type Props = { onClose: () => void };
-  let { onClose }: Props = $props();
+  type Props = {
+    onClose: () => void;
+    onOpenBootstrap?: () => void;
+  };
+  let { onClose, onOpenBootstrap }: Props = $props();
 
   let clients = $state<RestClient[]>([]);
   let rolesList = $state<string[]>([]);
@@ -107,7 +110,16 @@
     </div>
 
     <div class="body">
-      {#if error}<div class="error">{error}</div>{/if}
+      {#if error}
+        <div class="error">
+          {error}
+          {#if onOpenBootstrap && (error.includes("ORDS") || error.includes("OAUTH"))}
+            <button class="btn small" style="margin-left: 8px" onclick={() => { onClose(); onOpenBootstrap?.(); }}>
+              Configurar ORDS
+            </button>
+          {/if}
+        </div>
+      {/if}
 
       {#if showCreate}
         <div class="create-form">
