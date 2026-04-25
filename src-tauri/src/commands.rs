@@ -889,3 +889,76 @@ pub async fn ords_apply(
     call_sidecar(&app, "ords.apply", json!({ "sql": sql })).await?;
     Ok(())
 }
+
+use std::time::Duration;
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OrdsTestResult {
+    pub status: u16,
+    pub headers: Vec<(String, String)>,
+    pub body: String,
+    pub elapsed_ms: u64,
+}
+
+#[tauri::command]
+pub async fn ords_test_http(
+    method: String,
+    url: String,
+    allowed_base_url: String,
+    headers: Vec<(String, String)>,
+    body: Option<String>,
+) -> Result<OrdsTestResult, ConnectionTestErr> {
+    if allowed_base_url.is_empty() {
+        return Err(ConnectionTestErr {
+            code: -32603,
+            message: "Allowed base URL is empty".to_string(),
+        });
+    }
+    if !url.starts_with(&allowed_base_url) {
+        return Err(ConnectionTestErr {
+            code: -32603,
+            message: format!("URL not allowed by allowlist (must start with: {})", allowed_base_url),
+        });
+    }
+
+    let start = std::time::Instant::now();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .danger_accept_invalid_certs(true)
+        .build()
+        .map_err(|e| ConnectionTestErr { code: -32603, message: format!("HTTP client error: {}", e) })?;
+
+    let req_method = match method.to_uppercase().as_str() {
+        "GET" => reqwest::Method::GET,
+        "POST" => reqwest::Method::POST,
+        "PUT" => reqwest::Method::PUT,
+        "DELETE" => reqwest::Method::DELETE,
+        "PATCH" => reqwest::Method::PATCH,
+        _ => return Err(ConnectionTestErr { code: -32602, message: format!("Method not supported: {}", method) }),
+    };
+
+    let mut req = client.request(req_method, &url);
+    for (k, v) in &headers {
+        if !k.is_empty() {
+            req = req.header(k, v);
+        }
+    }
+    if let Some(b) = body {
+        req = req.body(b);
+    }
+
+    let resp = req.send().await.map_err(|e| ConnectionTestErr {
+        code: -32603,
+        message: format!("Request failed: {}", e),
+    })?;
+    let status = resp.status().as_u16();
+    let resp_headers: Vec<(String, String)> = resp.headers()
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
+        .collect();
+    let body = resp.text().await.unwrap_or_default();
+    let elapsed_ms = start.elapsed().as_millis() as u64;
+
+    Ok(OrdsTestResult { status, headers: resp_headers, body, elapsed_ms })
+}
