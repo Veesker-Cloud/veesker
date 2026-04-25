@@ -6,6 +6,8 @@
   import SchemaTree, { type SchemaNode } from "$lib/workspace/SchemaTree.svelte";
   import ObjectDetails from "$lib/workspace/ObjectDetails.svelte";
   import RestModuleDetails from "$lib/workspace/RestModuleDetails.svelte";
+  import RestApiBuilder, { type BuilderConfig } from "$lib/workspace/RestApiBuilder.svelte";
+  import RestApiPreview from "$lib/workspace/RestApiPreview.svelte";
   import SqlDrawer from "$lib/workspace/SqlDrawer.svelte";
   import CommandPalette from "$lib/workspace/CommandPalette.svelte";
   import SheepChat from "$lib/workspace/SheepChat.svelte";
@@ -27,6 +29,8 @@
     schemaKindCounts,
     vectorTablesInSchema,
     ordsModulesList,
+    ordsGenerateSql,
+    ordsApply,
     ordsEnableSchema,
     ordsModuleExportSql,
     SESSION_LOST,
@@ -72,6 +76,9 @@
   let activeWsTab = $state<"schema" | "dashboard">("schema");
   let testWindowOpen = $state(false);
   let showOrdsBootstrap = $state(false);
+  let showApiBuilder = $state(false);
+  let apiBuilderInitial = $state<{ kind: "table" | "view" | "procedure" | "function"; obj: { owner: string; name: string } } | null>(null);
+  let previewSql = $state<string | null>(null);
 
   // ── Panel resize (persisted) ─────────────────────────────────────────────────
   function loadPanelWidth(key: string, def: number): number {
@@ -284,6 +291,41 @@
   function onSelect(owner: string, name: string, kind: ObjectKind): void {
     if (selected) navHistory = [...navHistory, { owner: selected.owner, name: selected.name, kind: selected.kind }];
     selectObject(owner, name, kind);
+  }
+
+  async function handleBuilderPreview(config: BuilderConfig) {
+    const res = await ordsGenerateSql(config as unknown as Record<string, unknown>);
+    if (res.ok) {
+      previewSql = res.data.sql;
+    } else {
+      alert("Falha ao gerar SQL: " + res.error.message);
+    }
+  }
+
+  async function handlePreviewApply(): Promise<void> {
+    if (!previewSql) return;
+    const res = await ordsApply(previewSql);
+    if (!res.ok) {
+      throw new Error(res.error.message);
+    }
+    const current = schemas.find((s) => s.isCurrent);
+    if (current) await loadKind(current, "REST_MODULE");
+    previewSql = null;
+    showApiBuilder = false;
+    apiBuilderInitial = null;
+  }
+
+  function handleCopyToTab() {
+    if (!previewSql) return;
+    sqlEditor.openWithDdl("VRAS Generated", previewSql);
+    previewSql = null;
+    showApiBuilder = false;
+    apiBuilderInitial = null;
+  }
+
+  function openApiBuilder(initial: typeof apiBuilderInitial = null) {
+    apiBuilderInitial = initial;
+    showApiBuilder = true;
   }
 
   async function onTestWindow(owner: string, name: string, kind: ObjectKind) {
@@ -554,7 +596,7 @@
               moduleName={selected.name}
               onTest={() => { /* Wired in Phase 4 — Test Panel */ }}
               onOpenDocs={() => { /* Wired in Phase 4 — opens Swagger UI */ }}
-              onAddEndpoint={() => { /* Wired in Phase 3 — opens API Builder */ }}
+              onAddEndpoint={() => openApiBuilder(null)}
               onExportSql={async () => {
                 if (!selected) return;
                 const res = await ordsModuleExportSql(selected.owner, selected.name);
@@ -653,6 +695,24 @@
   {/if}
   {#if testWindowOpen}
     <TestWindow onClose={() => { testWindowOpen = false; void debugStore.stop(); }} />
+  {/if}
+  {#if showApiBuilder}
+    <RestApiBuilder
+      owner={schemas.find((s) => s.isCurrent)?.name ?? selected?.owner ?? ""}
+      initialKind={apiBuilderInitial?.kind ?? null}
+      initialObject={apiBuilderInitial?.obj ?? null}
+      onCancel={() => { showApiBuilder = false; apiBuilderInitial = null; }}
+      onPreview={(config) => void handleBuilderPreview(config)}
+    />
+  {/if}
+  {#if previewSql !== null}
+    <RestApiPreview
+      sql={previewSql}
+      connectionLabel={meta ? userLabel(meta) : ""}
+      onCancel={() => { previewSql = null; }}
+      onApply={handlePreviewApply}
+      onCopyToTab={handleCopyToTab}
+    />
   {/if}
   {#if showOrdsBootstrap && ordsStore.state}
     <OrdsBootstrapModal
