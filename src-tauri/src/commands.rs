@@ -814,3 +814,24 @@ pub async fn debug_run(app: AppHandle, payload: Value) -> Result<Value, Connecti
     let res = call_sidecar(&app, "debug.run", payload).await?;
     Ok(res)
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct OrdsDetectResult {
+    pub installed: bool,
+    pub version: Option<String>,
+    #[serde(rename = "currentSchemaEnabled")]
+    pub current_schema_enabled: bool,
+    #[serde(rename = "hasAdminRole")]
+    pub has_admin_role: bool,
+    #[serde(rename = "ordsBaseUrl")]
+    pub ords_base_url: Option<String>,
+}
+
+#[tauri::command]
+pub async fn ords_detect(app: AppHandle) -> Result<OrdsDetectResult, ConnectionTestErr> {
+    let res = call_sidecar(&app, "ords.detect", json!({})).await?;
+    serde_json::from_value(res).map_err(|e| ConnectionTestErr {
+        code: -32603,
+        message: format!("ords_detect parse error: {}", e),
+    })
+}
