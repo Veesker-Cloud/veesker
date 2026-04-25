@@ -35,6 +35,8 @@
   } from "$lib/workspace";
   import { getConnection, type ConnectionMeta } from "$lib/connections";
   import { theme } from "$lib/stores/theme.svelte";
+  import { ordsStore } from "$lib/stores/ords.svelte";
+  import OrdsBootstrapModal from "$lib/workspace/OrdsBootstrapModal.svelte";
 
   const PLSQL_KINDS: ObjectKind[] = ["PROCEDURE", "FUNCTION", "PACKAGE", "TRIGGER", "TYPE"];
 
@@ -65,6 +67,7 @@
   let related = $state<Loadable<TableRelated>>({ kind: "idle" });
   let activeWsTab = $state<"schema" | "dashboard">("schema");
   let testWindowOpen = $state(false);
+  let showOrdsBootstrap = $state(false);
 
   // ── Panel resize (persisted) ─────────────────────────────────────────────────
   function loadPanelWidth(key: string, def: number): number {
@@ -312,6 +315,7 @@
     schemas = schemaRes.data.map((s) => newSchemaNode(s.name, s.isCurrent));
     const current = schemas.find((s) => s.isCurrent);
     if (current) expandIfNeeded(current);
+    void ordsStore.refresh();
 
     if (current) {
       const [tablesRes, viewsRes] = await Promise.allSettled([
@@ -612,6 +616,21 @@
   {/if}
   {#if testWindowOpen}
     <TestWindow onClose={() => { testWindowOpen = false; void debugStore.stop(); }} />
+  {/if}
+  {#if showOrdsBootstrap && ordsStore.state}
+    <OrdsBootstrapModal
+      state={ordsStore.state}
+      schemaName={schemas.find((s) => s.isCurrent)?.name ?? ""}
+      onEnableSchema={async () => {
+        alert("Implementação em Task 2.5");
+        showOrdsBootstrap = false;
+      }}
+      onSetBaseUrl={(url) => {
+        if (ordsStore.state) ordsStore.state.ordsBaseUrl = url;
+        showOrdsBootstrap = false;
+      }}
+      onClose={() => showOrdsBootstrap = false}
+    />
   {/if}
 {/if}
 
