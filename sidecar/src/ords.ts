@@ -2,7 +2,8 @@ import oracledb from "oracledb";
 import { getActiveSession } from "./state";
 
 export type OrdsDetectResult = {
-  installed: boolean;
+  installed: boolean;          // ORDS package exists somewhere in DB
+  userHasAccess: boolean;      // Current user can call ORDS/OAUTH packages
   version: string | null;
   currentSchemaEnabled: boolean;
   hasAdminRole: boolean;
@@ -20,25 +21,24 @@ function isOrdsNotAccessible(err: any): boolean {
 export async function ordsDetect(_params: Record<string, unknown> = {}): Promise<OrdsDetectResult> {
   const conn = getActiveSession();
 
-  // Probe whether the current user can actually use ORDS — tries the synonym
-  // visible to this session. Modern ORDS lives in ORDS_METADATA with PUBLIC
-  // synonyms granted per-schema; if the user can't see them, ORDS is unusable
-  // for them regardless of where the package physically lives.
+  // Stage 1: ORDS package exists anywhere in the DB?
   let installed = false;
   try {
-    await conn.execute(
-      `SELECT 1 FROM all_objects WHERE object_name='ORDS' AND object_type='PACKAGE' AND ROWNUM=1`,
+    const r = await conn.execute<any>(
+      `SELECT COUNT(*) AS cnt FROM all_objects
+       WHERE object_name='ORDS' AND object_type='PACKAGE' AND ROWNUM=1`,
       [],
       { outFormat: oracledb.OUT_FORMAT_OBJECT }
     );
-    installed = true;
+    const row = r.rows?.[0];
+    installed = ((row?.CNT ?? row?.cnt ?? 0) as number) > 0;
   } catch {
     installed = false;
   }
 
-  // Even if the package is visible, the user may not have the views. Treat
-  // "user_ords_schemas absent" as "not installed for this schema" — the
-  // bootstrap modal then guides the user to grant + enable.
+  // Stage 2: Can the current user actually call ORDS APIs?
+  // Probes the dictionary view that comes with ORDS-enabled schemas.
+  let userHasAccess = false;
   if (installed) {
     try {
       await conn.execute(
@@ -46,14 +46,17 @@ export async function ordsDetect(_params: Record<string, unknown> = {}): Promise
         [],
         { outFormat: oracledb.OUT_FORMAT_OBJECT }
       );
+      userHasAccess = true;
     } catch (e) {
-      if (isOrdsNotAccessible(e)) installed = false;
+      if (!isOrdsNotAccessible(e)) throw e;
+      userHasAccess = false;
     }
   }
 
-  if (!installed) {
+  if (!installed || !userHasAccess) {
     return {
-      installed: false,
+      installed,
+      userHasAccess,
       version: null,
       currentSchemaEnabled: false,
       hasAdminRole: false,
@@ -117,7 +120,7 @@ export async function ordsDetect(_params: Record<string, unknown> = {}): Promise
     /* user may not have access */
   }
 
-  return { installed, version, currentSchemaEnabled, hasAdminRole, ordsBaseUrl };
+  return { installed, userHasAccess, version, currentSchemaEnabled, hasAdminRole, ordsBaseUrl };
 }
 
 export async function ordsModulesList(params: { owner: string }): Promise<{ name: string; basePath: string; status: string; itemsPerPage: number | null; comments: string | null }[]> {

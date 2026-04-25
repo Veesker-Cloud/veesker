@@ -15,6 +15,7 @@
 
   const variant = $derived.by(() => {
     if (!state.installed) return "not-installed";
+    if (!state.userHasAccess) return "no-access";
     if (!state.currentSchemaEnabled) return "schema-disabled";
     if (!state.hasAdminRole) return "no-privilege";
     if (!state.ordsBaseUrl) return "no-url";
@@ -58,6 +59,17 @@
         <p>
           Ou consulte:
           <a href="https://docs.oracle.com/en/database/oracle/oracle-rest-data-services/" target="_blank" rel="noopener">documentação oficial</a>.
+        </p>
+      {:else if variant === "no-access"}
+        <h3>Seu usuário <code>{schemaName}</code> não tem acesso ao ORDS</h3>
+        <p>
+          O ORDS está instalado neste banco, mas o usuário <code>{schemaName}</code> não tem permissão para usar os pacotes ORDS/OAUTH ou ler as views <code>USER_ORDS_*</code>.
+        </p>
+        <p><strong>Passo 1 — Peça ao DBA (executar como SYS ou ORDS_ADMINISTRATOR_ROLE):</strong></p>
+        <pre class="cmd">GRANT ORDS_ADMINISTRATOR_ROLE TO {schemaName};</pre>
+        <p><strong>Passo 2 — Após receber o GRANT, reconecte e clique em "Habilitar agora" no modal que aparecerá.</strong></p>
+        <p class="hint-small">
+          Sem essa permissão, a aba REST MODULES e o gerenciador de OAuth Clients não funcionam.
         </p>
       {:else if variant === "schema-disabled"}
         <h3>Schema <code>{schemaName}</code> não está habilitado</h3>
@@ -142,5 +154,8 @@ END;</pre>
   code {
     font-family: monospace; background: var(--bg-surface-alt);
     padding: 1px 5px; border-radius: 3px; font-size: 11.5px;
+  }
+  .hint-small {
+    font-size: 11px; color: var(--text-muted); font-style: italic; margin-top: 12px;
   }
 </style>

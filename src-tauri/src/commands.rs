@@ -827,6 +827,8 @@ pub async fn debug_run(app: AppHandle, payload: Value) -> Result<Value, Connecti
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OrdsDetectResult {
     pub installed: bool,
+    #[serde(rename = "userHasAccess", default)]
+    pub user_has_access: bool,
     pub version: Option<String>,
     #[serde(rename = "currentSchemaEnabled")]
     pub current_schema_enabled: bool,
