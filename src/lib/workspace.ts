@@ -4,7 +4,8 @@ export type WorkspaceInfo = { serverVersion: string; currentSchema: string };
 export type Schema = { name: string; isCurrent: boolean };
 export type ObjectKind =
   | "TABLE" | "VIEW" | "SEQUENCE"
-  | "PROCEDURE" | "FUNCTION" | "PACKAGE" | "TRIGGER" | "TYPE";
+  | "PROCEDURE" | "FUNCTION" | "PACKAGE" | "TRIGGER" | "TYPE"
+  | "REST_MODULE";
 export type ObjectRef = { name: string };
 export type ObjectRefWithStatus = { name: string; status: string };
 export type Column = {
@@ -103,6 +104,45 @@ export type OrdsDetectResult = {
 
 export const ordsDetect = () =>
   call<OrdsDetectResult>("ords_detect", {});
+
+export type RestModule = {
+  name: string;
+  basePath: string;
+  status: string;
+  itemsPerPage: number | null;
+  comments: string | null;
+};
+
+export type RestHandler = {
+  method: "GET" | "POST" | "PUT" | "DELETE";
+  sourceType: string;
+  source: string;
+  itemsPerPage: number | null;
+};
+
+export type RestTemplate = {
+  uriTemplate: string;
+  priority: number;
+  handlers: RestHandler[];
+};
+
+export type RestPrivilege = {
+  name: string;
+  roles: string[];
+  patterns: string[];
+};
+
+export type RestModuleDetail = {
+  module: RestModule;
+  templates: RestTemplate[];
+  privileges: RestPrivilege[];
+};
+
+export const ordsModulesList = (owner: string) =>
+  call<RestModule[]>("ords_modules_list", { owner });
+
+export const ordsModuleGet = (owner: string, name: string) =>
+  call<RestModuleDetail>("ords_module_get", { owner, name });
 
 export const objectsListPlsql = (owner: string, kind: string) =>
   call<ObjectRefWithStatus[]>("objects_list_plsql", { owner, kind });
