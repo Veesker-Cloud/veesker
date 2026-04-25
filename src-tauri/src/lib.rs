@@ -216,6 +216,7 @@ pub fn run() {
             commands::debug_get_values,
             commands::debug_get_call_stack,
             commands::debug_run,
+            commands::ords_detect,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

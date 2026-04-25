@@ -93,6 +93,17 @@ export type CompileError = { line: number; position: number; text: string };
 export const compileErrorsGet = (objectType: string, objectName: string) =>
   call<CompileError[]>("compile_errors_get", { objectType, objectName });
 
+export type OrdsDetectResult = {
+  installed: boolean;
+  version: string | null;
+  currentSchemaEnabled: boolean;
+  hasAdminRole: boolean;
+  ordsBaseUrl: string | null;
+};
+
+export const ordsDetect = () =>
+  call<OrdsDetectResult>("ords_detect", {});
+
 export const objectsListPlsql = (owner: string, kind: string) =>
   call<ObjectRefWithStatus[]>("objects_list_plsql", { owner, kind });
 
