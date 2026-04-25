@@ -4,6 +4,7 @@
   import { onMount } from "svelte";
   import { listen } from "@tauri-apps/api/event";
   import HelpModal from "$lib/workspace/HelpModal.svelte";
+  import UpdateNotification from "$lib/workspace/UpdateNotification.svelte";
   import type { Snippet } from "svelte";
 
   let { children }: { children: Snippet } = $props();
@@ -37,3 +38,5 @@
 {#if showHelp}
   <HelpModal onClose={() => { showHelp = false; }} />
 {/if}
+
+<UpdateNotification />
