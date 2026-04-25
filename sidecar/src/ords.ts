@@ -280,3 +280,173 @@ function sqlMultiline(s: string): string {
   }
   return sqlString(s);
 }
+
+// ── SQL Generators ────────────────────────────────────────────────────────────
+
+export type AutoCrudParams = {
+  schema: string;
+  objectName: string;
+  objectType: "TABLE" | "VIEW";
+  alias: string;
+  authMode: "none" | "role" | "oauth";
+  authRole?: string | null;
+};
+
+export function generateAutoCrudSql(p: AutoCrudParams): string {
+  const lines: string[] = ["BEGIN"];
+  lines.push("  ORDS.ENABLE_OBJECT(");
+  lines.push("    p_enabled        => TRUE,");
+  lines.push(`    p_schema         => ${sqlString(p.schema)},`);
+  lines.push(`    p_object         => ${sqlString(p.objectName)},`);
+  lines.push(`    p_object_type    => ${sqlString(p.objectType)},`);
+  lines.push(`    p_object_alias   => ${sqlString(p.alias)},`);
+  lines.push(`    p_auto_rest_auth => ${p.authMode === "none" ? "FALSE" : "TRUE"});`);
+  if (p.authMode === "role" && p.authRole) {
+    lines.push("");
+    lines.push("  ORDS.DEFINE_PRIVILEGE(");
+    lines.push(`    p_privilege_name => ${sqlString(p.alias + "_priv")},`);
+    lines.push(`    p_roles          => ORDS_TYPES.role_array(${sqlString(p.authRole)}),`);
+    lines.push(`    p_patterns       => ORDS_TYPES.pattern_array(${sqlString("/" + p.alias + "/*")}));`);
+  }
+  lines.push("");
+  lines.push("  COMMIT;");
+  lines.push("END;");
+  return lines.join("\n");
+}
+
+export type CustomSqlParams = {
+  moduleName: string;
+  basePath: string;
+  routePattern: string;
+  method: string;
+  source: string;
+  authMode: "none" | "role" | "oauth";
+  authRole?: string | null;
+};
+
+export function generateCustomSqlEndpoint(p: CustomSqlParams): string {
+  const lines: string[] = ["BEGIN"];
+  lines.push("  ORDS.DEFINE_MODULE(");
+  lines.push(`    p_module_name    => ${sqlString(p.moduleName)},`);
+  lines.push(`    p_base_path      => ${sqlString(p.basePath)},`);
+  lines.push("    p_items_per_page => 25);");
+  lines.push("");
+  lines.push("  ORDS.DEFINE_TEMPLATE(");
+  lines.push(`    p_module_name => ${sqlString(p.moduleName)},`);
+  lines.push(`    p_pattern     => ${sqlString(p.routePattern)});`);
+  lines.push("");
+  const sourceType = p.method.toUpperCase() === "GET"
+    ? "ORDS.source_type_collection"
+    : "ORDS.source_type_plsql";
+  lines.push("  ORDS.DEFINE_HANDLER(");
+  lines.push(`    p_module_name => ${sqlString(p.moduleName)},`);
+  lines.push(`    p_pattern     => ${sqlString(p.routePattern)},`);
+  lines.push(`    p_method      => ${sqlString(p.method.toUpperCase())},`);
+  lines.push(`    p_source_type => ${sourceType},`);
+  lines.push(`    p_source      => ${sqlMultiline(p.source)});`);
+  if (p.authMode === "role" && p.authRole) {
+    lines.push("");
+    lines.push("  ORDS.DEFINE_PRIVILEGE(");
+    lines.push(`    p_privilege_name => ${sqlString(p.moduleName + "_priv")},`);
+    lines.push(`    p_roles          => ORDS_TYPES.role_array(${sqlString(p.authRole)}),`);
+    lines.push(`    p_patterns       => ORDS_TYPES.pattern_array(${sqlString(p.basePath.replace(/\/$/, "") + "/*")}));`);
+  }
+  lines.push("");
+  lines.push("  COMMIT;");
+  lines.push("END;");
+  return lines.join("\n");
+}
+
+export type ProcedureEndpointParams = {
+  moduleName: string;
+  basePath: string;
+  routePattern: string;
+  method: string;
+  schema: string;
+  procName: string;
+  packageName: string | null;
+  params: { name: string; argMode: "IN" | "OUT" | "IN/OUT"; dataType: string }[];
+  hasReturn: boolean;
+  authMode: "none" | "role" | "oauth";
+  authRole?: string | null;
+};
+
+export function generateProcedureEndpoint(p: ProcedureEndpointParams): string {
+  const lines: string[] = ["BEGIN"];
+  lines.push("  ORDS.DEFINE_MODULE(");
+  lines.push(`    p_module_name    => ${sqlString(p.moduleName)},`);
+  lines.push(`    p_base_path      => ${sqlString(p.basePath)});`);
+  lines.push("");
+  lines.push("  ORDS.DEFINE_TEMPLATE(");
+  lines.push(`    p_module_name => ${sqlString(p.moduleName)},`);
+  lines.push(`    p_pattern     => ${sqlString(p.routePattern)});`);
+
+  const fqn = p.packageName ? `${p.packageName}.${p.procName}` : p.procName;
+  const outParams = p.params.filter((x) => x.argMode === "OUT" || x.argMode === "IN/OUT");
+
+  const declareLines: string[] = [];
+  for (const op of outParams) {
+    declareLines.push(`  v_${op.name.toLowerCase()} ${op.dataType};`);
+  }
+  if (p.hasReturn) declareLines.push("  v_result NUMBER;");
+
+  const callArgs = p.params.map((par) => {
+    const lower = par.name.toLowerCase();
+    if (par.argMode === "OUT") return `    ${par.name} => v_${lower}`;
+    if (par.argMode === "IN/OUT") return `    ${par.name} => v_${lower}`;
+    return `    ${par.name} => :${lower}`;
+  });
+
+  const printLines: string[] = [];
+  printLines.push("  HTP.print('{');");
+  outParams.forEach((op, i) => {
+    const lower = op.name.toLowerCase();
+    const sep = i < outParams.length - 1 ? " || ','" : "";
+    printLines.push(`  HTP.print('"${lower}":' || NVL(TO_CHAR(v_${lower}), 'null')${sep});`);
+  });
+  printLines.push("  HTP.print('}');");
+
+  const wrapper = [
+    "DECLARE",
+    ...declareLines,
+    "BEGIN",
+    `  ${fqn}(`,
+    callArgs.join(",\n"),
+    "  );",
+    "  :status_code := 200;",
+    "  OWA_UTIL.mime_header('application/json', false);",
+    "  OWA_UTIL.http_header_close;",
+    ...printLines,
+    "END;",
+  ].join("\n");
+
+  lines.push("");
+  lines.push("  ORDS.DEFINE_HANDLER(");
+  lines.push(`    p_module_name => ${sqlString(p.moduleName)},`);
+  lines.push(`    p_pattern     => ${sqlString(p.routePattern)},`);
+  lines.push(`    p_method      => ${sqlString(p.method.toUpperCase())},`);
+  lines.push("    p_source_type => ORDS.source_type_plsql,");
+  lines.push(`    p_source      => ${sqlMultiline(wrapper)});`);
+
+  if (p.authMode === "role" && p.authRole) {
+    lines.push("");
+    lines.push("  ORDS.DEFINE_PRIVILEGE(");
+    lines.push(`    p_privilege_name => ${sqlString(p.moduleName + "_priv")},`);
+    lines.push(`    p_roles          => ORDS_TYPES.role_array(${sqlString(p.authRole)}),`);
+    lines.push(`    p_patterns       => ORDS_TYPES.pattern_array(${sqlString(p.basePath.replace(/\/$/, "") + "/*")}));`);
+  }
+
+  lines.push("");
+  lines.push("  COMMIT;");
+  lines.push("END;");
+  return lines.join("\n");
+}
+
+// ── Dispatcher RPC ────────────────────────────────────────────────────────────
+
+export async function ordsGenerateSql(params: any): Promise<{ sql: string }> {
+  if (params.type === "auto-crud") return { sql: generateAutoCrudSql(params) };
+  if (params.type === "custom-sql") return { sql: generateCustomSqlEndpoint(params) };
+  if (params.type === "procedure") return { sql: generateProcedureEndpoint(params) };
+  throw { code: -32602, message: `Unknown endpoint type: ${params.type}` };
+}

@@ -872,3 +872,11 @@ pub async fn ords_module_export_sql(
 pub async fn ords_roles_list(app: AppHandle) -> Result<serde_json::Value, ConnectionTestErr> {
     call_sidecar(&app, "ords.roles.list", json!({})).await
 }
+
+#[tauri::command]
+pub async fn ords_generate_sql(
+    app: AppHandle,
+    config: serde_json::Value,
+) -> Result<serde_json::Value, ConnectionTestErr> {
+    call_sidecar(&app, "ords.generate_sql", config).await
+}

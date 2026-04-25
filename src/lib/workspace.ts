@@ -153,6 +153,9 @@ export const ordsModuleExportSql = (owner: string, name: string) =>
 export const ordsRolesList = () =>
   call<{ roles: string[] }>("ords_roles_list", {});
 
+export const ordsGenerateSql = (config: Record<string, unknown>) =>
+  call<{ sql: string }>("ords_generate_sql", { config });
+
 export const objectsListPlsql = (owner: string, kind: string) =>
   call<ObjectRefWithStatus[]>("objects_list_plsql", { owner, kind });
 
