@@ -2,7 +2,7 @@ import oracledb from "oracledb";
 import { embedText, type EmbedParams } from "./embedding";
 
 /** Validate and quote an Oracle identifier for use in double-quoted SQL interpolation. */
-function quoteIdent(name: string): string {
+export function quoteIdent(name: string): string {
   if (!/^[A-Za-z0-9_$#]{1,128}$/.test(name)) {
     throw new Error(`Invalid Oracle identifier: ${JSON.stringify(name)}`);
   }

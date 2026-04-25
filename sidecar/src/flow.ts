@@ -90,8 +90,44 @@ export async function traceProc(p: TraceProcParams): Promise<TraceResult> {
   const session = await createDebugSession();
   let traceTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
   let traceTimedOut = false;
+  let midTraceError: { code: number; message: string; atStep: number } | null = null;
+  let finalResult: { rowCount?: number; outBinds?: Record<string, unknown> } | undefined;
 
   try {
+    // F2: Pre-flight — if the target is INVALID, give a clear error before debug attaches.
+    try {
+      const { withActiveSession } = await import("./oracle");
+      await withActiveSession(async (conn) => {
+        const statusRes = await conn.execute<{ STATUS: string }>(
+          `SELECT status FROM all_objects WHERE owner = :o AND object_name = :n AND object_type IN ('PROCEDURE','FUNCTION','PACKAGE','PACKAGE BODY')`,
+          { o: p.owner.toUpperCase(), n: p.name.toUpperCase() },
+          { outFormat: 4002 },
+        );
+        const status = statusRes.rows?.[0]?.STATUS;
+        if (status === "INVALID") {
+          throw { code: -32020, message: `Procedure ${p.owner}.${p.name} has compile errors. Click the Compile button to see them and fix before tracing.` };
+        }
+      });
+    } catch (e: any) {
+      if (e?.code === -32020) {
+        session.stop();
+        await session.closingPromise();
+        throw e;
+      }
+    }
+
+    // F1: Pre-fetch source for the entry object via the active workspace session so we
+    // don't need extra Oracle round-trips during the trace loop.
+    const sourceCache = new Map<string, string[]>();
+    try {
+      const { withActiveSession } = await import("./oracle");
+      await withActiveSession(async (conn) => {
+        await getSourceLine(conn, sourceCache, p.owner, p.name, 1);
+      });
+    } catch {
+      // best-effort; trace still works without source text
+    }
+
     try {
       await session.initialize();
     } catch (e) {
@@ -172,7 +208,8 @@ export async function traceProc(p: TraceProcParams): Promise<TraceResult> {
       const frame = info.frame;
       const vars = await safeGetVars(session, candidateNames);
       const stack = await safeGetCallStack(session);
-      const sourceLine = "";
+      // F1: use pre-fetched source cache; un-cached objects (cross-procedure calls) get ""
+      const sourceLine = sourceCache.get(`${frame.owner}.${frame.objectName}`)?.at(frame.line - 1) ?? "";
 
       const event: PlsqlFrameEvent = {
         kind: "plsql.frame",
@@ -192,8 +229,32 @@ export async function traceProc(p: TraceProcParams): Promise<TraceResult> {
       events.push(event);
       stepIndex++;
 
-      info = await session.continueExecution(BREAK_ANY_CALL);
+      // F8: catch mid-trace errors and return partial trace
+      try {
+        info = await session.continueExecution(BREAK_ANY_CALL);
+      } catch (e: any) {
+        midTraceError = { code: -32022, message: e?.message ?? String(e), atStep: events.length };
+        break;
+      }
     }
+
+    // F5: capture OUT binds and REF CURSORs at trace completion
+    try {
+      const extras = await session.extractCompletionResults();
+      if (extras && (Object.keys(extras.outBinds ?? {}).length > 0 || (extras.refCursors ?? []).length > 0)) {
+        finalResult = {
+          outBinds: { ...extras.outBinds },
+        };
+        if (extras.refCursors && extras.refCursors.length > 0) {
+          for (const rc of extras.refCursors) {
+            (finalResult.outBinds as any)[rc.name] = { columns: rc.columns, rows: rc.rows };
+          }
+        }
+      }
+    } catch {
+      // best-effort
+    }
+
   } finally {
     if (traceTimeoutHandle !== null) clearTimeout(traceTimeoutHandle);
     session.stop();
@@ -208,8 +269,11 @@ export async function traceProc(p: TraceProcParams): Promise<TraceResult> {
     totalElapsedMs,
     events,
   };
+  if (finalResult) result.finalResult = finalResult;
   if (truncated) result.truncated = true;
-  if (traceTimedOut) {
+  if (midTraceError) {
+    result.error = midTraceError;
+  } else if (traceTimedOut) {
     result.error = { code: -32004, message: `Trace timed out after ${timeoutMs}ms`, atStep: events.length };
   }
   return result;
@@ -243,6 +307,34 @@ async function safeGetCallStack(session: any): Promise<StackEntry[]> {
   } catch {
     return [];
   }
+}
+
+async function getSourceLine(
+  conn: any,
+  cache: Map<string, string[]>,
+  owner: string,
+  objectName: string,
+  line: number,
+): Promise<string> {
+  const key = `${owner}.${objectName}`;
+  let lines = cache.get(key);
+  if (!lines) {
+    try {
+      const r = await conn.execute<{ TEXT: string }>(
+        `SELECT text FROM all_source WHERE owner = :o AND name = :n AND type IN ('PROCEDURE','FUNCTION','PACKAGE','PACKAGE BODY','TRIGGER','TYPE','TYPE BODY') ORDER BY line`,
+        { o: owner.toUpperCase(), n: objectName.toUpperCase() },
+        { outFormat: 4002 /* OUT_FORMAT_OBJECT */ },
+      );
+      lines = (r.rows ?? []).map((row: any) => (row.TEXT ?? "").replace(/\r?\n$/, ""));
+      cache.set(key, lines);
+    } catch {
+      lines = [];
+      cache.set(key, lines);
+    }
+  }
+  // line numbers are 1-based; line 0 happens for some Oracle anonymous frames
+  if (line < 1 || line > lines.length) return "";
+  return lines[line - 1] ?? "";
 }
 
 import type { ExplainNodeEvent, TraceSqlParams } from "./flow-types";
