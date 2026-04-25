@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import { dashboard } from "$lib/stores/dashboard.svelte";
   import ChartWidget from "./ChartWidget.svelte";
 
@@ -7,7 +8,7 @@
 
   let clearConfirm = $state(false);
 
-  async function exportPdf() {
+  async function exportPdf(): Promise<void> {
     const root = document.createElement("div");
     root.id = "pdf-print-root";
 
@@ -76,6 +77,8 @@
     }
 
     document.body.appendChild(root);
+    await tick();
+    await new Promise(requestAnimationFrame);
     window.print();
     setTimeout(() => root.remove(), 1000);
   }

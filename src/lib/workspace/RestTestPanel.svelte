@@ -41,6 +41,7 @@
       fullUrl,
       cleanHeaders,
       method !== "GET" && bodyText.trim() ? bodyText : null,
+      baseUrl.replace(/\/$/, ""),
     );
     sending = false;
     if (res.ok) response = res.data;
@@ -86,6 +87,7 @@
         ["Content-Type", "application/x-www-form-urlencoded"],
       ],
       body,
+      baseUrl.replace(/\/$/, ""),
     );
 
     oauthFetching = false;
