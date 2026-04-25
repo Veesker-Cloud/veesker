@@ -174,6 +174,21 @@ export const ordsTestHttp = (
   body: string | null,
 ) => call<OrdsTestResult>("ords_test_http", { method, url, allowedBaseUrl, headers, body });
 
+export type RestClient = {
+  name: string;
+  description: string | null;
+  createdOn: string | null;
+};
+
+export const ordsClientsList = () =>
+  call<{ clients: RestClient[] }>("ords_clients_list", {});
+
+export const ordsClientsCreate = (name: string, description: string, roles: string[]) =>
+  call<{ clientId: string; clientSecret: string }>("ords_clients_create", { name, description, roles });
+
+export const ordsClientsRevoke = (name: string) =>
+  call<void>("ords_clients_revoke", { name });
+
 export const objectsListPlsql = (owner: string, kind: string) =>
   call<ObjectRefWithStatus[]>("objects_list_plsql", { owner, kind });
 

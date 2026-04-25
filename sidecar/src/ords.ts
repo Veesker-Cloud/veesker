@@ -456,3 +456,77 @@ export async function ordsGenerateSql(params: any): Promise<{ sql: string }> {
   if (params.type === "procedure") return { sql: generateProcedureEndpoint(params) };
   throw { code: -32602, message: `Unknown endpoint type: ${params.type}` };
 }
+
+// ── OAuth Clients ─────────────────────────────────────────────────────────────
+
+export type RestClient = {
+  name: string;
+  description: string | null;
+  createdOn: string | null;
+};
+
+export async function ordsClientsList(_params: Record<string, unknown> = {}): Promise<{ clients: RestClient[] }> {
+  const conn = getActiveSession();
+  const res = await conn.execute<any>(
+    `SELECT name, description, created_on FROM user_ords_clients ORDER BY name`,
+    [],
+    { outFormat: oracledb.OUT_FORMAT_OBJECT }
+  );
+  return {
+    clients: (res.rows ?? []).map((r: any) => ({
+      name: r.NAME ?? r.name,
+      description: r.DESCRIPTION ?? r.description ?? null,
+      createdOn: r.CREATED_ON ? String(r.CREATED_ON) : (r.created_on ? String(r.created_on) : null),
+    })),
+  };
+}
+
+export async function ordsClientsCreate(params: {
+  name: string;
+  description: string;
+  roles: string[];
+}): Promise<{ clientId: string; clientSecret: string }> {
+  const conn = getActiveSession();
+
+  const sqlCreate = `BEGIN
+    OAUTH.CREATE_CLIENT(
+      p_name            => :name,
+      p_grant_type      => 'client_credentials',
+      p_owner           => USER,
+      p_description     => :description,
+      p_support_email   => NULL,
+      p_privilege_names => NULL);
+    COMMIT;
+  END;`;
+  await conn.execute(sqlCreate, {
+    name: params.name,
+    description: params.description ?? "",
+  });
+
+  for (const role of params.roles) {
+    await conn.execute(
+      `BEGIN OAUTH.GRANT_CLIENT_ROLE(p_client_name => :n, p_role_name => :r); COMMIT; END;`,
+      { n: params.name, r: role }
+    );
+  }
+
+  const credsRes = await conn.execute<any>(
+    `SELECT client_id, client_secret FROM user_ords_clients WHERE name = :name`,
+    { name: params.name },
+    { outFormat: oracledb.OUT_FORMAT_OBJECT }
+  );
+  const row = credsRes.rows?.[0];
+  return {
+    clientId: (row?.CLIENT_ID ?? row?.client_id ?? "") as string,
+    clientSecret: (row?.CLIENT_SECRET ?? row?.client_secret ?? "") as string,
+  };
+}
+
+export async function ordsClientsRevoke(params: { name: string }): Promise<{ ok: true }> {
+  const conn = getActiveSession();
+  await conn.execute(
+    `BEGIN OAUTH.DELETE_CLIENT(p_name => :n); COMMIT; END;`,
+    { n: params.name }
+  );
+  return { ok: true };
+}

@@ -962,3 +962,31 @@ pub async fn ords_test_http(
 
     Ok(OrdsTestResult { status, headers: resp_headers, body, elapsed_ms })
 }
+
+#[tauri::command]
+pub async fn ords_clients_list(app: AppHandle) -> Result<serde_json::Value, ConnectionTestErr> {
+    call_sidecar(&app, "ords.clients.list", json!({})).await
+}
+
+#[tauri::command]
+pub async fn ords_clients_create(
+    app: AppHandle,
+    name: String,
+    description: String,
+    roles: Vec<String>,
+) -> Result<serde_json::Value, ConnectionTestErr> {
+    call_sidecar(
+        &app,
+        "ords.clients.create",
+        json!({ "name": name, "description": description, "roles": roles }),
+    ).await
+}
+
+#[tauri::command]
+pub async fn ords_clients_revoke(
+    app: AppHandle,
+    name: String,
+) -> Result<(), ConnectionTestErr> {
+    call_sidecar(&app, "ords.clients.revoke", json!({ "name": name })).await?;
+    Ok(())
+}

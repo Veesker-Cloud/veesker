@@ -33,7 +33,7 @@ import {
 } from "./oracle";
 import { aiChat } from "./ai";
 import { chartConfigure, chartReset } from "./chart";
-import { ordsDetect, ordsModulesList, ordsModuleGet, ordsEnableSchema, ordsModuleExportSql, ordsRolesList, ordsGenerateSql, ordsApply } from "./ords";
+import { ordsDetect, ordsModulesList, ordsModuleGet, ordsEnableSchema, ordsModuleExportSql, ordsRolesList, ordsGenerateSql, ordsApply, ordsClientsList, ordsClientsCreate, ordsClientsRevoke } from "./ords";
 import {
   debugOpen,
   debugGetSource,
@@ -94,6 +94,9 @@ const handlers: HandlerMap = {
   "ords.roles.list":     (params) => ordsRolesList(params as any),
   "ords.generate_sql":   (params) => ordsGenerateSql(params as any),
   "ords.apply":          (params) => ordsApply(params as any),
+  "ords.clients.list":   (params) => ordsClientsList(params as any),
+  "ords.clients.create": (params) => ordsClientsCreate(params as any),
+  "ords.clients.revoke": (params) => ordsClientsRevoke(params as any),
   "debug.open":              (params) => debugOpen(params as any),
   "debug.get_source":        (params) => debugGetSource(params as any),
   "debug.start":             (params) => debugStart(params as any),

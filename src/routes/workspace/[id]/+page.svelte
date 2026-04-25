@@ -47,6 +47,7 @@
   import { theme } from "$lib/stores/theme.svelte";
   import { ordsStore } from "$lib/stores/ords.svelte";
   import OrdsBootstrapModal from "$lib/workspace/OrdsBootstrapModal.svelte";
+  import OAuthClientsPanel from "$lib/workspace/OAuthClientsPanel.svelte";
 
   const PLSQL_KINDS: ObjectKind[] = ["PROCEDURE", "FUNCTION", "PACKAGE", "TRIGGER", "TYPE"];
 
@@ -82,6 +83,7 @@
   let apiBuilderInitial = $state<{ kind: "table" | "view" | "procedure" | "function"; obj: { owner: string; name: string } } | null>(null);
   let previewSql = $state<string | null>(null);
   let testPanelOpen = $state<{ basePath: string } | null>(null);
+  let showOAuthPanel = $state(false);
 
   // ── Panel resize (persisted) ─────────────────────────────────────────────────
   function loadPanelWidth(key: string, def: number): number {
@@ -591,6 +593,11 @@
             class:active={activeWsTab === "dashboard"}
             onclick={() => (activeWsTab = "dashboard")}
           >📊 Dashboard</button>
+          <button
+            class="ws-tab"
+            onclick={() => (showOAuthPanel = true)}
+            title="Manage OAuth Clients"
+          >🔐 OAuth</button>
         </div>
         {#if activeWsTab === "schema"}
           {#if selected && selected.kind === "REST_MODULE"}
@@ -756,6 +763,9 @@
         onClose={() => testPanelOpen = null}
       />
     </div>
+  {/if}
+  {#if showOAuthPanel}
+    <OAuthClientsPanel onClose={() => showOAuthPanel = false} />
   {/if}
 {/if}
 
