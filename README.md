@@ -27,6 +27,13 @@ If you need warranty, SLA, or commercial support, that requires a separate signe
 ## Screenshots
 
 <div align="center">
+<img src="docs/screenshots/workspace-overview.png" width="100%" alt="Veesker workspace — schema tree, DataFlow graph, AI assistant, SQL editor with results" />
+<sub>Full workspace — schema browser, DataFlow graph, Veesker AI with chart, SQL editor, query history, results grid</sub>
+</div>
+
+<br/>
+
+<div align="center">
 <table>
   <tr>
     <td align="center">
