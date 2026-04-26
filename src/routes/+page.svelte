@@ -12,6 +12,20 @@
   let connections = $state<ConnectionMeta[]>([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
+  let query = $state("");
+  let authFilter = $state<"all" | "basic" | "wallet">("all");
+
+  const filtered = $derived.by(() => {
+    const q = query.trim().toLowerCase();
+    return connections.filter((c) => {
+      if (authFilter !== "all" && c.authType !== authFilter) return false;
+      if (!q) return true;
+      const haystack = c.authType === "basic"
+        ? `${c.name} ${c.username} ${c.host} ${c.serviceName}`
+        : `${c.name} ${c.username} ${c.connectAlias}`;
+      return haystack.toLowerCase().includes(q);
+    });
+  });
 
   async function refresh() {
     loading = true;
@@ -68,9 +82,47 @@
     </button>
   </header>
 
+  {#if !loading && !error && connections.length > 0}
+    <div class="filter-bar">
+      <div class="search-wrap">
+        <svg class="search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+          <circle cx="6" cy="6" r="4.2" stroke="currentColor" stroke-width="1.4"/>
+          <path d="M9.2 9.2l3.3 3.3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        </svg>
+        <input
+          type="search"
+          class="search-input"
+          placeholder="Filter connections by name, user, host…"
+          bind:value={query}
+          autocomplete="off"
+          spellcheck={false}
+        />
+        {#if query}
+          <button
+            class="clear-btn"
+            title="Clear"
+            aria-label="Clear search"
+            onclick={() => { query = ""; }}
+          >×</button>
+        {/if}
+      </div>
+      <div class="auth-filter" role="tablist" aria-label="Auth type filter">
+        <button class="chip" class:chip-on={authFilter === "all"}    role="tab" aria-selected={authFilter === "all"}    onclick={() => authFilter = "all"}>All</button>
+        <button class="chip" class:chip-on={authFilter === "basic"}  role="tab" aria-selected={authFilter === "basic"}  onclick={() => authFilter = "basic"}>Basic</button>
+        <button class="chip" class:chip-on={authFilter === "wallet"} role="tab" aria-selected={authFilter === "wallet"} onclick={() => authFilter = "wallet"}>Wallet</button>
+      </div>
+    </div>
+  {/if}
+
   <div class="section-label">
     {#if !loading && !error}
-      {connections.length === 0 ? "No connections" : `${connections.length} connection${connections.length === 1 ? "" : "s"}`}
+      {#if connections.length === 0}
+        No connections
+      {:else if filtered.length === connections.length}
+        {connections.length} connection{connections.length === 1 ? "" : "s"}
+      {:else}
+        {filtered.length} of {connections.length}
+      {/if}
     {:else if loading}
       &nbsp;
     {:else}
@@ -112,9 +164,14 @@
         New connection
       </button>
     </div>
+  {:else if filtered.length === 0}
+    <div class="empty-filter">
+      <span class="muted">No connections match the current filter.</span>
+      <button class="link-btn" onclick={() => { query = ""; authFilter = "all"; }}>Clear filters</button>
+    </div>
   {:else}
     <ul class="list">
-      {#each connections as c (c.id)}
+      {#each filtered as c (c.id)}
         <li
           class="card"
           role="button"
@@ -269,6 +326,89 @@
     white-space: nowrap;
   }
   .new-btn:hover { background: #b33e1f; }
+
+  /* ── Filter bar ──────────────────────────────────────────── */
+  .filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+  .search-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0 0.75rem;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .search-wrap:focus-within {
+    border-color: rgba(179, 62, 31, 0.5);
+    box-shadow: 0 0 0 3px rgba(179, 62, 31, 0.1);
+  }
+  .search-icon { color: var(--text-muted); flex-shrink: 0; }
+  .search-input {
+    flex: 1;
+    background: none;
+    border: none;
+    outline: none;
+    color: var(--text-primary);
+    font-size: 13px;
+    padding: 0.55rem 0;
+    font-family: inherit;
+  }
+  .search-input::placeholder { color: var(--text-muted); }
+  .clear-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 0.25rem;
+    border-radius: 3px;
+  }
+  .clear-btn:hover { color: var(--text-primary); }
+  .auth-filter { display: flex; gap: 4px; flex-shrink: 0; }
+  .chip {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    padding: 0.4rem 0.7rem;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s, border-color 0.12s;
+    font-family: inherit;
+  }
+  .chip:hover { color: var(--text-primary); border-color: var(--text-muted); }
+  .chip-on {
+    background: rgba(179, 62, 31, 0.12);
+    border-color: rgba(179, 62, 31, 0.5);
+    color: #b33e1f;
+  }
+  .empty-filter {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 0;
+  }
+  .link-btn {
+    background: none;
+    border: none;
+    color: #b33e1f;
+    cursor: pointer;
+    font-size: 12px;
+    text-decoration: underline;
+    font-family: inherit;
+    padding: 0;
+  }
+  .link-btn:hover { opacity: 0.8; }
 
   /* ── Section label ────────────────────────────────────────── */
   .section-label {
