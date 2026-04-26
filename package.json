@@ -5,10 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build",
+    "build": "bun run copy-bindings && vite build",
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+    "copy-bindings": "bun run scripts/copy-oracledb-bindings.ts",
     "tauri": "tauri",
     "test": "vitest run",
     "test:watch": "vitest",

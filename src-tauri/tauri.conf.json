@@ -27,6 +27,7 @@
     "active": true,
     "targets": "all",
     "externalBin": ["binaries/veesker-sidecar"],
+    "resources": ["oracledb-bindings/*.node"],
     "createUpdaterArtifacts": true,
     "macOS": {
       "signingIdentity": "-"
