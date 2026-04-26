@@ -202,3 +202,135 @@ describe("detectRedFlags Tier 1", () => {
     expect(r005?.message).toMatch(/STG/);
   });
 });
+
+describe("detectRedFlags Tier 2", () => {
+  const NOW = new Date("2026-04-26T00:00:00Z");
+
+  function nlPlan(outerCardinality: number): ExplainNode[] {
+    return [
+      { id: 0, parentId: null, operation: "SELECT STATEMENT", options: null,
+        objectName: null, objectOwner: null, cost: 100,
+        cardinality: 100, bytes: null,
+        accessPredicates: null, filterPredicates: null },
+      { id: 1, parentId: 0, operation: "NESTED LOOPS", options: null,
+        objectName: null, objectOwner: null, cost: 50,
+        cardinality: 100, bytes: null,
+        accessPredicates: "A.ID = B.A_ID", filterPredicates: null },
+      { id: 2, parentId: 1, operation: "TABLE ACCESS", options: "FULL",
+        objectName: "BIG", objectOwner: "HR", cost: 30,
+        cardinality: outerCardinality, bytes: null,
+        accessPredicates: null, filterPredicates: null },
+      { id: 3, parentId: 1, operation: "INDEX", options: "RANGE SCAN",
+        objectName: "IDX_B_A", objectOwner: "HR", cost: 1,
+        cardinality: 1, bytes: null,
+        accessPredicates: "B.A_ID = :A_ID", filterPredicates: null },
+    ] as ExplainNode[];
+  }
+
+  it("R010 flags NESTED LOOPS with outer cardinality > 10k", () => {
+    const flags = detectRedFlags(nlPlan(50_000), [], "...", NOW);
+    expect(flags.find((f) => f.id === "R010")).toBeDefined();
+  });
+
+  it("R010 does NOT flag NESTED LOOPS with small outer", () => {
+    const flags = detectRedFlags(nlPlan(100), [], "...", NOW);
+    expect(flags.find((f) => f.id === "R010")).toBeUndefined();
+  });
+
+  it("R011 flags TRUNC() on an indexed column", () => {
+    const stats: TableStats[] = [{
+      owner: "HR", name: "EMPLOYEES",
+      numRows: 1000, lastAnalyzed: "2026-04-20T00:00:00Z", blocks: 10,
+      indexes: [{
+        name: "IDX_EMP_HIRE_DATE", columns: ["HIRE_DATE"],
+        unique: false, status: "VALID",
+      }],
+    }];
+    const flags = detectRedFlags(
+      [{ id: 0, parentId: null, operation: "SELECT STATEMENT", options: null,
+         objectName: null, objectOwner: null, cost: 50, cardinality: 1,
+         bytes: null, accessPredicates: null, filterPredicates: null }] as ExplainNode[],
+      stats,
+      "SELECT * FROM EMPLOYEES WHERE TRUNC(hire_date) = TO_DATE('2024-01-01', 'YYYY-MM-DD')",
+      NOW,
+    );
+    const r011 = flags.find((f) => f.id === "R011");
+    expect(r011).toBeDefined();
+    expect(r011?.context.column).toBe("HIRE_DATE");
+  });
+
+  it("R011 does NOT flag TRUNC() on non-indexed column", () => {
+    const stats: TableStats[] = [{
+      owner: "HR", name: "EMPLOYEES",
+      numRows: 1000, lastAnalyzed: "2026-04-20T00:00:00Z", blocks: 10,
+      indexes: [],
+    }];
+    const flags = detectRedFlags(
+      [{ id: 0, parentId: null, operation: "SELECT STATEMENT", options: null,
+         objectName: null, objectOwner: null, cost: 50, cardinality: 1,
+         bytes: null, accessPredicates: null, filterPredicates: null }] as ExplainNode[],
+      stats,
+      "SELECT * FROM EMPLOYEES WHERE TRUNC(hire_date) = SYSDATE",
+      NOW,
+    );
+    expect(flags.find((f) => f.id === "R011")).toBeUndefined();
+  });
+
+  it("R012 flags REMOTE operation", () => {
+    const flags = detectRedFlags(
+      [{ id: 0, parentId: null, operation: "SELECT STATEMENT", options: null,
+         objectName: null, objectOwner: null, cost: 100, cardinality: 1,
+         bytes: null, accessPredicates: null, filterPredicates: null },
+       { id: 1, parentId: 0, operation: "REMOTE", options: null,
+         objectName: "EMPLOYEES", objectOwner: "HR", cost: 50, cardinality: 100,
+         bytes: null, accessPredicates: null, filterPredicates: null }] as ExplainNode[],
+      [],
+      "SELECT * FROM emp@remote",
+      NOW,
+    );
+    expect(flags.find((f) => f.id === "R012")).toBeDefined();
+  });
+
+  it("R012 flags object_name with @ (db link)", () => {
+    const flags = detectRedFlags(
+      [{ id: 0, parentId: null, operation: "TABLE ACCESS", options: "FULL",
+         objectName: "EMP@PROD_LINK", objectOwner: null, cost: 50,
+         cardinality: 100, bytes: null,
+         accessPredicates: null, filterPredicates: null }] as ExplainNode[],
+      [],
+      "SELECT * FROM emp@prod_link",
+      NOW,
+    );
+    expect(flags.find((f) => f.id === "R012")).toBeDefined();
+  });
+
+  it("R013 flags INDEX FULL SCAN with no predicate", () => {
+    const flags = detectRedFlags(
+      [{ id: 0, parentId: null, operation: "SELECT STATEMENT", options: null,
+         objectName: null, objectOwner: null, cost: 100, cardinality: 1,
+         bytes: null, accessPredicates: null, filterPredicates: null },
+       { id: 1, parentId: 0, operation: "INDEX", options: "FULL SCAN",
+         objectName: "IDX_FOO", objectOwner: "HR", cost: 50, cardinality: 1000,
+         bytes: null, accessPredicates: null, filterPredicates: null }] as ExplainNode[],
+      [],
+      "SELECT MIN(id) FROM employees",
+      NOW,
+    );
+    expect(flags.find((f) => f.id === "R013")).toBeDefined();
+  });
+
+  it("R013 does NOT flag INDEX FULL SCAN with a predicate", () => {
+    const flags = detectRedFlags(
+      [{ id: 0, parentId: null, operation: "SELECT STATEMENT", options: null,
+         objectName: null, objectOwner: null, cost: 100, cardinality: 1,
+         bytes: null, accessPredicates: null, filterPredicates: null },
+       { id: 1, parentId: 0, operation: "INDEX", options: "FULL SCAN",
+         objectName: "IDX_FOO", objectOwner: "HR", cost: 50, cardinality: 1,
+         bytes: null, accessPredicates: "A = :A", filterPredicates: null }] as ExplainNode[],
+      [],
+      "...",
+      NOW,
+    );
+    expect(flags.find((f) => f.id === "R013")).toBeUndefined();
+  });
+});
