@@ -23,9 +23,13 @@
   let lastDatasetCount = -1;
 
   let ChartClass: any = null;
+  let renderError = $state<string | null>(null);
   const chartReady = import("chart.js").then(({ Chart, registerables }) => {
     Chart.register(...registerables);
     ChartClass = Chart;
+  }).catch((e) => {
+    renderError = `Chart.js failed to load: ${e?.message ?? e}`;
+    console.error("[ChartWidget] chart.js import failed", e);
   });
 
   function destroyChart() {
@@ -71,46 +75,62 @@
     const isDoughnut   = type === "pie";
     const chartType    = isDoughnut ? "doughnut" : "bar";
 
-    chart = new ChartClass(c, {
-      type: type === "line" ? "line" : chartType,
-      data: {
-        labels: pd.labels,
-        datasets: pd.datasets.map((ds, i) => ({
-          label: ds.label,
-          data: ds.data,
-          backgroundColor: isDoughnut
-            ? pd.labels.map((_, j) => PALETTE[j % PALETTE.length])
-            : PALETTE[i % PALETTE.length] + "cc",
-          borderColor: PALETTE[i % PALETTE.length],
-          borderWidth: 1.5,
-          fill: type === "line",
-          tension: 0.3,
-        })),
-      },
-      options: {
-        responsive: false,
-        maintainAspectRatio: false,
-        indexAxis: isHorizontal ? "y" : "x",
-        plugins: {
-          legend: { display: pd.datasets.length > 1 || isDoughnut, labels: { color: colorPrimary, font: { size: 10 } } },
-          title: { display: false },
+    try {
+      chart = new ChartClass(c, {
+        type: type === "line" ? "line" : chartType,
+        data: {
+          labels: pd.labels,
+          datasets: pd.datasets.map((ds, i) => ({
+            label: ds.label,
+            data: ds.data,
+            backgroundColor: isDoughnut
+              ? pd.labels.map((_, j) => PALETTE[j % PALETTE.length])
+              : PALETTE[i % PALETTE.length] + "cc",
+            borderColor: PALETTE[i % PALETTE.length],
+            borderWidth: 1.5,
+            fill: type === "line",
+            tension: 0.3,
+          })),
         },
-        scales: isDoughnut ? {} : {
-          x: { ticks: { color: colorMuted, font: { size: 9 } }, grid: { color: colorBorder } },
-          y: { ticks: { color: colorMuted, font: { size: 9 } }, grid: { color: colorBorder } },
+        options: {
+          responsive: false,
+          maintainAspectRatio: false,
+          indexAxis: isHorizontal ? "y" : "x",
+          plugins: {
+            legend: { display: pd.datasets.length > 1 || isDoughnut, labels: { color: colorPrimary, font: { size: 10 } } },
+            title: { display: false },
+          },
+          scales: isDoughnut ? {} : {
+            x: { ticks: { color: colorMuted, font: { size: 9 } }, grid: { color: colorBorder } },
+            y: { ticks: { color: colorMuted, font: { size: 9 } }, grid: { color: colorBorder } },
+          },
         },
-      },
-    });
-    lastType = type;
-    lastLabelCount = pd.labels.length;
-    lastDatasetCount = pd.datasets.length;
+      });
+      lastType = type;
+      lastLabelCount = pd.labels.length;
+      lastDatasetCount = pd.datasets.length;
+      renderError = null;
+      console.log("[ChartWidget] rendered", { type, labels: pd.labels.length, datasets: pd.datasets.length, w, h });
+    } catch (e: any) {
+      renderError = `Chart render failed: ${e?.message ?? e}`;
+      console.error("[ChartWidget] buildChart threw", e, { type, pd });
+    }
   }
 
   $effect(() => {
     const c = canvas;
     const type = config.type;
     const pd = previewData;
-    if (!c || !type || type === "kpi" || type === "table" || !pd || pd.datasets.length === 0 || pd.labels.length === 0) return destroyChart;
+    if (!c || !type || type === "kpi" || type === "table" || !pd || pd.datasets.length === 0 || pd.labels.length === 0) {
+      console.log("[ChartWidget] skip render", {
+        hasCanvas: !!c,
+        type,
+        hasPd: !!pd,
+        datasets: pd?.datasets.length ?? 0,
+        labels: pd?.labels.length ?? 0,
+      });
+      return destroyChart;
+    }
     let raf = requestAnimationFrame(() => {
       const wrap = c.parentElement;
       const w = (wrap?.offsetWidth  || 320);
@@ -177,6 +197,9 @@
     <div class="canvas-wrap" bind:this={canvasWrap}>
       <canvas bind:this={canvas}></canvas>
     </div>
+    {#if renderError}
+      <div class="render-error">{renderError}</div>
+    {/if}
   {/if}
 </div>
 
@@ -193,6 +216,7 @@
   .chart-widget.compact .kpi-value { font-size: 14px; }
   .empty-chart { padding: 16px; color: var(--text-muted); font-size: 12px; text-align: center; border: 1px dashed var(--border); border-radius: 6px; background: var(--bg-surface-alt); }
   .empty-chart p { margin: 0; line-height: 1.5; }
+  .render-error { margin-top: 6px; padding: 6px 8px; font-size: 10px; color: #f5a08a; background: rgba(179,62,31,0.12); border: 1px solid rgba(179,62,31,0.3); border-radius: 4px; }
   .table-wrap { overflow: auto; max-height: 180px; }
   .cap-note { font-size: 9px; color: var(--text-muted); padding: 2px 6px 4px; font-style: italic; }
   table { width: 100%; border-collapse: collapse; font-size: 10px; color: var(--text-primary); }
