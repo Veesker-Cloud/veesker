@@ -1276,3 +1276,9 @@ pub async fn ords_clients_revoke(app: AppHandle, name: String) -> Result<(), Con
     call_sidecar(&app, "ords.clients.revoke", json!({ "name": name })).await?;
     Ok(())
 }
+
+#[tauri::command]
+pub async fn perf_stats(app: AppHandle, sql: String) -> Result<Value, ConnectionTestErr> {
+    let res = call_sidecar(&app, "perf.stats", json!({ "sql": sql })).await?;
+    Ok(res)
+}

@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { TableStats, TableIndex } from "$lib/perf/perf-rules";
 
 export type WorkspaceInfo = { serverVersion: string; currentSchema: string };
 export type Schema = { name: string; isCurrent: boolean };
@@ -401,6 +402,18 @@ export type ExplainNode = {
 
 export const explainPlanGet = (sql: string) =>
   call<{ nodes: ExplainNode[] }>("explain_plan_get", { sql });
+
+// Re-export under the `Perf*` names so existing imports of `PerfTableStats`
+// from `$lib/workspace` keep working — they resolve to the same shape.
+export type PerfTableIndex = TableIndex;
+export type PerfTableStats = TableStats;
+
+export type PerfStatsResult = {
+  tables: PerfTableStats[];
+};
+
+export const perfStats = (sql: string) =>
+  call<PerfStatsResult>("perf_stats", { sql });
 
 export type ProcParam = {
   name: string;
