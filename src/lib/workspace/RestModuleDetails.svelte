@@ -43,12 +43,13 @@
   {:else if error}
     <div class="state-msg error">{error}</div>
   {:else if detail}
+    {@const basePath = detail.module.basePath}
     <div class="header">
       <div class="title-row">
         <span class="title">📦 {detail.module.name}</span>
         <div class="actions">
-          <button class="btn" onclick={() => onTest(detail.module.basePath, "", "GET")}>Test</button>
-          <button class="btn" onclick={() => onOpenDocs(detail.module.basePath)}>Docs ↗</button>
+          <button class="btn" onclick={() => onTest(basePath, "", "GET")}>Test</button>
+          <button class="btn" onclick={() => onOpenDocs(basePath)}>Docs ↗</button>
         </div>
       </div>
       <div class="meta">

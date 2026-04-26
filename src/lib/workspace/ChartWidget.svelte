@@ -205,7 +205,7 @@
         </tbody>
       </table>
     </div>
-  {:else if !previewData && config.type !== "kpi" && config.type !== "table"}
+  {:else if !previewData}
     <div class="empty-chart">
       <p>Select a numeric column for the Y axis with Sum/Avg/Max/Min, or use Count for any column type.</p>
     </div>

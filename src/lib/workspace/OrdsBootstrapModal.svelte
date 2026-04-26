@@ -2,23 +2,23 @@
   import type { OrdsDetectResult } from "$lib/workspace";
 
   type Props = {
-    state: OrdsDetectResult;
+    result: OrdsDetectResult;
     schemaName: string;
     onEnableSchema: () => Promise<void>;
     onSetBaseUrl: (url: string) => void;
     onClose: () => void;
   };
-  let { state, schemaName, onEnableSchema, onSetBaseUrl, onClose }: Props = $props();
+  let { result, schemaName, onEnableSchema, onSetBaseUrl, onClose }: Props = $props();
 
   let baseUrlInput = $state("");
   let enabling = $state(false);
 
   const variant = $derived.by(() => {
-    if (!state.installed) return "not-installed";
-    if (!state.userHasAccess) return "no-access";
-    if (!state.currentSchemaEnabled) return "schema-disabled";
-    if (!state.hasAdminRole) return "no-privilege";
-    if (!state.ordsBaseUrl) return "no-url";
+    if (!result.installed) return "not-installed";
+    if (!result.userHasAccess) return "no-access";
+    if (!result.currentSchemaEnabled) return "schema-disabled";
+    if (!result.hasAdminRole) return "no-privilege";
+    if (!result.ordsBaseUrl) return "no-url";
     return "ok";
   });
 
@@ -103,7 +103,7 @@ END;</pre>
         </button>
       {:else}
         <h3>Tudo pronto</h3>
-        <p>ORDS {state.version ?? ""} configurado e funcionando.</p>
+        <p>ORDS {result.version ?? ""} configurado e funcionando.</p>
       {/if}
     </div>
   </div>

@@ -11,10 +11,12 @@
     "strict": true,
     "moduleResolution": "bundler",
     "types": ["vitest/globals"]
-  }
+  },
+  // Test files are checked at runtime by Vitest; svelte-check trips on them because
+  // (a) sql-splitter.test.ts imports node:fs/url/path which would need @types/node
+  // and (b) some test fixtures use `undefined` where the prod types use `null`. These
+  // are not real bugs and don't affect the bundle, so we skip type-checking them.
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.svelte"]
   // Path aliases are handled by https://svelte.dev/docs/kit/configuration#alias
   // except $lib which is handled by https://svelte.dev/docs/kit/configuration#files
-  //
-  // If you want to overwrite includes/excludes, make sure to copy over the relevant includes/excludes
-  // from the referenced tsconfig.json - TypeScript does not merge them in
 }

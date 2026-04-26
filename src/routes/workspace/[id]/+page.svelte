@@ -754,7 +754,7 @@
   {/if}
   {#if showOrdsBootstrap && ordsStore.state}
     <OrdsBootstrapModal
-      state={ordsStore.state}
+      result={ordsStore.state}
       schemaName={schemas.find((s) => s.isCurrent)?.name ?? ""}
       onEnableSchema={async () => {
         const res = await ordsEnableSchema();
