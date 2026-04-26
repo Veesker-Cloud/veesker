@@ -16,6 +16,7 @@ export type TabResult = {
   id: string;                         // crypto.randomUUID for selection stability
   statementIndex: number;             // 0-based; for display as "Statement N+1"
   sqlPreview: string;                 // first ~80 chars of the statement, single line
+  sqlOriginal: string | null;         // full SQL of the statement (for re-execution / Fetch All)
   status: "ok" | "error" | "cancelled" | "running" | "explain";
   result: QueryResult | null;
   error: { code: number; message: string } | null;
@@ -23,6 +24,7 @@ export type TabResult = {
   dbmsOutput: string[] | null;        // null = not captured; [] = enabled but nothing printed
   compileErrors: CompileError[] | null; // null = not a compilable stmt; [] = clean
   explainNodes: import("$lib/workspace").ExplainNode[] | null;
+  fetchedAll: boolean;                // true if the result came from a fetchAll run (no row cap)
 };
 
 export type SqlTab = {
@@ -378,6 +380,7 @@ export const sqlEditor = {
         id: resultId,
         statementIndex: 0,
         sqlPreview: makeSqlPreview(sql),
+        sqlOriginal: sql,
         status: res.ok ? "ok" : "error",
         result: res.ok ? res.data : null,
         error: res.ok ? null : res.error,
@@ -385,6 +388,7 @@ export const sqlEditor = {
         dbmsOutput: null,
         compileErrors: null,
         explainNodes: null,
+        fetchedAll: false,
       };
       tab.results = [tabResult];
       tab.activeResultId = resultId;
@@ -455,6 +459,7 @@ export const sqlEditor = {
             id: newId(),
             statementIndex: 0,
             sqlPreview: makeSqlPreview(sql),
+            sqlOriginal: sql,
             status: "error",
             result: null,
             error: res.error ?? { code: -32000, message: errMsg },
@@ -462,6 +467,7 @@ export const sqlEditor = {
             dbmsOutput: null,
             compileErrors: null,
             explainNodes: null,
+            fetchedAll: false,
           };
           tab.results = [errResult];
           tab.activeResultId = errResult.id;
@@ -477,6 +483,7 @@ export const sqlEditor = {
             id,
             statementIndex: sr.statementIndex,
             sqlPreview,
+            sqlOriginal: sr.sql,
             status: "ok" as const,
             result: { columns: sr.columns, rows: sr.rows, rowCount: sr.rowCount, elapsedMs: sr.elapsedMs },
             error: null,
@@ -484,12 +491,14 @@ export const sqlEditor = {
             dbmsOutput: sr.output ?? null,
             compileErrors: null,
             explainNodes: null,
+            fetchedAll: false,
           };
         } else if (sr.status === "error") {
           return {
             id,
             statementIndex: sr.statementIndex,
             sqlPreview,
+            sqlOriginal: sr.sql,
             status: "error" as const,
             result: null,
             error: sr.error,
@@ -497,6 +506,7 @@ export const sqlEditor = {
             dbmsOutput: sr.output ?? null,
             compileErrors: null,
             explainNodes: null,
+            fetchedAll: false,
           };
         } else {
           // cancelled
@@ -504,6 +514,7 @@ export const sqlEditor = {
             id,
             statementIndex: sr.statementIndex,
             sqlPreview,
+            sqlOriginal: sr.sql,
             status: "cancelled" as const,
             result: null,
             error: null,
@@ -511,6 +522,7 @@ export const sqlEditor = {
             dbmsOutput: null,
             compileErrors: null,
             explainNodes: null,
+            fetchedAll: false,
           };
         }
       });
@@ -568,6 +580,7 @@ export const sqlEditor = {
         id: resultId,
         statementIndex: 0,
         sqlPreview: makeSqlPreview(sql),
+        sqlOriginal: sql,
         status: res.ok ? "ok" : "error",
         result: res.ok ? res.data : null,
         error: res.ok ? null : res.error,
@@ -575,6 +588,7 @@ export const sqlEditor = {
         dbmsOutput: null,
         compileErrors: null,
         explainNodes: null,
+        fetchedAll: false,
       };
       tab.results = [tabResult];
       tab.activeResultId = resultId;
@@ -652,6 +666,7 @@ export const sqlEditor = {
         id: resultId,
         statementIndex: 0,
         sqlPreview: makeSqlPreview(sqlToRun),
+        sqlOriginal: sqlToRun,
         status: res.ok ? "ok" : "error",
         result: res.ok ? res.data : null,
         error: res.ok ? null : res.error,
@@ -659,6 +674,7 @@ export const sqlEditor = {
         dbmsOutput: null,
         compileErrors: null,
         explainNodes: null,
+        fetchedAll: false,
       };
       tab.results = [tabResult];
       tab.activeResultId = resultId;
@@ -758,6 +774,36 @@ export const sqlEditor = {
     // its finally block will clear running / runningRequestId.
   },
 
+  /** Re-run the active result's SQL with no row limit, replacing it in place. */
+  async fetchAllForActiveResult(): Promise<void> {
+    const tab = this.active;
+    if (tab === null) return;
+    const ar = activeResult(tab);
+    if (ar === null || ar.sqlOriginal === null) return;
+    const sql = stripTrailingSemicolon(ar.sqlOriginal);
+    if (sql === "") return;
+    const requestId = crypto.randomUUID();
+    tab.running = true;
+    tab.runningRequestId = requestId;
+    try {
+      const res = await queryExecute(sql, requestId, true);
+      const idx = tab.results.findIndex((r) => r.id === ar.id);
+      if (idx === -1) return;
+      const replacement: TabResult = {
+        ...ar,
+        status: res.ok ? "ok" : "error",
+        result: res.ok ? res.data : null,
+        error: res.ok ? null : res.error,
+        elapsedMs: res.ok ? res.data.elapsedMs : 0,
+        fetchedAll: res.ok,
+      };
+      tab.results = tab.results.map((r, i) => (i === idx ? replacement : r));
+    } finally {
+      tab.running = false;
+      tab.runningRequestId = null;
+    }
+  },
+
   openWithDdl(title: string, ddl: string): void {
     // If a tab with this title already exists, just activate it
     const existing = _tabs.find(t => t.title === title);
@@ -821,6 +867,7 @@ export async function runExplain(sql: string): Promise<void> {
     id: resultId,
     statementIndex: 0,
     sqlPreview: "EXPLAIN PLAN",
+    sqlOriginal: sql,
     status: res.ok ? "explain" : "error",
     result: null,
     error: res.ok ? null : res.error,
@@ -828,6 +875,7 @@ export async function runExplain(sql: string): Promise<void> {
     dbmsOutput: null,
     compileErrors: null,
     explainNodes: res.ok ? res.data.nodes : null,
+    fetchedAll: false,
   };
   const t = _tabs.find((x) => x.id === _activeId);
   if (!t) return;
@@ -868,6 +916,7 @@ export function addProcResults(result: ProcExecuteResult): void {
           id,
           statementIndex: 0,
           sqlPreview: `REF CURSOR: ${rc.name}`,
+          sqlOriginal: null,
           status: "ok",
           result: { columns: rc.columns, rows: rc.rows, rowCount: rc.rows.length, elapsedMs: 0 },
           error: null,
@@ -875,6 +924,7 @@ export function addProcResults(result: ProcExecuteResult): void {
           dbmsOutput: ri === 0 && logLines.length > 0 ? logLines : null,
           compileErrors: null,
           explainNodes: null,
+          fetchedAll: false,
         },
       ];
       lastId = id;
@@ -887,6 +937,7 @@ export function addProcResults(result: ProcExecuteResult): void {
         id,
         statementIndex: 0,
         sqlPreview: "Procedure executed",
+        sqlOriginal: null,
         status: "ok",
         result: null,
         error: null,
@@ -894,6 +945,7 @@ export function addProcResults(result: ProcExecuteResult): void {
         dbmsOutput: logLines.length > 0 ? logLines : ["(no output)"],
         compileErrors: null,
         explainNodes: null,
+        fetchedAll: false,
       },
     ];
     lastId = id;

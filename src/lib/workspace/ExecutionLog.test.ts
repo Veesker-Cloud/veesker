@@ -13,12 +13,15 @@ function makeResult(partial: Partial<TabResult> = {}): TabResult {
     id: partial.id ?? crypto.randomUUID(),
     statementIndex: partial.statementIndex ?? 0,
     sqlPreview: partial.sqlPreview ?? "SELECT 1 FROM dual",
+    sqlOriginal: partial.sqlOriginal ?? "SELECT 1 FROM dual",
     status: partial.status ?? "ok",
     result: partial.result ?? null,
     error: partial.error ?? null,
     elapsedMs: partial.elapsedMs ?? 0,
     dbmsOutput: partial.dbmsOutput ?? null,
     compileErrors: partial.compileErrors ?? null,
+    explainNodes: partial.explainNodes ?? null,
+    fetchedAll: partial.fetchedAll ?? false,
     ...partial,
   };
 }

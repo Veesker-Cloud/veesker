@@ -11,12 +11,15 @@ function makeResult(partial: Partial<TabResult> = {}): TabResult {
     id,
     statementIndex: 0,
     sqlPreview: "SELECT 1 FROM dual",
+    sqlOriginal: "SELECT 1 FROM dual",
     status: "ok",
     result: null,
     error: null,
     elapsedMs: 0,
     dbmsOutput: null,
     compileErrors: null,
+    explainNodes: null,
+    fetchedAll: false,
     ...partial,
   };
 }

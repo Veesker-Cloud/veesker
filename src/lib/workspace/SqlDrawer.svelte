@@ -404,7 +404,12 @@
                   {onExplainWithAI}
                 />
               {:else}
-                <ResultGrid {tab} {onCancel} {onAnalyze} />
+                <ResultGrid
+                  {tab}
+                  {onCancel}
+                  {onAnalyze}
+                  onFetchAll={() => void sqlEditor.fetchAllForActiveResult()}
+                />
               {/if}
             </div>
           </div>
