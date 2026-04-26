@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
@@ -8,6 +9,43 @@ use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 use tokio::sync::{mpsc, oneshot, Mutex};
 use uuid::Uuid;
+
+/// Locate the directory containing oracledb's native `.node` binding for the current
+/// platform. Tries (in order): explicit env var, dev-mode node_modules path, bundled
+/// resources next to the sidecar binary. Returns None if nothing is found — the sidecar
+/// will then run in Thin mode.
+fn resolve_oracledb_binding_dir(app: &AppHandle) -> Option<String> {
+    if let Ok(explicit) = std::env::var("VEESKER_ORACLEDB_BINARY_DIR") {
+        if PathBuf::from(&explicit).is_dir() {
+            return Some(explicit);
+        }
+    }
+    // Dev mode: walk up from CARGO_MANIFEST_DIR (set when running cargo) to find the repo's
+    // sidecar/node_modules/oracledb/build/Release directory.
+    if let Some(manifest) = option_env!("CARGO_MANIFEST_DIR") {
+        let dev = PathBuf::from(manifest)
+            .join("..")
+            .join("sidecar")
+            .join("node_modules")
+            .join("oracledb")
+            .join("build")
+            .join("Release");
+        if dev.is_dir() {
+            return dev
+                .canonicalize()
+                .ok()
+                .map(|p| p.to_string_lossy().into_owned());
+        }
+    }
+    // Production: look for `oracledb-bindings/` in resource_dir alongside the bundled app.
+    if let Ok(res_dir) = app.path().resource_dir() {
+        let prod = res_dir.join("oracledb-bindings");
+        if prod.is_dir() {
+            return Some(prod.to_string_lossy().into_owned());
+        }
+    }
+    None
+}
 
 #[derive(Debug, Serialize)]
 struct Request<'a> {
@@ -47,10 +85,21 @@ pub struct Sidecar {
 
 impl Sidecar {
     pub fn spawn(app: &AppHandle) -> Result<Self, String> {
-        let (mut rx, child) = app
+        // Tell the sidecar where the node-oracledb native binding (.node) lives. Bun's
+        // --compile cannot bundle the .node file (oracledb uses a dynamic require path
+        // the bundler can't trace), so we ship the file alongside the binary and pass
+        // its directory via env var. The sidecar passes this to oracledb.initOracleClient
+        // as `binaryDir`. Without this, Thick mode fails with NJS-045 at runtime.
+        let mut cmd = app
             .shell()
             .sidecar("veesker-sidecar")
-            .map_err(|e| format!("sidecar binary not found: {e}"))?
+            .map_err(|e| format!("sidecar binary not found: {e}"))?;
+
+        if let Some(dir) = resolve_oracledb_binding_dir(app) {
+            cmd = cmd.env("VEESKER_ORACLEDB_BINARY_DIR", dir);
+        }
+
+        let (mut rx, child) = cmd
             .spawn()
             .map_err(|e| format!("failed to spawn sidecar: {e}"))?;
 

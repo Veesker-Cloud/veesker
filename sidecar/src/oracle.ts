@@ -129,6 +129,17 @@ export function tryEnableThickMode(): { mode: "thin" | "thick"; libDir?: string;
     return { mode: "thin" };
   }
 
+  // The compiled Bun binary doesn't include oracledb's native .node binding (the loader
+  // uses a dynamic require path Bun's bundler can't trace). The Tauri host passes the
+  // directory containing the binding via VEESKER_ORACLEDB_BINARY_DIR; we forward it as
+  // initOracleClient's `binaryDir` option.
+  const binaryDir = process.env.VEESKER_ORACLEDB_BINARY_DIR;
+  if (binaryDir) {
+    process.stderr.write(`[oracle] using native binding from ${binaryDir}\n`);
+  } else {
+    process.stderr.write("[oracle] VEESKER_ORACLEDB_BINARY_DIR not set — Thick mode will likely fail with NJS-045\n");
+  }
+
   const attempts: Array<{ libDir?: string; label: string }> = [];
   const explicit = process.env.VEESKER_INSTANT_CLIENT_DIR;
   if (explicit) attempts.push({ libDir: explicit, label: `env VEESKER_INSTANT_CLIENT_DIR=${explicit}` });
@@ -139,7 +150,10 @@ export function tryEnableThickMode(): { mode: "thin" | "thick"; libDir?: string;
 
   for (const a of attempts) {
     try {
-      if (a.libDir) oracledb.initOracleClient({ libDir: a.libDir });
+      const opts: { libDir?: string; binaryDir?: string } = {};
+      if (a.libDir) opts.libDir = a.libDir;
+      if (binaryDir) opts.binaryDir = binaryDir;
+      if (Object.keys(opts).length > 0) oracledb.initOracleClient(opts);
       else oracledb.initOracleClient();
       _driverMode = "thick";
       process.stderr.write(`[oracle] Thick mode enabled — ${a.label}\n`);
