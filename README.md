@@ -8,7 +8,7 @@
 
 A native desktop IDE for Oracle 23ai that combines a multi-statement SQL editor, an AI assistant with live database access, a vector search studio, a PL/SQL debugger, and a no-code REST API builder — all in one app, no Oracle client required.
 
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-E85D3C.svg)](LICENSE) [![Built with Tauri 2](https://img.shields.io/badge/built%20with-Tauri%202-24C8D8?logo=tauri&logoColor=white)](https://tauri.app) [![Svelte 5](https://img.shields.io/badge/Svelte-5-FF3E00?logo=svelte&logoColor=white)](https://svelte.dev) [![Oracle 23ai](https://img.shields.io/badge/Oracle-23ai-F80000?logo=oracle&logoColor=white)](https://oracle.com) [![Pre-release](https://img.shields.io/badge/status-pre--release-orange.svg)]()
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-E85D3C.svg)](LICENSE) [![Built with Tauri 2](https://img.shields.io/badge/built%20with-Tauri%202-24C8D8?logo=tauri&logoColor=white)](https://tauri.app) [![Svelte 5](https://img.shields.io/badge/Svelte-5-FF3E00?logo=svelte&logoColor=white)](https://svelte.dev) [![Oracle 23ai](https://img.shields.io/badge/Oracle-23ai-F80000?logo=oracle&logoColor=white)](https://oracle.com) [![Open Source](https://img.shields.io/badge/open%20source-Apache%202.0-E85D3C.svg)](LICENSE)
 
 [veesker.cloud](https://veesker.cloud) · [Install](#install) · [Features](#features) · [Build from source](#build-from-source) · [License & disclaimer](#license--disclaimer)
 
@@ -18,7 +18,7 @@ A native desktop IDE for Oracle 23ai that combines a multi-statement SQL editor,
 
 ## ⚠️ Important — Read before using
 
-Veesker is **pre-release open-source software** distributed AS IS. There are no guarantees about correctness, security, availability, or fitness for any purpose. **Do not use Veesker against production databases without first validating it in a non-production environment.** See [TERMS_OF_USE.md](TERMS_OF_USE.md) and [LICENSE](LICENSE) for the full disclaimer.
+Veesker is **open-source software** distributed AS IS. There are no guarantees about correctness, security, availability, or fitness for any purpose. **Do not use Veesker against production databases without first validating it in a non-production environment.** See [TERMS_OF_USE.md](TERMS_OF_USE.md) and [LICENSE](LICENSE) for the full disclaimer.
 
 If you need warranty, SLA, or commercial support, that requires a separate signed agreement — the open-source build never has one.
 
@@ -218,13 +218,13 @@ A no-code REST API builder using Oracle ORDS:
 
 Download the latest installer from the [Releases page](https://github.com/gevianajr/veesker/releases) and run `Veesker_<version>_x64-setup.exe`.
 
-> The installer is currently unsigned during the pre-release period. Windows SmartScreen will show "Windows protected your PC" — click **More info** → **Run anyway**. Code signing via Azure Trusted Signing or SignPath Foundation is in progress.
+> The installer is currently unsigned. Windows SmartScreen will show "Windows protected your PC" — click **More info** → **Run anyway**. Code signing via Azure Trusted Signing is in progress.
 
 ### macOS
 
 Download the `.dmg` from the [Releases page](https://github.com/gevianajr/veesker/releases) and drag Veesker into Applications.
 
-> Apple Silicon and Intel are both supported. The app is ad-hoc signed during pre-release; on first launch you may need to **Right-click → Open** to bypass Gatekeeper.
+> Apple Silicon and Intel are both supported. The app is ad-hoc signed; on first launch you may need to **Right-click → Open** to bypass Gatekeeper.
 
 ### Linux
 
