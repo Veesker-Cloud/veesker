@@ -311,15 +311,15 @@ Veesker follows the **Docker Desktop / Kubernetes pattern**: the **entire codeba
 | Tier | Price | Eligible | Includes |
 |---|---|---|---|
 | **Personal** | Free | Personal use, OSS, education, ≤50 employees AND ≤US$ 5M revenue | Full IDE, all features, best-effort support |
-| **Pro** | R$ 49 / month per user | Individuals, freelancers | Email support 5 business days, commercial use right |
-| **Business** | R$ 199 / month per seat | Companies of any size | 1-business-day SLA, Slack channel, Veesker Cloud (when available), team add-ons |
+| **Pro** | $9.90 / month per user | Individuals, freelancers | Email support 5 business days, commercial use right |
+| **Business** | $39 / month per seat | Companies of any size | 1-business-day SLA, Slack channel, Veesker Cloud (when available), team add-ons |
 | **Enterprise** | Custom | Custom needs, regulated industries | 4h SLA, dedicated engineer, on-prem AI, SSO, indemnification |
 
 **Commercial use clause** — companies with **50+ employees** OR **US$ 5M+ annual revenue** require a paid subscription to use the official packaged Veesker app. The source code is always free under Apache 2.0. See [COMMERCIAL_USE.md](COMMERCIAL_USE.md).
 
 **No technical enforcement** — Veesker has no telemetry, no license server check, no degraded experience. Compliance is honor-based + EULA. Same model as Docker Desktop.
 
-**Add-ons available for any tier:** Oracle EBS Pack (R$ 4.000/year), AWR Analyzer (R$ 1.500/year), Azure OpenAI / AWS Bedrock connectors, Compliance Pack BR (LGPD/BACEN-ready audit), and more.
+**Add-ons available for any tier:** Oracle EBS Pack ($799/year), AWR Analyzer ($299/year), Azure OpenAI / AWS Bedrock connectors ($99/month), Compliance Pack BR (LGPD/BACEN-ready audit, $399/year), and more.
 
 See [docs/PRICING.md](docs/PRICING.md) for full details. Free for **active open-source maintainers** — apply with your project link.
 
