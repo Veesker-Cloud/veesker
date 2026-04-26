@@ -363,7 +363,7 @@ For security issues, please report privately via [SECURITY.md](SECURITY.md).
 
 <div align="center">
 
-Built by [Geraldo Viana Jr](https://github.com/geeviana) - Brazil
+Built by [Geraldo Viana Jr](https://github.com/gevianajr) - Brazil
 
 [veesker.cloud](https://veesker.cloud) · [GitHub](https://github.com/gevianajr/veesker) · [Issues](https://github.com/gevianajr/veesker/issues) · [![LinkedIn](https://img.shields.io/badge/LinkedIn-0A66C2?logo=linkedin&logoColor=white)](https://www.linkedin.com/in/geraldovianajr/)
 
