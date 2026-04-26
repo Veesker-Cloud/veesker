@@ -59,6 +59,15 @@ jobs:
       - name: Type check
         run: bun run check
 
+      - name: Frontend tests (Vitest)
+        run: bun run test
+
+      - name: Sidecar tests (Bun)
+        run: cd sidecar && bun test
+
+      - name: Rust tests (lib)
+        run: cargo test --manifest-path src-tauri/Cargo.toml --lib
+
       - name: Compile sidecar binary (Windows)
         if: matrix.platform == 'windows-latest'
         run: cd sidecar && bun run build:win-x64
