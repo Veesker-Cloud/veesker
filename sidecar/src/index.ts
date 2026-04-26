@@ -52,6 +52,7 @@ import {
   debugRun,
 } from "./debug";
 import { traceProc, explainPlanFlow } from "./flow";
+import { tablesStats } from "./perf-stats";
 
 const handlers: HandlerMap = {
   "connection.test": (params) => connectionTest(params as any),
@@ -116,6 +117,7 @@ const handlers: HandlerMap = {
   "debug.run":               (params) => debugRun(params as any),
   "flow.trace_proc": (params) => traceProc(params as any),
   "flow.trace_sql":  (params) => explainPlanFlow(params as any),
+  "perf.stats": (params) => tablesStats(params as any),
   "driver.mode": async () => ({ mode: getDriverMode() }),
   ping: async () => ({ pong: true }),
 };
