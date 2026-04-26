@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Veesker",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "identifier": "dev.veesker.app",
   "build": {
     "beforeDevCommand": "bun run dev",
@@ -45,7 +45,7 @@
       "endpoints": [
         "https://github.com/gevianajr/veesker/releases/latest/download/latest.json"
       ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlEMDczRjk3NEFFOTU2MDcKUldRSFZ1bEtsejhIblVYVTZKQS9YeXRGbWplUExiYVY5ZHFyTzlVMUpnd2lwN3lwcm1yYXJyTE0K",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDNFQTQzNjFCNkQ0MTNDNTUKUldSVlBFRnRHemFrUGw1bjA4RVI5Z1U5QWZYOFZxN0FlbHZ0N1J0QzcyRm8yVDdtK3hSSlZMZU4K",
       "windows": {
         "installMode": "passive"
       }
