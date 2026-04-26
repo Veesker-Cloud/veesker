@@ -313,6 +313,28 @@ taskkill /PID <PID> /F
 | `-32601 Method not found: <rpc.method>` | Old sidecar binary running — new RPC handlers not compiled in | Recompile sidecar binary (see above), restart `tauri dev` |
 | `PermissionDenied` in `tauri-build lib.rs` | Zombie sidecar processes locking the binary | Kill with `Get-Process \| Where-Object { $_.Name -like "*veesker*" } \| Stop-Process -Force` |
 | `ORA-01780 string literal required` in EXPLAIN PLAN | `EXPLAIN PLAN SET STATEMENT_ID = :bind` — Oracle requires a literal, not a bind variable | Use `'${sid}'` string interpolation for STATEMENT_ID; sid is machine-generated so this is safe |
+| `NJS-045: cannot load a node-oracledb Thick mode binary` | Sidecar compiled without explicit `--target` — Bun didn't embed the native `.node` binding | Rebuild with `bun run build:win-x64` (or matching `build:mac-arm64`/`build:mac-x64`/`build:linux-x64`); the `--target=bun-<platform>-<arch>` flag is required for native modules |
+| `NJS-116: password verifier type 0xNNN is not supported` (Thin mode) | Pre-12c Oracle user has only legacy verifiers | Veesker auto-discovers Instant Client and switches to Thick mode at startup. If still failing: install Oracle Instant Client Basic ([download](https://www.oracle.com/database/technologies/instant-client/downloads.html)), then restart Veesker. Force a specific path with `VEESKER_INSTANT_CLIENT_DIR=...` env var |
+
+---
+
+## Oracle driver modes (Thin vs Thick)
+
+The sidecar starts in **Thin mode** by default (pure JS, no Oracle Instant Client required). At startup it tries to enable **Thick mode** automatically:
+
+1. Reads `VEESKER_FORCE_THIN=1` → stays in Thin (skips everything below)
+2. Tries `VEESKER_INSTANT_CLIENT_DIR` env var if set
+3. Tries `oracledb.initOracleClient()` with no args (uses PATH / LD_LIBRARY_PATH / DYLD_LIBRARY_PATH)
+4. Auto-discovers common install paths per platform:
+   - **Windows**: `C:\instantclient_*`, `C:\Oracle\<x>\bin`, `C:\Oracle\<x>\<y>\bin`, `C:\app\<user>\product\<ver>\(client|dbhome)_<n>\bin`, `C:\Program Files\Oracle\*\bin` (and x86)
+   - **macOS**: `/opt/oracle/instantclient_*`, `/usr/local/oracle/instantclient_*`
+   - **Linux**: `/opt/oracle/instantclient_*`, `/usr/local/oracle/instantclient_*`, `/usr/lib/oracle/<ver>/client*/lib`
+
+Each candidate is verified by checking for the platform library (`oci.dll`, `libclntsh.dylib`, `libclntsh.so`) before `initOracleClient` is attempted. Wrong-architecture installs fall through to the next candidate.
+
+**Why Thick mode is needed:** node-oracledb Thin mode rejects pre-12c password verifiers (e.g. `0x939`) with NJS-116. Thick mode (which uses Oracle's official OCI client) supports all verifier types — same as PL/SQL Developer, SQL Developer, sqlplus. Most Oracle developer machines already have one Instant Client installed, so auto-discovery typically Just Works without configuration.
+
+**RPC `driver.mode`** (frontend: `driverMode()`) returns `{mode: "thin" | "thick"}` for diagnostics.
 
 ---
 
