@@ -79,11 +79,19 @@ The sidecar must be compiled before `tauri build` (and before `tauri dev` if the
 
 ```powershell
 cd sidecar
-bun build src/index.ts --compile --minify --outfile ../src-tauri/binaries/veesker-sidecar-x86_64-pc-windows-msvc.exe
+bun run build:win-x64
 cd ..
 ```
 
-The file name **must** match `veesker-sidecar-<target-triple>.exe`. Tauri reads `externalBin: ["binaries/veesker-sidecar"]` from `tauri.conf.json` and appends the host triple automatically at build/run time.
+Or directly:
+
+```powershell
+cd sidecar
+bun build src/index.ts --compile --target=bun-windows-x64 --minify --outfile ../src-tauri/binaries/veesker-sidecar-x86_64-pc-windows-msvc.exe
+cd ..
+```
+
+The `--target=bun-windows-x64` flag is **required** — without it, native modules like `oracledb`'s Thick mode binding fail to load at runtime (NJS-045). The file name **must** match `veesker-sidecar-<target-triple>.exe`. Tauri reads `externalBin: ["binaries/veesker-sidecar"]` from `tauri.conf.json` and appends the host triple automatically at build/run time.
 
 To confirm your target triple:
 
@@ -152,18 +160,26 @@ Verify: `rustc -vV` — look for the `host:` line.
 ```bash
 cd sidecar
 
-# Apple Silicon — required before every first run and after sidecar changes
-bun build src/index.ts --compile --minify --outfile ../src-tauri/binaries/veesker-sidecar-aarch64-apple-darwin
+# Apple Silicon
+bun run build:mac-arm64
 
-# Intel Mac — only needed after sidecar source changes
-bun build src/index.ts --compile --minify --outfile ../src-tauri/binaries/veesker-sidecar-x86_64-apple-darwin
+# Intel Mac
+bun run build:mac-x64
 
 cd ..
 ```
 
-The binary has no `.exe` extension on macOS. Tauri appends the target triple automatically.
+Or directly with the explicit `--target` flag (required for native modules to load — without it `oracledb` Thick mode fails with NJS-045):
 
-**Note:** `sidecar/package.json` has a `build` script that targets `x86_64-apple-darwin`. On Apple Silicon, run the command above directly — do not use `bun run build` inside the sidecar directory without editing the script first.
+```bash
+# Apple Silicon
+bun build src/index.ts --compile --target=bun-darwin-arm64 --minify --outfile ../src-tauri/binaries/veesker-sidecar-aarch64-apple-darwin
+
+# Intel Mac
+bun build src/index.ts --compile --target=bun-darwin-x64 --minify --outfile ../src-tauri/binaries/veesker-sidecar-x86_64-apple-darwin
+```
+
+The binary has no `.exe` extension on macOS. Tauri appends the target triple automatically.
 
 After compiling, run normally:
 
