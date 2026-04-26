@@ -451,7 +451,7 @@
           <div class="bubble" class:user-bubble={msg.role === "user"} class:ai-bubble={msg.role === "assistant"}>
             <!-- eslint-disable-next-line svelte/no-at-html-tags -->
             {@html renderMarkdown(msg.content)}
-            {#if msg.role === "assistant" && msg.chartPreview}
+            {#if msg.role === "assistant" && msg.chartPreview && msg.chartPreview.previewData !== null}
               <div class="msg-chart-preview">
                 <ChartWidget config={msg.chartPreview.config} previewData={msg.chartPreview.previewData} compact={true} />
               </div>
