@@ -221,7 +221,7 @@
         pushAssistant("Something went wrong. Please try again.");
         return;
       }
-      if (r.ok && r.data.previewData === null && agg[1] !== "none" && agg[1] !== "count") {
+      if (r.ok && r.data.previewData === null && agg[1] !== "count") {
         const nonNumericY = (r.data.config.yColumns ?? []).filter((yc: string) => {
           const col = payload.columns.find((c) => c.name === yc);
           if (!col) return false;
@@ -229,7 +229,7 @@
         });
         if (nonNumericY.length > 0) {
           pushAssistant(
-            `The Y column${nonNumericY.length > 1 ? "s" : ""} ${nonNumericY.join(", ")} ${nonNumericY.length > 1 ? "are" : "is"} not numeric. Sum/Avg/Max/Min only work on numeric columns. Try **Count** (works for any type), or pick a numeric column.`,
+            `The Y column${nonNumericY.length > 1 ? "s" : ""} ${nonNumericY.join(", ")} ${nonNumericY.length > 1 ? "are" : "is"} not numeric (${nonNumericY.map((n) => payload.columns.find((c) => c.name === n)?.dataType ?? "?").join(", ")}). Only **Count** works for non-numeric columns — Sum/Avg/Max/Min/None all need NUMBER/INTEGER/FLOAT. Pick **Count**, or restart and choose numeric Y columns.`,
             { config: r.data.config, previewData: null },
             AGG_BTNS,
           );
@@ -451,7 +451,7 @@
           <div class="bubble" class:user-bubble={msg.role === "user"} class:ai-bubble={msg.role === "assistant"}>
             <!-- eslint-disable-next-line svelte/no-at-html-tags -->
             {@html renderMarkdown(msg.content)}
-            {#if msg.role === "assistant" && msg.chartPreview && msg.chartPreview.previewData !== null}
+            {#if msg.role === "assistant" && msg.chartPreview}
               <div class="msg-chart-preview">
                 <ChartWidget config={msg.chartPreview.config} previewData={msg.chartPreview.previewData} compact={true} />
               </div>
