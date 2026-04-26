@@ -826,6 +826,12 @@ pub async fn connection_rollback(app: AppHandle) -> Result<(), ConnectionTestErr
 }
 
 #[tauri::command]
+pub async fn driver_mode(app: AppHandle) -> Result<Value, ConnectionTestErr> {
+    let res = call_sidecar(&app, "driver.mode", json!({})).await?;
+    Ok(res)
+}
+
+#[tauri::command]
 pub async fn vector_search(app: AppHandle, payload: Value) -> Result<Value, ConnectionTestErr> {
     let res = call_sidecar(&app, "vector.search", payload).await?;
     Ok(res)

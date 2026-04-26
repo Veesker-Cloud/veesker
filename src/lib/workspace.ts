@@ -267,6 +267,9 @@ export async function connectionRollback(): Promise<Result<void>> {
   }
 }
 
+export const driverMode = () =>
+  call<{ mode: "thin" | "thick" }>("driver_mode");
+
 // ── Vector Search ─────────────────────────────────────────────────────────────
 
 export type EmbedProvider = "ollama" | "openai" | "voyage" | "custom";
