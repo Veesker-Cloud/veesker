@@ -181,6 +181,68 @@ bun build src/index.ts --compile --target=bun-darwin-x64 --outfile ../src-tauri/
 
 The binary has no `.exe` extension on macOS. Tauri appends the target triple automatically.
 
+For production builds (`bun run tauri build`), the Oracle native bindings (`.node` files) are auto-copied into `src-tauri/oracledb-bindings/` and bundled into the `.app`/`.dmg` as resources. No manual step needed — `bun run build` (which Tauri invokes) calls `copy-bindings` first. See the "Oracle native bindings — production layout" subsection under Production build for details.
+
+---
+
+## Linux prerequisites
+
+Install all of these before building on Linux.
+
+### 1. System packages (Debian/Ubuntu shown — adapt for Fedora/Arch)
+
+```bash
+sudo apt update
+sudo apt install -y \
+  libwebkit2gtk-4.1-dev \
+  build-essential \
+  curl \
+  wget \
+  file \
+  libxdo-dev \
+  libssl-dev \
+  libayatana-appindicator3-dev \
+  librsvg2-dev
+```
+
+### 2. Bun
+
+```bash
+curl -fsSL https://bun.sh/install | bash
+```
+
+Verify: `bun --version` (need ≥ 1.1)
+
+### 3. Rust stable toolchain
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+rustup default stable
+rustup target add x86_64-unknown-linux-gnu
+```
+
+Verify: `rustc -vV`
+
+---
+
+## Compile the sidecar binary (Linux)
+
+```bash
+cd sidecar
+bun run build:linux-x64
+cd ..
+```
+
+Or directly:
+
+```bash
+bun build src/index.ts --compile --target=bun-linux-x64 --outfile ../src-tauri/binaries/veesker-sidecar-x86_64-unknown-linux-gnu
+```
+
+The binary has no extension on Linux. As with the other platforms, the explicit `--target` flag is required so Bun embeds the Bun runtime — without it, `oracledb` Thick mode fails with NJS-045.
+
+For production builds (`bun run tauri build`), `.node` bindings are bundled automatically into the `.deb`/`.AppImage`/`.rpm` resource path (see Production build section). The Tauri host's resolver will find them at `/usr/lib/veesker/resources/oracledb-bindings/` after install.
+
 After compiling, run normally:
 
 ```bash
@@ -222,13 +284,37 @@ This starts Vite (port 1420) + the Tauri shell + the sidecar as a live Bun proce
 
 ## Production build
 
+The frontend `build` script is wired so it copies the Oracle native bindings before Vite runs:
+`bun run build` → `bun run copy-bindings` (copies `.node` files from `sidecar/node_modules/oracledb/build/Release/` to `src-tauri/oracledb-bindings/`) → `vite build`. Tauri's `beforeBuildCommand` runs this automatically, so the bindings end up bundled.
+
 ```powershell
-# 1. Compile the sidecar binary first (see above)
-# 2. Build the app
+# 1. Compile the sidecar binary first (per-platform — see sections below)
+# 2. Build the app (auto-copies oracledb bindings, runs vite build, then bundles)
 bun run tauri build
 ```
 
 The installer is written to `src-tauri/target/release/bundle/`.
+
+### Oracle native bindings — production layout
+
+Tauri 2's `bundle.resources` config in `tauri.conf.json` lists `oracledb-bindings/*.node`. After install, the files end up at:
+
+| Platform | Location |
+|---|---|
+| Windows | `<install-dir>\resources\oracledb-bindings\` |
+| macOS | `<App.app>/Contents/Resources/oracledb-bindings/` |
+| Linux (deb/AppImage) | `/usr/lib/veesker/resources/oracledb-bindings/` |
+
+At runtime, `src-tauri/src/sidecar.rs` → `resolve_oracledb_binding_dir()` calls `app.path().resource_dir()` and appends `oracledb-bindings`, finds the directory, strips the Windows `\\?\` prefix, and passes it to the sidecar via `VEESKER_ORACLEDB_BINARY_DIR`. The sidecar forwards this to `oracledb.initOracleClient` as `binaryDir`.
+
+All 5 platform `.node` files are bundled in every build (~3 MB total). oracledb's loader picks the right one based on `process.platform` + `process.arch` at runtime, so no per-platform conditional packaging is needed.
+
+To force a fresh copy of the bindings (e.g., after upgrading `oracledb` in `sidecar/`):
+```powershell
+bun run copy-bindings
+```
+
+The `src-tauri/oracledb-bindings/` directory is gitignored — it's repopulated locally by the script.
 
 ---
 
