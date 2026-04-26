@@ -1,4 +1,6 @@
 import oracledb from "oracledb";
+import { readdirSync } from "node:fs";
+import { join, basename } from "node:path";
 import { embedText, type EmbedParams } from "./embedding";
 
 /** Validate and quote an Oracle identifier for use in double-quoted SQL interpolation. */
@@ -11,17 +13,114 @@ export function quoteIdent(name: string): string {
 
 let _driverMode: "thin" | "thick" = "thin";
 
+function dirHasOracleClientLib(dir: string): boolean {
+  try {
+    const files = readdirSync(dir);
+    if (process.platform === "win32") return files.includes("oci.dll");
+    if (process.platform === "darwin")
+      return files.some((f) => f === "libclntsh.dylib" || f.startsWith("libclntsh.dylib."));
+    return files.some((f) => f === "libclntsh.so" || f.startsWith("libclntsh.so."));
+  } catch {
+    return false;
+  }
+}
+
+function listSubdirs(dir: string): string[] {
+  try {
+    return readdirSync(dir, { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => join(dir, d.name));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Scan well-known filesystem locations for an existing Oracle client install.
+ * Most Oracle developer machines already have one (PL/SQL Developer, SQL Developer,
+ * sqlplus, full DB client) — we look for it instead of forcing the user to download
+ * Instant Client separately or set an env var.
+ */
+function findInstantClientCandidates(): string[] {
+  const found: string[] = [];
+
+  if (process.platform === "win32") {
+    // C:\instantclient_*
+    for (const sub of listSubdirs("C:\\")) {
+      if (basename(sub).toLowerCase().startsWith("instantclient") && dirHasOracleClientLib(sub)) {
+        found.push(sub);
+      }
+    }
+    // C:\Oracle\<anything>\bin and C:\Oracle\<anything>\<anything>\bin (covers Middleware/Oracle_Home)
+    for (const oraSub of listSubdirs("C:\\Oracle")) {
+      const bin = join(oraSub, "bin");
+      if (dirHasOracleClientLib(bin)) found.push(bin);
+      for (const oraSub2 of listSubdirs(oraSub)) {
+        const bin2 = join(oraSub2, "bin");
+        if (dirHasOracleClientLib(bin2)) found.push(bin2);
+      }
+    }
+    // C:\app\<user>\product\<version>\(client|dbhome)_<n>\bin (Oracle Universal Installer default)
+    for (const userDir of listSubdirs("C:\\app")) {
+      const productDir = join(userDir, "product");
+      for (const verDir of listSubdirs(productDir)) {
+        for (const installRoot of listSubdirs(verDir)) {
+          const name = basename(installRoot).toLowerCase();
+          if (name.startsWith("client_") || name.startsWith("dbhome_")) {
+            const bin = join(installRoot, "bin");
+            if (dirHasOracleClientLib(bin)) found.push(bin);
+          }
+        }
+      }
+    }
+    // C:\Program Files\Oracle\*\bin and (x86)
+    for (const root of ["C:\\Program Files\\Oracle", "C:\\Program Files (x86)\\Oracle"]) {
+      for (const oraSub of listSubdirs(root)) {
+        const bin = join(oraSub, "bin");
+        if (dirHasOracleClientLib(bin)) found.push(bin);
+      }
+    }
+  } else if (process.platform === "darwin") {
+    for (const root of ["/opt/oracle", "/usr/local/oracle"]) {
+      for (const sub of listSubdirs(root)) {
+        if (basename(sub).toLowerCase().startsWith("instantclient") && dirHasOracleClientLib(sub)) {
+          found.push(sub);
+        }
+      }
+    }
+  } else {
+    for (const root of ["/opt/oracle", "/usr/local/oracle"]) {
+      for (const sub of listSubdirs(root)) {
+        if (basename(sub).toLowerCase().startsWith("instantclient") && dirHasOracleClientLib(sub)) {
+          found.push(sub);
+        }
+      }
+    }
+    for (const verDir of listSubdirs("/usr/lib/oracle")) {
+      for (const client of listSubdirs(verDir)) {
+        if (basename(client).startsWith("client")) {
+          const lib = join(client, "lib");
+          if (dirHasOracleClientLib(lib)) found.push(lib);
+        }
+      }
+    }
+  }
+
+  return [...new Set(found)];
+}
+
 /**
  * Try to enable node-oracledb Thick mode (using Oracle Instant Client). Thick mode
  * supports legacy password verifiers (e.g., 0x939) that pre-12c databases sometimes
  * still hold, while Thin mode rejects them with NJS-116. Once initOracleClient succeeds
  * the entire process is locked into Thick mode and every subsequent getConnection uses it.
  *
- * Resolution order for the client library:
- *   1. VEESKER_INSTANT_CLIENT_DIR env var (explicit path)
- *   2. PATH (Windows) / LD_LIBRARY_PATH (Linux) / DYLD_LIBRARY_PATH (macOS)
+ * Resolution order:
+ *   1. VEESKER_INSTANT_CLIENT_DIR env var (explicit user override)
+ *   2. Default initOracleClient — uses PATH / LD_LIBRARY_PATH / DYLD_LIBRARY_PATH
+ *   3. Auto-discovered paths (typical Oracle / Instant Client install locations)
  *
- * Set VEESKER_FORCE_THIN=1 to skip the attempt and stay in Thin mode.
+ * Set VEESKER_FORCE_THIN=1 to stay in Thin mode regardless.
  */
 export function tryEnableThickMode(): { mode: "thin" | "thick"; libDir?: string; error?: string } {
   if (process.env.VEESKER_FORCE_THIN === "1") {
@@ -30,22 +129,30 @@ export function tryEnableThickMode(): { mode: "thin" | "thick"; libDir?: string;
     return { mode: "thin" };
   }
 
-  const libDir = process.env.VEESKER_INSTANT_CLIENT_DIR;
-  try {
-    if (libDir) {
-      oracledb.initOracleClient({ libDir });
-    } else {
-      oracledb.initOracleClient();
-    }
-    _driverMode = "thick";
-    process.stderr.write(`[oracle] Thick mode enabled${libDir ? ` (libDir=${libDir})` : ""}\n`);
-    return { mode: "thick", libDir };
-  } catch (err) {
-    const msg = String(err).split("\n")[0];
-    process.stderr.write(`[oracle] Thick mode unavailable, using Thin: ${msg}\n`);
-    _driverMode = "thin";
-    return { mode: "thin", error: msg };
+  const attempts: Array<{ libDir?: string; label: string }> = [];
+  const explicit = process.env.VEESKER_INSTANT_CLIENT_DIR;
+  if (explicit) attempts.push({ libDir: explicit, label: `env VEESKER_INSTANT_CLIENT_DIR=${explicit}` });
+  attempts.push({ label: "default search path" });
+  for (const dir of findInstantClientCandidates()) {
+    attempts.push({ libDir: dir, label: `auto-discovered ${dir}` });
   }
+
+  for (const a of attempts) {
+    try {
+      if (a.libDir) oracledb.initOracleClient({ libDir: a.libDir });
+      else oracledb.initOracleClient();
+      _driverMode = "thick";
+      process.stderr.write(`[oracle] Thick mode enabled — ${a.label}\n`);
+      return { mode: "thick", libDir: a.libDir };
+    } catch (err) {
+      const msg = String(err).split("\n")[0];
+      process.stderr.write(`[oracle] Thick init failed (${a.label}): ${msg}\n`);
+    }
+  }
+
+  process.stderr.write("[oracle] no Oracle client library found, using Thin mode\n");
+  _driverMode = "thin";
+  return { mode: "thin", error: "no Instant Client available" };
 }
 
 export function getDriverMode(): "thin" | "thick" {
