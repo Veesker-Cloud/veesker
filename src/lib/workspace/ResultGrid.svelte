@@ -5,8 +5,13 @@
   import { toCsv, toJson, toInsertSql } from "$lib/csv-export";
   import { saveBlob } from "$lib/sql-files";
 
-  type Props = { tab: SqlTab | null; onCancel: () => void; onAnalyze?: () => void };
-  let { tab, onCancel, onAnalyze }: Props = $props();
+  type Props = {
+    tab: SqlTab | null;
+    onCancel: () => void;
+    onAnalyze?: () => void;
+    onFetchAll?: () => void;
+  };
+  let { tab, onCancel, onAnalyze, onFetchAll }: Props = $props();
 
   function isNumericType(t: string): boolean {
     const u = t.toUpperCase();
@@ -51,14 +56,80 @@
     }
   }
 
-  // Reset sort + scroll when the active result changes
+  // Reset sort + scroll + selection when the active result changes
   $effect(() => {
     ar; // track
     sortCol = null;
     sortDir = "none";
     scrollTop = 0;
     if (scrollEl) scrollEl.scrollTop = 0;
+    selectedRows = new Set();
+    lastSelectedIdx = null;
   });
+
+  // ── Row selection ────────────────────────────────────────────────────────────
+  let selectedRows = $state<Set<number>>(new Set());
+  let lastSelectedIdx = $state<number | null>(null);
+
+  function selectRow(rowIdx: number, e: MouseEvent) {
+    const next = new Set(selectedRows);
+    if (e.shiftKey && lastSelectedIdx !== null) {
+      const [lo, hi] = lastSelectedIdx < rowIdx ? [lastSelectedIdx, rowIdx] : [rowIdx, lastSelectedIdx];
+      for (let i = lo; i <= hi; i++) next.add(i);
+    } else if (e.ctrlKey || e.metaKey) {
+      if (next.has(rowIdx)) next.delete(rowIdx);
+      else next.add(rowIdx);
+      lastSelectedIdx = rowIdx;
+    } else {
+      next.clear();
+      next.add(rowIdx);
+      lastSelectedIdx = rowIdx;
+    }
+    selectedRows = next;
+  }
+
+  function selectAllRows() {
+    const total = sortedRows.length;
+    if (selectedRows.size === total && total > 0) {
+      selectedRows = new Set();
+      lastSelectedIdx = null;
+    } else {
+      const next = new Set<number>();
+      for (let i = 0; i < total; i++) next.add(i);
+      selectedRows = next;
+      lastSelectedIdx = total > 0 ? total - 1 : null;
+    }
+  }
+
+  function copySelectedToClipboard() {
+    if (!ar?.result || selectedRows.size === 0) return;
+    const cols = ar.result.columns;
+    const indices = [...selectedRows].sort((a, b) => a - b);
+    const header = cols.map((c) => c.name).join("\t");
+    const lines = indices.map((i) => {
+      const row = sortedRows[i];
+      return row.map((cell, j) => {
+        if (cell === null || cell === undefined) return "";
+        if (cell instanceof Date) return cell.toISOString();
+        if (typeof cell === "string") return cell.replace(/[\t\r\n]/g, " ");
+        return String(cell);
+      }).join("\t");
+    });
+    const tsv = [header, ...lines].join("\n");
+    void navigator.clipboard.writeText(tsv);
+  }
+
+  function onGridKeydown(e: KeyboardEvent) {
+    if (!ar?.result) return;
+    const meta = e.ctrlKey || e.metaKey;
+    if (meta && e.key.toLowerCase() === "a") {
+      e.preventDefault();
+      selectAllRows();
+    } else if (meta && e.key.toLowerCase() === "c" && selectedRows.size > 0) {
+      e.preventDefault();
+      copySelectedToClipboard();
+    }
+  }
 
   // Sorted rows (derived)
   let sortedRows = $derived.by(() => {
@@ -245,10 +316,23 @@
     </div>
   {:else if ar.result}
     {@const r = ar.result}
-    <div class="scroll" bind:this={scrollEl} onscroll={(e) => { scrollTop = (e.currentTarget as HTMLDivElement).scrollTop; }}>
+    <div
+      class="scroll"
+      bind:this={scrollEl}
+      onscroll={(e) => { scrollTop = (e.currentTarget as HTMLDivElement).scrollTop; }}
+      onkeydown={onGridKeydown}
+      tabindex="0"
+      role="grid"
+    >
       <table>
         <thead>
           <tr>
+            <th
+              class="row-num-header"
+              onclick={selectAllRows}
+              title="Select all (Ctrl+A)"
+              style:cursor="pointer"
+            >#</th>
             {#each r.columns as c, ci (c.name)}
               <th
                 class:numeric={isNumericType(c.dataType)}
@@ -278,18 +362,23 @@
         </thead>
         <tbody>
           {#if visibleSlice.topPad > 0}
-            <tr class="spacer" style="height:{visibleSlice.topPad}px"><td colspan={r.columns.length}></td></tr>
+            <tr class="spacer" style="height:{visibleSlice.topPad}px"><td colspan={r.columns.length + 1}></td></tr>
           {/if}
           {#each sortedRows.slice(visibleSlice.start, visibleSlice.end) as row, vi (visibleSlice.start + vi)}
             {@const rowIdx = visibleSlice.start + vi}
-            <tr class:even={rowIdx % 2 === 1}>
+            <tr
+              class:even={rowIdx % 2 === 1}
+              class:selected={selectedRows.has(rowIdx)}
+              onclick={(e) => selectRow(rowIdx, e)}
+            >
+              <td class="row-num">{rowIdx + 1}</td>
               {#each row as cell, j (j)}
                 <td class:numeric={isNumericType(r.columns[j].dataType)} class:null-cell={cell === null}>{formatCell(cell)}</td>
               {/each}
             </tr>
           {/each}
           {#if visibleSlice.botPad > 0}
-            <tr class="spacer" style="height:{visibleSlice.botPad}px"><td colspan={r.columns.length}></td></tr>
+            <tr class="spacer" style="height:{visibleSlice.botPad}px"><td colspan={r.columns.length + 1}></td></tr>
           {/if}
         </tbody>
       </table>
@@ -311,8 +400,19 @@
         {#if onAnalyze && r.columns.length > 0}
           <button class="analyze-btn" onclick={onAnalyze}>📊 Analyze</button>
         {/if}
+        {#if onFetchAll && r.columns.length > 0 && !ar?.fetchedAll && r.rowCount >= 100}
+          <button class="fetch-all-btn" onclick={onFetchAll} disabled={tab?.running} title="Re-run query without the 100-row limit">
+            {tab?.running ? "Fetching…" : "Fetch all"}
+          </button>
+        {/if}
+        {#if selectedRows.size > 0}
+          <span class="selected-count">{selectedRows.size} selected</span>
+          <button class="copy-btn" onclick={copySelectedToClipboard} title="Copy selected rows as TSV (Ctrl+C)">Copy</button>
+        {/if}
       </div>
-      <span>{r.rowCount} rows · {r.elapsedMs}ms</span>
+      <span>
+        {r.rowCount} rows{#if ar?.fetchedAll} (all){/if} · {r.elapsedMs}ms
+      </span>
     </div>
   {/if}
 </section>
@@ -400,19 +500,28 @@
   .scroll {
     flex: 1;
     overflow: auto;
+    outline: none;
   }
+  .scroll:focus-visible { box-shadow: inset 0 0 0 1px rgba(179, 62, 31, 0.3); }
   table {
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0;
     min-width: 100%;
+  }
+  thead {
+    position: sticky;
+    top: 0;
+    z-index: 5;
   }
   thead th {
     position: sticky;
     top: 0;
-    background: rgba(179, 62, 31, 0.1);
+    z-index: 5;
+    background: var(--bg-surface-raised, var(--bg-surface));
     text-align: left;
     padding: 0.4rem 0.6rem;
     border-right: 1px solid var(--border);
-    border-bottom: 1px solid var(--border-strong);
+    border-bottom: 2px solid var(--border-strong);
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -421,8 +530,17 @@
     min-width: 80px;
     cursor: pointer;
     user-select: none;
+    box-shadow: 0 1px 0 var(--border-strong);
   }
-  thead th:hover { background: rgba(179, 62, 31, 0.15); }
+  thead th:hover { background: var(--row-hover, rgba(179, 62, 31, 0.12)); }
+  thead th.row-num-header {
+    width: 48px;
+    min-width: 48px;
+    max-width: 48px;
+    text-align: right;
+    color: var(--text-muted);
+    font-weight: 600;
+  }
   .th-stack {
     display: flex;
     flex-direction: column;
@@ -438,7 +556,8 @@
     font-size: 9.5px;
   }
   thead th.numeric .th-stack { align-items: flex-end; }
-  tbody tr { height: 24px; }
+  tbody tr { height: 24px; cursor: pointer; }
+  tbody tr:hover:not(.spacer):not(.selected) { background: var(--row-hover, rgba(179, 62, 31, 0.06)); }
   tbody td {
     padding: 0.2rem 0.6rem;
     border-right: 1px solid var(--border);
@@ -452,8 +571,30 @@
     text-overflow: ellipsis;
   }
   tbody td.numeric { text-align: right; }
+  tbody td.row-num {
+    width: 48px;
+    min-width: 48px;
+    max-width: 48px;
+    text-align: right;
+    color: var(--text-muted);
+    background: var(--bg-surface-alt, var(--bg-surface));
+    font-size: 10.5px;
+    user-select: none;
+    cursor: default;
+  }
   tbody tr.even { background: var(--row-alt); }
-  tbody tr.spacer { background: none; }
+  tbody tr.even td.row-num { background: var(--row-alt); }
+  tbody tr.selected td:not(.row-num) {
+    background: rgba(179, 62, 31, 0.18);
+    color: var(--text-primary);
+  }
+  tbody tr.selected td.row-num {
+    background: rgba(179, 62, 31, 0.32);
+    color: #fff;
+    font-weight: 600;
+  }
+  tbody tr.spacer { background: none; cursor: default; }
+  tbody tr.spacer:hover { background: none; }
   td.null-cell {
     color: var(--text-muted);
     font-style: italic;
@@ -524,6 +665,33 @@
     cursor: pointer;
   }
   .analyze-btn:hover { background: rgba(179,62,31,0.2); }
+  .fetch-all-btn {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border-strong);
+    background: transparent;
+    color: var(--text-primary);
+    cursor: pointer;
+  }
+  .fetch-all-btn:hover:not(:disabled) { background: var(--row-hover); border-color: rgba(179,62,31,0.4); }
+  .fetch-all-btn:disabled { opacity: 0.5; cursor: default; }
+  .selected-count {
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-family: "Space Grotesk", sans-serif;
+    padding-left: 4px;
+  }
+  .copy-btn {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border-strong);
+    background: transparent;
+    color: var(--text-primary);
+    cursor: pointer;
+  }
+  .copy-btn:hover { background: var(--row-hover); }
   .spinner {
     display: inline-block;
     width: 12px; height: 12px;

@@ -628,7 +628,8 @@ const PLSQL_ANON_RE = /^(?:[ \t]*--[^\n]*\n)*[ \t]*(?:BEGIN|DECLARE)\b/i;
 async function executeSingleStatement(
   conn: oracledb.Connection,
   sql: string,
-  requestId: string
+  requestId: string,
+  fetchAll: boolean = false
 ): Promise<QueryResult> {
   const started = Date.now();
   let r: any;
@@ -643,7 +644,11 @@ async function executeSingleStatement(
       // :name patterns and misidentifies :old/:new trigger references as bind variables.
       r = await conn.execute(sqlToSend);
     } else {
-      r = await conn.execute(sqlToSend, [], { maxRows: 100, outFormat: oracledb.OUT_FORMAT_ARRAY });
+      // maxRows: 0 means unlimited (oracledb convention)
+      const opts = fetchAll
+        ? { maxRows: 0, outFormat: oracledb.OUT_FORMAT_ARRAY }
+        : { maxRows: 100, outFormat: oracledb.OUT_FORMAT_ARRAY };
+      r = await conn.execute(sqlToSend, [], opts);
     }
   } catch (execErr) {
     if (_running?.requestId === requestId && _running.cancelled && isCancelError(execErr)) {
@@ -663,7 +668,7 @@ async function executeSingleStatement(
   return { columns, rows, rowCount, elapsedMs };
 }
 
-export async function queryExecute(p: { sql: string; requestId?: string; splitMulti?: boolean }): Promise<QueryResult | MultiQueryResult> {
+export async function queryExecute(p: { sql: string; requestId?: string; splitMulti?: boolean; fetchAll?: boolean }): Promise<QueryResult | MultiQueryResult> {
   if (_running !== null) {
     throw new RpcCodedError(ORACLE_ERR, "Another query is already running on this connection");
   }
@@ -745,7 +750,7 @@ export async function queryExecute(p: { sql: string; requestId?: string; splitMu
   // ── Single-statement path (default, back-compat) ──────────────────────────
   try {
     return await withActiveSession(async (conn) => {
-      return executeSingleStatement(conn, p.sql, requestId);
+      return executeSingleStatement(conn, p.sql, requestId, p.fetchAll === true);
     });
   } finally {
     if (_running?.requestId === requestId) _running = null;
