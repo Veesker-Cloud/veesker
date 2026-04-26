@@ -1,0 +1,42 @@
+name: OSV-Scanner
+
+# Google's open-source vuln scanner. Runs against package-lock.json, bun.lockb,
+# Cargo.lock — finds CVEs in transitive deps that bun audit / cargo audit may
+# miss. Free, no signup. Results are uploaded as SARIF and appear in the
+# Security tab next to the CodeQL findings.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 10 * * 1"
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run OSV-Scanner
+        uses: google/osv-scanner-action/osv-scanner-action@v2.0.2
+        continue-on-error: true
+        with:
+          scan-args: |-
+            --recursive
+            --skip-git
+            --format=sarif
+            --output=results.sarif
+            ./
+
+      - name: Upload SARIF to Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
