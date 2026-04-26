@@ -760,7 +760,7 @@
   .thinking {
     padding: 0.6rem 0.85rem;
   }
-  .msg-chart-preview { margin-top: 8px; }
+  .msg-chart-preview { margin-top: 8px; max-width: 100%; overflow: hidden; }
 
   /* ── Quick action buttons ─────────────────────────────────── */
   .quick-actions {
