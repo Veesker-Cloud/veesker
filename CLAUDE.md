@@ -87,7 +87,7 @@ Or directly:
 
 ```powershell
 cd sidecar
-bun build src/index.ts --compile --target=bun-windows-x64 --minify --outfile ../src-tauri/binaries/veesker-sidecar-x86_64-pc-windows-msvc.exe
+bun build src/index.ts --compile --target=bun-windows-x64 --outfile ../src-tauri/binaries/veesker-sidecar-x86_64-pc-windows-msvc.exe
 cd ..
 ```
 
@@ -173,10 +173,10 @@ Or directly with the explicit `--target` flag (required for native modules to lo
 
 ```bash
 # Apple Silicon
-bun build src/index.ts --compile --target=bun-darwin-arm64 --minify --outfile ../src-tauri/binaries/veesker-sidecar-aarch64-apple-darwin
+bun build src/index.ts --compile --target=bun-darwin-arm64 --outfile ../src-tauri/binaries/veesker-sidecar-aarch64-apple-darwin
 
 # Intel Mac
-bun build src/index.ts --compile --target=bun-darwin-x64 --minify --outfile ../src-tauri/binaries/veesker-sidecar-x86_64-apple-darwin
+bun build src/index.ts --compile --target=bun-darwin-x64 --outfile ../src-tauri/binaries/veesker-sidecar-x86_64-apple-darwin
 ```
 
 The binary has no `.exe` extension on macOS. Tauri appends the target triple automatically.
@@ -313,7 +313,7 @@ taskkill /PID <PID> /F
 | `-32601 Method not found: <rpc.method>` | Old sidecar binary running — new RPC handlers not compiled in | Recompile sidecar binary (see above), restart `tauri dev` |
 | `PermissionDenied` in `tauri-build lib.rs` | Zombie sidecar processes locking the binary | Kill with `Get-Process \| Where-Object { $_.Name -like "*veesker*" } \| Stop-Process -Force` |
 | `ORA-01780 string literal required` in EXPLAIN PLAN | `EXPLAIN PLAN SET STATEMENT_ID = :bind` — Oracle requires a literal, not a bind variable | Use `'${sid}'` string interpolation for STATEMENT_ID; sid is machine-generated so this is safe |
-| `NJS-045: cannot load a node-oracledb Thick mode binary` | Sidecar compiled without explicit `--target` — Bun didn't embed the native `.node` binding | Rebuild with `bun run build:win-x64` (or matching `build:mac-arm64`/`build:mac-x64`/`build:linux-x64`); the `--target=bun-<platform>-<arch>` flag is required for native modules |
+| `NJS-045: cannot load a node-oracledb Thick mode binary` | Sidecar compiled with `--minify` and/or without explicit `--target` — Bun strips/breaks the native `.node` binding loader path | Rebuild with `bun run build:win-x64` (or matching `build:mac-arm64`/`build:mac-x64`/`build:linux-x64`). **Do NOT add `--minify`** — it breaks oracledb's native binding lookup at runtime even when the .node files are embedded. `--target=bun-<platform>-<arch>` is also required |
 | `NJS-116: password verifier type 0xNNN is not supported` (Thin mode) | Pre-12c Oracle user has only legacy verifiers | Veesker auto-discovers Instant Client and switches to Thick mode at startup. If still failing: install Oracle Instant Client Basic ([download](https://www.oracle.com/database/technologies/instant-client/downloads.html)), then restart Veesker. Force a specific path with `VEESKER_INSTANT_CLIENT_DIR=...` env var |
 
 ---

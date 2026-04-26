@@ -5,10 +5,11 @@
   "type": "module",
   "scripts": {
     "test": "bun test",
-    "build:win-x64":   "bun build src/index.ts --compile --target=bun-windows-x64  --minify --outfile ../src-tauri/binaries/veesker-sidecar-x86_64-pc-windows-msvc.exe",
-    "build:mac-x64":   "bun build src/index.ts --compile --target=bun-darwin-x64   --minify --outfile ../src-tauri/binaries/veesker-sidecar-x86_64-apple-darwin",
-    "build:mac-arm64": "bun build src/index.ts --compile --target=bun-darwin-arm64 --minify --outfile ../src-tauri/binaries/veesker-sidecar-aarch64-apple-darwin",
-    "build:linux-x64": "bun build src/index.ts --compile --target=bun-linux-x64    --minify --outfile ../src-tauri/binaries/veesker-sidecar-x86_64-unknown-linux-gnu",
+    "_": "--minify breaks oracledb's native binding loader when combined with --compile (NJS-045 at runtime). Do not add it back without re-verifying Thick mode works.",
+    "build:win-x64":   "bun build src/index.ts --compile --target=bun-windows-x64  --outfile ../src-tauri/binaries/veesker-sidecar-x86_64-pc-windows-msvc.exe",
+    "build:mac-x64":   "bun build src/index.ts --compile --target=bun-darwin-x64   --outfile ../src-tauri/binaries/veesker-sidecar-x86_64-apple-darwin",
+    "build:mac-arm64": "bun build src/index.ts --compile --target=bun-darwin-arm64 --outfile ../src-tauri/binaries/veesker-sidecar-aarch64-apple-darwin",
+    "build:linux-x64": "bun build src/index.ts --compile --target=bun-linux-x64    --outfile ../src-tauri/binaries/veesker-sidecar-x86_64-unknown-linux-gnu",
     "build": "bun run build:mac-x64"
   },
   "dependencies": {
