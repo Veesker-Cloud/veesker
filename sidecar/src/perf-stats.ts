@@ -21,15 +21,17 @@ export type PerfStatsResult = {
   tables: PerfTableStats[];
 };
 
+export type TableRef = { owner: string | null; name: string };
+
 const FROM_PATTERN =
-  /\b(?:FROM|JOIN)\s+(?:[a-zA-Z_]\w*\s*\.\s*)?([a-zA-Z_]\w*)/gi;
+  /\b(?:FROM|JOIN)\s+(?:([a-zA-Z_]\w*)\s*\.\s*)?([a-zA-Z_]\w*)/gi;
 
 // Why: original spec used a character-class lookahead that mis-parsed names
 // like "DEPT" (the trailing "T" lived inside the class). Switched to a
 // boundary-style lookahead that ends the table name at end-of-string,
 // comma, paren, or whitespace — which is what the comma-join shape needs.
 const COMMA_FROM_PATTERN =
-  /,\s*(?:[a-zA-Z_]\w*\s*\.\s*)?([a-zA-Z_]\w*)(?:\s+[a-zA-Z_]\w*)?(?=\s*(?:,|\)|$|\s))/gi;
+  /,\s*(?:([a-zA-Z_]\w*)\s*\.\s*)?([a-zA-Z_]\w*)(?:\s+[a-zA-Z_]\w*)?(?=\s*(?:,|\)|$|\s))/gi;
 
 function stripComments(sql: string): string {
   return sql
@@ -37,21 +39,28 @@ function stripComments(sql: string): string {
     .replace(/--[^\n]*\n?/g, " ");
 }
 
-export function extractTableNames(sql: string): string[] {
+export function extractTableNames(sql: string): TableRef[] {
   const cleaned = stripComments(sql).trim();
   if (!/^\s*(?:SELECT|WITH|INSERT|UPDATE|DELETE|MERGE)/i.test(cleaned)) {
     return [];
   }
-  const found = new Set<string>();
+  const seen = new Set<string>();
+  const refs: TableRef[] = [];
   for (const re of [FROM_PATTERN, COMMA_FROM_PATTERN]) {
     re.lastIndex = 0;
     let m: RegExpExecArray | null;
     // eslint-disable-next-line no-cond-assign
     while ((m = re.exec(cleaned)) !== null) {
-      found.add(m[1].toUpperCase());
+      const owner = m[1] ? m[1].toUpperCase() : null;
+      const name = m[2].toUpperCase();
+      const key = `${owner ?? ""}.${name}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        refs.push({ owner, name });
+      }
     }
   }
-  return [...found];
+  return refs;
 }
 
 let _testSession: oracledb.Connection | null = null;
@@ -67,16 +76,25 @@ async function withConn<T>(fn: (c: oracledb.Connection) => Promise<T>): Promise<
 }
 
 export async function tablesStats(p: { sql: string }): Promise<PerfStatsResult> {
-  const names = extractTableNames(p.sql);
-  if (names.length === 0) return { tables: [] };
+  const refs = extractTableNames(p.sql);
+  if (refs.length === 0) return { tables: [] };
 
   return withConn(async (conn) => {
     const binds: Record<string, string> = {};
-    const placeholders: string[] = [];
-    names.forEach((n, i) => {
-      const k = `n${i}`;
-      binds[k] = n;
-      placeholders.push(`:${k}`);
+    const tableConds: string[] = [];
+    const indexConds: string[] = [];
+    refs.forEach((r, i) => {
+      const nKey = `n${i}`;
+      binds[nKey] = r.name;
+      if (r.owner !== null) {
+        const oKey = `o${i}`;
+        binds[oKey] = r.owner;
+        tableConds.push(`(owner = :${oKey} AND table_name = :${nKey})`);
+        indexConds.push(`(ic.table_owner = :${oKey} AND ic.table_name = :${nKey})`);
+      } else {
+        tableConds.push(`(table_name = :${nKey})`);
+        indexConds.push(`(ic.table_name = :${nKey})`);
+      }
     });
 
     const tablesRes = await conn.execute<{
@@ -92,7 +110,7 @@ export async function tablesStats(p: { sql: string }): Promise<PerfStatsResult> 
               last_analyzed AS "LAST_ANALYZED",
               blocks AS "BLOCKS"
          FROM ALL_TABLES
-        WHERE table_name IN (${placeholders.join(",")})`,
+        WHERE ${tableConds.join(" OR ")}`,
       binds,
       { outFormat: oracledb.OUT_FORMAT_OBJECT },
     );
@@ -120,7 +138,7 @@ export async function tablesStats(p: { sql: string }): Promise<PerfStatsResult> 
          JOIN ALL_INDEXES i
            ON i.owner = ic.index_owner
           AND i.index_name = ic.index_name
-        WHERE ic.table_name IN (${placeholders.join(",")})
+        WHERE ${indexConds.join(" OR ")}
         ORDER BY ic.table_owner, ic.table_name, ic.index_name, ic.column_position`,
       binds,
       { outFormat: oracledb.OUT_FORMAT_OBJECT },

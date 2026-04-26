@@ -1,51 +1,58 @@
-import { describe, expect, test } from "bun:test";
-import { extractTableNames } from "../src/perf-stats";
+import { afterEach, describe, expect, test } from "bun:test";
+import { extractTableNames, setTestSession, tablesStats } from "../src/perf-stats";
+import type oracledb from "oracledb";
+
+afterEach(() => {
+  setTestSession(null);
+});
 
 describe("extractTableNames", () => {
   test("simple SELECT FROM", () => {
     expect(extractTableNames("SELECT * FROM employees"))
-      .toEqual(["EMPLOYEES"]);
+      .toEqual([{ owner: null, name: "EMPLOYEES" }]);
   });
   test("schema-qualified", () => {
     expect(extractTableNames("SELECT * FROM hr.employees"))
-      .toEqual(["EMPLOYEES"]);
+      .toEqual([{ owner: "HR", name: "EMPLOYEES" }]);
   });
   test("JOIN expands set", () => {
-    const names = extractTableNames(
+    const refs = extractTableNames(
       "SELECT * FROM employees e JOIN departments d ON e.dept_id = d.id"
     );
-    expect(names).toContain("EMPLOYEES");
-    expect(names).toContain("DEPARTMENTS");
+    expect(refs).toContainEqual({ owner: null, name: "EMPLOYEES" });
+    expect(refs).toContainEqual({ owner: null, name: "DEPARTMENTS" });
   });
   test("comma-join expands set", () => {
-    const names = extractTableNames("SELECT * FROM emp, dept");
-    expect(names).toContain("EMP");
-    expect(names).toContain("DEPT");
+    const refs = extractTableNames("SELECT * FROM emp, dept");
+    expect(refs).toContainEqual({ owner: null, name: "EMP" });
+    expect(refs).toContainEqual({ owner: null, name: "DEPT" });
   });
   test("CTE not flagged as table (skip WITH name)", () => {
-    const names = extractTableNames(
+    const refs = extractTableNames(
       "WITH x AS (SELECT 1 FROM dual) SELECT * FROM x"
     );
     // x is the CTE alias — not a real table; we accept it since we have no
     // way to distinguish at parse-time. The dictionary lookup will return
     // empty stats for it, which is fine.
-    expect(names).toContain("X");
+    expect(refs).toContainEqual({ owner: null, name: "X" });
   });
   test("strips line comments", () => {
     expect(extractTableNames("-- foo\nSELECT * FROM emp"))
-      .toEqual(["EMP"]);
+      .toEqual([{ owner: null, name: "EMP" }]);
   });
   test("returns empty for non-SELECT", () => {
     expect(extractTableNames("BEGIN NULL; END;")).toEqual([]);
   });
   test("dedups duplicates", () => {
-    const names = extractTableNames("SELECT * FROM emp, emp e2");
-    expect(names.filter((n) => n === "EMP")).toHaveLength(1);
+    const refs = extractTableNames("SELECT * FROM emp, emp e2");
+    expect(refs.filter((r) => r.name === "EMP")).toHaveLength(1);
+  });
+  test("schema-qualified preserves owner across multiple tables", () => {
+    const refs = extractTableNames("SELECT * FROM hr.employees, payroll.salary");
+    expect(refs).toContainEqual({ owner: "HR", name: "EMPLOYEES" });
+    expect(refs).toContainEqual({ owner: "PAYROLL", name: "SALARY" });
   });
 });
-
-import { tablesStats, setTestSession } from "../src/perf-stats";
-import type oracledb from "oracledb";
 
 describe("tablesStats with mocked oracle", () => {
   test("returns empty when no tables in SQL", async () => {
