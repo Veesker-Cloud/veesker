@@ -20,6 +20,10 @@ src-tauri/gen/
 # Compiled sidecar binaries (built per-platform via scripts/build-sidecar.sh)
 src-tauri/binaries/veesker-sidecar-*
 !src-tauri/binaries/.gitkeep
+
+# Oracle native bindings (copied from sidecar/node_modules at build time —
+# scripts/copy-oracledb-bindings.ts). Oracle redistribution license applies.
+src-tauri/oracledb-bindings/
 .superpowers/
 
 # Paid add-ons live in a separate private repo (../veesker-addons-private/)
