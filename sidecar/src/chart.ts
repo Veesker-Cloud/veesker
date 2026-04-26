@@ -100,7 +100,11 @@ function buildPreview(
     }
   }
 
-  if (config.aggregation && config.aggregation !== "count" && config.aggregation !== "none") {
+  // Reject non-numeric Y columns for aggregations that require numeric math.
+  // For "count" we count rows (any type). For "none" we still need numbers
+  // because the chart will plot bar/line heights — DATE/VARCHAR coerced to 0
+  // produces visually-empty charts that look broken to the user.
+  if (config.aggregation !== "count") {
     const nonNumeric = config.yColumns.filter((yCol) => !isNumericCol(columns, yCol));
     if (nonNumeric.length > 0) {
       return null;
