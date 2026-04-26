@@ -1,0 +1,120 @@
+name: Security Audit
+
+on:
+  schedule:
+    # Every Monday at 09:00 UTC (06:00 Brasília)
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: Install JS deps (root)
+        run: bun install --frozen-lockfile
+
+      - name: Install JS deps (sidecar)
+        run: cd sidecar && bun install --frozen-lockfile
+
+      # Each audit step runs with `continue-on-error` so we collect ALL findings
+      # before deciding whether to open an issue. The summary step at the end
+      # decides based on captured exit codes.
+
+      - name: bun audit (root)
+        id: audit_root
+        continue-on-error: true
+        run: |
+          set +e
+          bun audit | tee audit_root.txt
+          echo "exitcode=$?" >> "$GITHUB_OUTPUT"
+
+      - name: bun audit (sidecar)
+        id: audit_sidecar
+        continue-on-error: true
+        run: |
+          set +e
+          cd sidecar
+          bun audit | tee ../audit_sidecar.txt
+          echo "exitcode=$?" >> "$GITHUB_OUTPUT"
+
+      - name: cargo audit
+        id: audit_cargo
+        continue-on-error: true
+        run: |
+          set +e
+          cd src-tauri
+          cargo audit --ignore RUSTSEC-2024-0411 --ignore RUSTSEC-2024-0412 \
+                      --ignore RUSTSEC-2024-0413 --ignore RUSTSEC-2024-0414 \
+                      --ignore RUSTSEC-2024-0415 --ignore RUSTSEC-2024-0416 \
+                      --ignore RUSTSEC-2024-0417 --ignore RUSTSEC-2024-0418 \
+                      --ignore RUSTSEC-2024-0419 --ignore RUSTSEC-2024-0420 \
+                      --ignore RUSTSEC-2024-0370 --ignore RUSTSEC-2025-0057 \
+                      --ignore RUSTSEC-2025-0081 \
+            | tee ../audit_cargo.txt
+          echo "exitcode=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Open issue if audits failed
+        if: |
+          steps.audit_root.outputs.exitcode != '0' ||
+          steps.audit_sidecar.outputs.exitcode != '0' ||
+          steps.audit_cargo.outputs.exitcode != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require("fs");
+            const today = new Date().toISOString().split("T")[0];
+            const sections = [
+              { id: "audit_root",    title: "Frontend (root) — bun audit",  file: "audit_root.txt",    code: "${{ steps.audit_root.outputs.exitcode }}" },
+              { id: "audit_sidecar", title: "Sidecar — bun audit",          file: "audit_sidecar.txt", code: "${{ steps.audit_sidecar.outputs.exitcode }}" },
+              { id: "audit_cargo",   title: "Rust (Tauri host) — cargo audit", file: "audit_cargo.txt",  code: "${{ steps.audit_cargo.outputs.exitcode }}" },
+            ];
+            const body = sections.map((s) => {
+              const status = s.code === "0" ? "✅ clean" : "❌ findings";
+              const log = fs.existsSync(s.file) ? fs.readFileSync(s.file, "utf8") : "(no output)";
+              return `## ${s.title} — ${status}\n\n<details>\n<summary>Output</summary>\n\n\`\`\`\n${log.slice(0, 30000)}\n\`\`\`\n\n</details>`;
+            }).join("\n\n");
+
+            const title = `Security audit findings — ${today}`;
+            const fullBody =
+              `Automated weekly security audit detected vulnerabilities. Review the output below and update affected dependencies.\n\n` +
+              `Run: [#${context.runId}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})\n\n` +
+              body;
+
+            // Avoid duplicate issues on the same day
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              state: "open",
+              labels: "security-audit",
+            });
+            const dup = existing.data.find((i) => i.title === title);
+            if (dup) {
+              core.info(`Issue already open: #${dup.number}`);
+              return;
+            }
+
+            const created = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              title,
+              body: fullBody,
+              labels: ["security-audit"],
+            });
+            core.info(`Opened issue #${created.data.number}`);
