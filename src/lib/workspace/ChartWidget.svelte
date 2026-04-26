@@ -104,7 +104,16 @@
           maintainAspectRatio: false,
           indexAxis: isHorizontal ? "y" : "x",
           plugins: {
-            legend: { display: pd.datasets.length > 1 || isDoughnut, labels: { color: colorPrimary, font: { size: 10 } } },
+            legend: {
+              display: pd.datasets.length > 1 || (isDoughnut && plainLabels.length <= 6),
+              position: isDoughnut ? "bottom" : "top",
+              labels: {
+                color: colorPrimary,
+                font: { size: compact ? 9 : 10 },
+                boxWidth: compact ? 8 : 12,
+                padding: compact ? 4 : 8,
+              },
+            },
             title: { display: false },
           },
           scales: isDoughnut ? {} : {
@@ -140,8 +149,8 @@
     }
     let raf = requestAnimationFrame(() => {
       const wrap = c.parentElement;
-      const w = (wrap?.offsetWidth  || 320);
-      const h = (wrap?.offsetHeight || (compact ? 130 : 200));
+      const w = (wrap?.clientWidth  || 280);
+      const h = (wrap?.clientHeight || (compact ? 170 : 200));
       void buildChart(c, pd, type, w, h);
     });
     return () => { cancelAnimationFrame(raf); destroyChart(); };
@@ -152,8 +161,8 @@
     if (!wrap || typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver(() => {
       if (!chart || !canvas) return;
-      const w = wrap.offsetWidth;
-      const h = wrap.offsetHeight || (compact ? 130 : 200);
+      const w = wrap.clientWidth;
+      const h = wrap.clientHeight || (compact ? 170 : 200);
       canvas.width = w;
       canvas.height = h;
       chart.resize(w, h);
@@ -211,11 +220,11 @@
 </div>
 
 <style>
-  .chart-widget { background: var(--bg-surface-alt); border-radius: 4px; padding: 8px; width: 100%; }
-  .chart-widget.compact { max-height: 160px; overflow: hidden; }
-  .canvas-wrap { position: relative; height: 200px; }
-  .chart-widget.compact .canvas-wrap { height: 130px; }
-  canvas { width: 100% !important; display: block; }
+  .chart-widget { background: var(--bg-surface-alt); border-radius: 4px; padding: 8px; width: 100%; max-width: 100%; box-sizing: border-box; overflow: hidden; }
+  .chart-widget.compact { max-height: 200px; }
+  .canvas-wrap { position: relative; height: 200px; width: 100%; max-width: 100%; overflow: hidden; }
+  .chart-widget.compact .canvas-wrap { height: 170px; }
+  canvas { max-width: 100% !important; display: block; }
   .kpi-row { display: flex; gap: 8px; flex-wrap: wrap; }
   .kpi-card { flex: 1; min-width: 80px; background: var(--bg-surface); border-radius: 4px; padding: 8px; text-align: center; }
   .kpi-label { font-size: 9px; color: var(--text-muted); margin-bottom: 4px; }
