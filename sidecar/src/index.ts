@@ -2,6 +2,8 @@ import { parseRequest, makeError } from "./rpc";
 import { dispatch, type HandlerMap } from "./handlers";
 import { embedText, type EmbedParams } from "./embedding";
 import {
+  tryEnableThickMode,
+  getDriverMode,
   connectionTest,
   openSession,
   closeSession,
@@ -114,12 +116,18 @@ const handlers: HandlerMap = {
   "debug.run":               (params) => debugRun(params as any),
   "flow.trace_proc": (params) => traceProc(params as any),
   "flow.trace_sql":  (params) => explainPlanFlow(params as any),
+  "driver.mode": async () => ({ mode: getDriverMode() }),
   ping: async () => ({ pong: true }),
 };
 
 function writeLine(obj: unknown) {
   process.stdout.write(JSON.stringify(obj) + "\n");
 }
+
+// Enable Thick mode at startup if Oracle Instant Client is available; falls back
+// to Thin mode silently if not. Thick mode supports legacy password verifiers
+// (NJS-116 errors) that older databases (9i/10g/11g) may still expose.
+tryEnableThickMode();
 
 async function main() {
   const decoder = new TextDecoder();

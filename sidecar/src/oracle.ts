@@ -9,6 +9,61 @@ export function quoteIdent(name: string): string {
   return `"${name}"`;
 }
 
+let _driverMode: "thin" | "thick" = "thin";
+
+/**
+ * Try to enable node-oracledb Thick mode (using Oracle Instant Client). Thick mode
+ * supports legacy password verifiers (e.g., 0x939) that pre-12c databases sometimes
+ * still hold, while Thin mode rejects them with NJS-116. Once initOracleClient succeeds
+ * the entire process is locked into Thick mode and every subsequent getConnection uses it.
+ *
+ * Resolution order for the client library:
+ *   1. VEESKER_INSTANT_CLIENT_DIR env var (explicit path)
+ *   2. PATH (Windows) / LD_LIBRARY_PATH (Linux) / DYLD_LIBRARY_PATH (macOS)
+ *
+ * Set VEESKER_FORCE_THIN=1 to skip the attempt and stay in Thin mode.
+ */
+export function tryEnableThickMode(): { mode: "thin" | "thick"; libDir?: string; error?: string } {
+  if (process.env.VEESKER_FORCE_THIN === "1") {
+    process.stderr.write("[oracle] VEESKER_FORCE_THIN=1 — using Thin mode\n");
+    _driverMode = "thin";
+    return { mode: "thin" };
+  }
+
+  const libDir = process.env.VEESKER_INSTANT_CLIENT_DIR;
+  try {
+    if (libDir) {
+      oracledb.initOracleClient({ libDir });
+    } else {
+      oracledb.initOracleClient();
+    }
+    _driverMode = "thick";
+    process.stderr.write(`[oracle] Thick mode enabled${libDir ? ` (libDir=${libDir})` : ""}\n`);
+    return { mode: "thick", libDir };
+  } catch (err) {
+    const msg = String(err).split("\n")[0];
+    process.stderr.write(`[oracle] Thick mode unavailable, using Thin: ${msg}\n`);
+    _driverMode = "thin";
+    return { mode: "thin", error: msg };
+  }
+}
+
+export function getDriverMode(): "thin" | "thick" {
+  return _driverMode;
+}
+
+const NJS_116_HINT =
+  "\n\nThis password verifier is unsupported in Thin mode. Install Oracle Instant Client " +
+  "(https://www.oracle.com/database/technologies/instant-client/downloads.html) and restart " +
+  "Veesker — it will auto-enable Thick mode which supports all verifier types.";
+
+function decorateOracleError(err: unknown): Error {
+  if (err instanceof Error && err.message.includes("NJS-116") && _driverMode === "thin") {
+    return new Error(err.message + NJS_116_HINT);
+  }
+  return err instanceof Error ? err : new Error(String(err));
+}
+
 export type ConnectionTestParams =
   | {
       authType: "basic";
@@ -37,23 +92,28 @@ export async function connectionTest(
   params: ConnectionTestParams
 ): Promise<ConnectionTestResult> {
   const started = Date.now();
-  const conn =
-    params.authType === "basic"
-      ? await oracledb.getConnection({
-          user: params.username,
-          password: params.password,
-          connectString: `${params.host}:${params.port}/${params.serviceName}`,
-          connectTimeout: 10,
-        })
-      : await oracledb.getConnection({
-          user: params.username,
-          password: params.password,
-          connectString: params.connectAlias,
-          configDir: params.walletDir,
-          walletLocation: params.walletDir,
-          walletPassword: params.walletPassword,
-          connectTimeout: 10,
-        });
+  let conn: oracledb.Connection;
+  try {
+    conn =
+      params.authType === "basic"
+        ? await oracledb.getConnection({
+            user: params.username,
+            password: params.password,
+            connectString: `${params.host}:${params.port}/${params.serviceName}`,
+            connectTimeout: 10,
+          })
+        : await oracledb.getConnection({
+            user: params.username,
+            password: params.password,
+            connectString: params.connectAlias,
+            configDir: params.walletDir,
+            walletLocation: params.walletDir,
+            walletPassword: params.walletPassword,
+            connectTimeout: 10,
+          });
+  } catch (err) {
+    throw decorateOracleError(err);
+  }
   try {
     const result = await conn.execute<{ V: string }>(
       "SELECT BANNER_FULL AS V FROM V$VERSION WHERE ROWNUM = 1",
@@ -92,23 +152,27 @@ export function isLostSessionError(err: unknown): boolean {
 }
 
 export async function buildConnection(p: OpenSessionParams): Promise<oracledb.Connection> {
-  if (p.authType === "basic") {
+  try {
+    if (p.authType === "basic") {
+      return await oracledb.getConnection({
+        user: p.username,
+        password: p.password,
+        connectString: `${p.host}:${p.port}/${p.serviceName}`,
+        connectTimeout: 15,
+      });
+    }
     return await oracledb.getConnection({
       user: p.username,
       password: p.password,
-      connectString: `${p.host}:${p.port}/${p.serviceName}`,
+      connectString: p.connectAlias,
+      configDir: p.walletDir,
+      walletLocation: p.walletDir,
+      walletPassword: p.walletPassword,
       connectTimeout: 15,
     });
+  } catch (err) {
+    throw decorateOracleError(err);
   }
-  return await oracledb.getConnection({
-    user: p.username,
-    password: p.password,
-    connectString: p.connectAlias,
-    configDir: p.walletDir,
-    walletLocation: p.walletDir,
-    walletPassword: p.walletPassword,
-    connectTimeout: 15,
-  });
 }
 
 export async function openSession(p: OpenSessionParams): Promise<OpenSessionResult> {
