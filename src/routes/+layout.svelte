@@ -2,6 +2,7 @@
   import "../app.css";
   import { theme } from "$lib/stores/theme.svelte";
   import { onMount } from "svelte";
+  import { goto } from "$app/navigation";
   import { listen } from "@tauri-apps/api/event";
   import HelpModal from "$lib/workspace/HelpModal.svelte";
   import UpdateNotification from "$lib/workspace/UpdateNotification.svelte";
@@ -19,9 +20,17 @@
   onMount(() => {
     const unlistenHelp = listen("open-help", () => { showHelp = true; });
     const unlistenPlugins = listen("open-plugins", () => { showPluginManager = true; });
+    const unlistenNewConn = listen("menu-new-connection", () => { void goto("/connections/new"); });
+    const unlistenTrayOpen = listen<string>("tray-open-connection", (e) => {
+      if (e.payload) void goto(`/workspace/${e.payload}`);
+    });
+    const unlistenTrayDisconnect = listen("tray-disconnect", () => { void goto("/"); });
     return () => {
       unlistenHelp.then((fn) => fn());
       unlistenPlugins.then((fn) => fn());
+      unlistenNewConn.then((fn) => fn());
+      unlistenTrayOpen.then((fn) => fn());
+      unlistenTrayDisconnect.then((fn) => fn());
     };
   });
 

@@ -117,11 +117,19 @@ pub fn run() {
                                 .await;
                                 app_clone.exit(0);
                             }
-                            "open_app" | "new_query" | "schema_browser" => {
+                            "open_app" => {
                                 if let Some(win) = app_clone.get_webview_window("main") {
                                     let _ = win.show();
                                     let _ = win.set_focus();
                                 }
+                            }
+                            id if id.starts_with("connect_") => {
+                                if let Some(win) = app_clone.get_webview_window("main") {
+                                    let _ = win.show();
+                                    let _ = win.set_focus();
+                                }
+                                let conn_id = id.strip_prefix("connect_").unwrap_or("").to_string();
+                                let _ = app_clone.emit("tray-open-connection", &conn_id);
                             }
                             id if id.starts_with("disconnect_") => {
                                 let _ = crate::sidecar::call_raw(
@@ -132,6 +140,7 @@ pub fn run() {
                                 .await;
                                 *app_clone.state::<ActiveConnection>().0.lock().await = None;
                                 crate::tray::update_tray(&app_clone, TrayState::Idle).await;
+                                let _ = app_clone.emit("tray-disconnect", ());
                             }
                             _ => {}
                         }
@@ -188,6 +197,9 @@ pub fn run() {
                 }
                 "open_plugins" => {
                     let _ = app.emit("open-plugins", ());
+                }
+                "new_connection" => {
+                    let _ = app.emit("menu-new-connection", ());
                 }
                 _ => {}
             });

@@ -99,16 +99,10 @@ pub fn build_tray_menu(
         }
     }
 
-    let actions_label = MenuItemBuilder::with_id("actions_label", "ACTIONS")
-        .enabled(false)
-        .build(app)?;
-    let new_query = MenuItemBuilder::with_id("new_query", "New Query").build(app)?;
-    let schema_browser = MenuItemBuilder::with_id("schema_browser", "Schema Browser").build(app)?;
     let open_app = MenuItemBuilder::with_id("open_app", "Open Veesker").build(app)?;
     let quit = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
     let sep1 = PredefinedMenuItem::separator(app)?;
     let sep2 = PredefinedMenuItem::separator(app)?;
-    let sep3 = PredefinedMenuItem::separator(app)?;
 
     let mut builder = MenuBuilder::new(app).item(&connections_label);
     for item in &conn_items {
@@ -116,12 +110,8 @@ pub fn build_tray_menu(
     }
     builder
         .item(&sep1)
-        .item(&actions_label)
-        .item(&new_query)
-        .item(&schema_browser)
-        .item(&sep2)
         .item(&open_app)
-        .item(&sep3)
+        .item(&sep2)
         .item(&quit)
         .build()
 }
