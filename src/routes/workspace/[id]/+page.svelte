@@ -77,6 +77,7 @@
   let dataflowError = $state<string | null>(null);
   let related = $state<Loadable<TableRelated>>({ kind: "idle" });
   let activeWsTab = $state<"schema" | "dashboard">("schema");
+  let ddlLoading = $state<{ owner: string; name: string } | null>(null);
   let testWindowOpen = $state(false);
   let showOrdsBootstrap = $state(false);
   let showApiBuilder = $state(false);
@@ -266,8 +267,10 @@
     related = { kind: "idle" };
     if (PLSQL_KINDS.includes(kind)) {
       details = { kind: "idle" };
+      ddlLoading = { owner, name };
       void (async () => {
         const res = await objectDdlGet(owner, kind, name);
+        if (ddlLoading?.owner === owner && ddlLoading?.name === name) ddlLoading = null;
         if (res.ok) {
           sqlEditor.openWithDdl(`${owner}.${name}`, res.data);
         } else {
@@ -665,9 +668,14 @@
               onNavigateDataflow={(owner, objectType, name) => onSelect(owner, name, objectType as ObjectKind)}
               onNavigate={(owner, kind, name) => onSelect(owner, name, kind as ObjectKind)}
               onViewDdl={async (owner, kind, name) => {
-                const res = await objectDdlGet(owner, kind as any, name);
-                if (res.ok) sqlEditor.openWithDdl(`${owner}.${name}`, res.data);
-                else if (res.error.code === SESSION_LOST) sessionLost = true;
+                ddlLoading = { owner, name };
+                try {
+                  const res = await objectDdlGet(owner, kind as any, name);
+                  if (res.ok) sqlEditor.openWithDdl(`${owner}.${name}`, res.data);
+                  else if (res.error.code === SESSION_LOST) sessionLost = true;
+                } finally {
+                  if (ddlLoading?.owner === owner && ddlLoading?.name === name) ddlLoading = null;
+                }
               }}
             />
           {/if}
@@ -790,6 +798,12 @@
       onOpenBootstrap={() => { showOAuthPanel = false; showOrdsBootstrap = true; }}
     />
   {/if}
+  {#if ddlLoading}
+    <div class="ddl-toast" role="status" aria-live="polite">
+      <span class="ddl-spinner"></span>
+      <span class="ddl-msg">Loading DDL <code>{ddlLoading.owner}.{ddlLoading.name}</code>…</span>
+    </div>
+  {/if}
 {/if}
 
 <style>
@@ -906,5 +920,36 @@
     top: 0; right: 0; bottom: 0;
     z-index: 900;
     box-shadow: -8px 0 24px rgba(0,0,0,0.3);
+  }
+  .ddl-toast {
+    position: fixed; bottom: 24px; right: 24px; z-index: 1100;
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+    font-size: 12px;
+    color: var(--text-primary);
+    animation: ddl-slide-in 200ms cubic-bezier(0.2, 0.9, 0.3, 1.0);
+  }
+  .ddl-msg code {
+    font-family: monospace;
+    color: #7dcfff;
+    background: var(--bg-surface-alt);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+  .ddl-spinner {
+    width: 14px; height: 14px;
+    border: 2px solid var(--border);
+    border-top-color: #f97316;
+    border-radius: 50%;
+    animation: ddl-spin 0.8s linear infinite;
+  }
+  @keyframes ddl-spin { to { transform: rotate(360deg); } }
+  @keyframes ddl-slide-in {
+    from { transform: translateX(20px); opacity: 0; }
+    to   { transform: translateX(0);     opacity: 1; }
   }
 </style>
