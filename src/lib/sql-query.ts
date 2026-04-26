@@ -17,18 +17,38 @@ export type ServerStatementResult =
 
 export type MultiQueryResult = { multi: true; results: ServerStatementResult[] };
 
-export async function queryExecute(sql: string, requestId: string, fetchAll: boolean = false): Promise<Result<QueryResult>> {
+export async function queryExecute(
+  sql: string,
+  requestId: string,
+  fetchAll: boolean = false,
+  acknowledgeUnsafe: boolean = false,
+): Promise<Result<QueryResult>> {
   try {
-    const data = await invoke<QueryResult>("query_execute", { sql, requestId, splitMulti: false, fetchAll });
+    const data = await invoke<QueryResult>("query_execute", {
+      sql,
+      requestId,
+      splitMulti: false,
+      fetchAll,
+      acknowledgeUnsafe,
+    });
     return { ok: true, data };
   } catch (err) {
     return { ok: false, error: err as WorkspaceError };
   }
 }
 
-export async function queryExecuteMulti(sql: string, requestId: string): Promise<Result<MultiQueryResult>> {
+export async function queryExecuteMulti(
+  sql: string,
+  requestId: string,
+  acknowledgeUnsafe: boolean = false,
+): Promise<Result<MultiQueryResult>> {
   try {
-    const data = await invoke<MultiQueryResult>("query_execute", { sql, requestId, splitMulti: true });
+    const data = await invoke<MultiQueryResult>("query_execute", {
+      sql,
+      requestId,
+      splitMulti: true,
+      acknowledgeUnsafe,
+    });
     return { ok: true, data };
   } catch (err) {
     return { ok: false, error: err as WorkspaceError };

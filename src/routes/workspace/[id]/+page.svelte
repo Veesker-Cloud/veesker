@@ -568,6 +568,8 @@
       onSwitchConnection={onSwitchConnection}
       theme={theme.current}
       onToggleTheme={() => theme.toggle()}
+      env={meta.env}
+      readOnly={meta.readOnly ?? false}
     />
     <div class="body" class:body-collapsed={sqlEditor.editorExpanded}>
       <div class="panel-wrap" style="width: {schemaWidth}px; min-width: 160px; max-width: 480px;">

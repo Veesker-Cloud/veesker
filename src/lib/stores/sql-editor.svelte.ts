@@ -82,6 +82,14 @@ type PendingConfirm = {
   resolve: (confirmed: boolean) => void;
 };
 let _pendingConfirm = $state<PendingConfirm | null>(null);
+
+type PendingUnsafeDml = {
+  sql: string;
+  message: string;
+  resolve: (confirmed: boolean) => void;
+};
+let _pendingUnsafeDml = $state<PendingUnsafeDml | null>(null);
+
 let _pendingTx = $state(false);
 let _editorExpanded = $state(false);
 
@@ -219,6 +227,20 @@ function askConfirm(sql: string): true | Promise<boolean> {
   });
 }
 
+const UNSAFE_DML_WARNING_CODE = -32031;
+
+function isUnsafeDmlError(err: { code?: number } | null | undefined): boolean {
+  return !!err && err.code === UNSAFE_DML_WARNING_CODE;
+}
+
+/** Returns true if user clicked Run anyway, false if Cancel. */
+function askUnsafeDml(sql: string, message: string): Promise<boolean> {
+  if (_pendingUnsafeDml !== null) return Promise.resolve(false);
+  return new Promise<boolean>((resolve) => {
+    _pendingUnsafeDml = { sql, message, resolve };
+  });
+}
+
 export const sqlEditor = {
   get tabs() { return _tabs; },
   get activeId() { return _activeId; },
@@ -237,6 +259,14 @@ export const sqlEditor = {
     if (_pendingConfirm) {
       _pendingConfirm.resolve(confirmed);
       _pendingConfirm = null;
+    }
+  },
+
+  get pendingUnsafeDml(): PendingUnsafeDml | null { return _pendingUnsafeDml; },
+  resolveUnsafeDml(confirmed: boolean): void {
+    if (_pendingUnsafeDml) {
+      _pendingUnsafeDml.resolve(confirmed);
+      _pendingUnsafeDml = null;
     }
   },
   get pendingTx() { return _pendingTx; },
@@ -375,7 +405,16 @@ export const sqlEditor = {
     tab.results = [];
     tab.activeResultId = null;
     try {
-      const res = await queryExecute(sql, requestId);
+      let res = await queryExecute(sql, requestId);
+      if (!res.ok && isUnsafeDmlError(res.error)) {
+        const ack = await askUnsafeDml(sql, res.error?.message ?? "");
+        if (!ack) {
+          tab.results = [];
+          tab.activeResultId = null;
+          return;
+        }
+        res = await queryExecute(sql, requestId, false, true);
+      }
       const tabResult: TabResult = {
         id: resultId,
         statementIndex: 0,
@@ -446,7 +485,16 @@ export const sqlEditor = {
     tab.activeResultId = null;
 
     try {
-      const res = await queryExecuteMulti(sql, requestId);
+      let res = await queryExecuteMulti(sql, requestId);
+      if (!res.ok && isUnsafeDmlError(res.error)) {
+        const ack = await askUnsafeDml(sql, res.error?.message ?? "");
+        if (!ack) {
+          tab.results = [];
+          tab.activeResultId = null;
+          return;
+        }
+        res = await queryExecuteMulti(sql, requestId, true);
+      }
       if (!res.ok) {
         // Server-side error (e.g. splitter error from sidecar, or session lost)
         const errMsg = res.error?.message ?? "Unknown error";
@@ -575,7 +623,16 @@ export const sqlEditor = {
     tab.results = [];
     tab.activeResultId = null;
     try {
-      const res = await queryExecute(sql, requestId);
+      let res = await queryExecute(sql, requestId);
+      if (!res.ok && isUnsafeDmlError(res.error)) {
+        const ack = await askUnsafeDml(sql, res.error?.message ?? "");
+        if (!ack) {
+          tab.results = [];
+          tab.activeResultId = null;
+          return;
+        }
+        res = await queryExecute(sql, requestId, false, true);
+      }
       const tabResult: TabResult = {
         id: resultId,
         statementIndex: 0,
@@ -661,7 +718,16 @@ export const sqlEditor = {
     tab.results = [];
     tab.activeResultId = null;
     try {
-      const res = await queryExecute(sqlToRun, requestId);
+      let res = await queryExecute(sqlToRun, requestId);
+      if (!res.ok && isUnsafeDmlError(res.error)) {
+        const ack = await askUnsafeDml(sqlToRun, res.error?.message ?? "");
+        if (!ack) {
+          tab.results = [];
+          tab.activeResultId = null;
+          return;
+        }
+        res = await queryExecute(sqlToRun, requestId, false, true);
+      }
       const tabResult: TabResult = {
         id: resultId,
         statementIndex: 0,

@@ -1,5 +1,5 @@
 import type oracledb from "oracledb";
-import type { OpenSessionParams } from "./oracle";
+import type { ConnectionSafety, OpenSessionParams } from "./oracle";
 import { RpcCodedError, NO_ACTIVE_SESSION } from "./errors";
 
 let currentSession: oracledb.Connection | null = null;
@@ -13,6 +13,7 @@ export function setSession(conn: oracledb.Connection, schema: string): void {
 export function clearSession(): void {
   currentSession = null;
   currentSchema = null;
+  _sessionSafety = {};
 }
 
 export function getActiveSession(): oracledb.Connection {
@@ -34,6 +35,7 @@ export function getCurrentSchema(): string | null {
 }
 
 let _sessionParams: OpenSessionParams | null = null;
+let _sessionSafety: ConnectionSafety = {};
 
 export function setSessionParams(p: OpenSessionParams): void {
   _sessionParams = p;
@@ -41,6 +43,14 @@ export function setSessionParams(p: OpenSessionParams): void {
 
 export function getSessionParams(): OpenSessionParams | null {
   return _sessionParams;
+}
+
+export function setSessionSafety(s: ConnectionSafety): void {
+  _sessionSafety = s ?? {};
+}
+
+export function getSessionSafety(): ConnectionSafety {
+  return _sessionSafety;
 }
 
 // Serializes openSession/closeSession across the process so concurrent

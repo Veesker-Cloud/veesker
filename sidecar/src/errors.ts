@@ -6,6 +6,9 @@ export const SESSION_LOST      = -32011;
 export const OBJECT_NOT_FOUND  = -32012;
 export const ORACLE_ERR        = -32013;
 export const SPLITTER_ERROR    = -32014;
+// Connection refused the statement because of a per-connection safety guard.
+export const READ_ONLY_BLOCKED  = -32030;
+export const UNSAFE_DML_WARNING = -32031;
 
 // Domain code for user-initiated query cancellation.
 // Intentionally outside the JSON-RPC reserved range.

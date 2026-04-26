@@ -4,6 +4,7 @@
   import { visualFlow } from "$lib/stores/visual-flow.svelte";
   import SqlEditor from "./SqlEditor.svelte";
   import DmlConfirmModal from "./DmlConfirmModal.svelte";
+  import UnsafeDmlModal from "./UnsafeDmlModal.svelte";
   import ResultGrid from "./ResultGrid.svelte";
   import ExecutionLog from "./ExecutionLog.svelte";
   import QueryHistory from "./QueryHistory.svelte";
@@ -423,6 +424,14 @@
       ops={sqlEditor.pendingConfirm.ops}
       onConfirm={() => sqlEditor.confirmRun(true)}
       onCancel={() => sqlEditor.confirmRun(false)}
+    />
+  {/if}
+  {#if sqlEditor.pendingUnsafeDml}
+    <UnsafeDmlModal
+      sql={sqlEditor.pendingUnsafeDml.sql}
+      message={sqlEditor.pendingUnsafeDml.message}
+      onConfirm={() => sqlEditor.resolveUnsafeDml(true)}
+      onCancel={() => sqlEditor.resolveUnsafeDml(false)}
     />
   {/if}
 {/if}

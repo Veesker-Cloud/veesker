@@ -10,6 +10,20 @@ use super::{history, secrets, store, tnsnames, wallet};
 use store::{AuthType, ConnectionRow, StoreError};
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionSafety {
+    /// "dev" | "staging" | "prod" | None
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub env: Option<String>,
+    pub read_only: bool,
+    /// per-statement timeout in milliseconds (None / 0 = no timeout)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub statement_timeout_ms: Option<u32>,
+    /// when true, warn before DML without WHERE
+    pub warn_unsafe_dml: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
 #[serde(tag = "authType")]
 pub enum ConnectionMeta {
     #[serde(rename = "basic", rename_all = "camelCase")]
@@ -22,6 +36,8 @@ pub enum ConnectionMeta {
         username: String,
         created_at: String,
         updated_at: String,
+        #[serde(flatten)]
+        safety: ConnectionSafety,
     },
     #[serde(rename = "wallet", rename_all = "camelCase")]
     Wallet {
@@ -31,12 +47,20 @@ pub enum ConnectionMeta {
         username: String,
         created_at: String,
         updated_at: String,
+        #[serde(flatten)]
+        safety: ConnectionSafety,
     },
 }
 
 impl TryFrom<ConnectionRow> for ConnectionMeta {
     type Error = ConnectionError;
     fn try_from(r: ConnectionRow) -> Result<Self, ConnectionError> {
+        let safety = ConnectionSafety {
+            env: r.env.clone(),
+            read_only: r.read_only,
+            statement_timeout_ms: r.statement_timeout_ms,
+            warn_unsafe_dml: r.warn_unsafe_dml,
+        };
         match r.auth_type {
             AuthType::Basic => Ok(ConnectionMeta::Basic {
                 id: r.id,
@@ -53,6 +77,7 @@ impl TryFrom<ConnectionRow> for ConnectionMeta {
                 username: r.username,
                 created_at: r.created_at,
                 updated_at: r.updated_at,
+                safety,
             }),
             AuthType::Wallet => Ok(ConnectionMeta::Wallet {
                 id: r.id,
@@ -63,6 +88,7 @@ impl TryFrom<ConnectionRow> for ConnectionMeta {
                 username: r.username,
                 created_at: r.created_at,
                 updated_at: r.updated_at,
+                safety,
             }),
         }
     }
@@ -77,6 +103,15 @@ pub struct ConnectionFull {
     pub wallet_password_set: Option<bool>,
 }
 
+#[derive(Debug, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ConnectionSafetyInput {
+    pub env: Option<String>,
+    pub read_only: bool,
+    pub statement_timeout_ms: Option<u32>,
+    pub warn_unsafe_dml: bool,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(tag = "authType")]
 pub enum ConnectionInput {
@@ -89,6 +124,8 @@ pub enum ConnectionInput {
         service_name: String,
         username: String,
         password: String,
+        #[serde(default)]
+        safety: ConnectionSafetyInput,
     },
     #[serde(rename = "wallet", rename_all = "camelCase")]
     Wallet {
@@ -99,7 +136,20 @@ pub enum ConnectionInput {
         connect_alias: String,
         username: String,
         password: String,
+        #[serde(default)]
+        safety: ConnectionSafetyInput,
     },
+}
+
+fn validate_env(env: &Option<String>) -> Result<(), ConnectionError> {
+    if let Some(e) = env {
+        if !matches!(e.as_str(), "dev" | "staging" | "prod") {
+            return Err(ConnectionError::invalid(
+                "env must be 'dev', 'staging', or 'prod'",
+            ));
+        }
+    }
+    Ok(())
 }
 
 #[derive(Debug, Serialize)]
@@ -246,7 +296,7 @@ impl ConnectionService {
     /// for the saved connection identified by `id`. Reads passwords directly
     /// from the OS keychain — they are never stored in `ConnectionFull`.
     pub fn sidecar_params(&self, id: &str) -> Result<serde_json::Value, ConnectionError> {
-        use super::connection_config::{basic_params, wallet_params};
+        use super::connection_config::{basic_params_with_safety, wallet_params_with_safety};
         let row = {
             let conn = self.lock()?;
             store::get(&conn, id)?.ok_or_else(ConnectionError::not_found)?
@@ -269,18 +319,21 @@ impl ConnectionService {
                 port,
                 service_name,
                 username,
+                safety,
                 ..
-            } => Ok(basic_params(
+            } => Ok(basic_params_with_safety(
                 &host,
                 port,
                 &service_name,
                 &username,
                 &password,
+                &safety,
             )),
             ConnectionMeta::Wallet {
                 connect_alias,
                 username,
                 id: meta_id,
+                safety,
                 ..
             } => {
                 let wallet_password = match secrets::get_wallet_password(&row_id) {
@@ -292,12 +345,13 @@ impl ConnectionService {
                 };
                 let _ = auth;
                 let dir = self.wallet_dir(&meta_id);
-                Ok(wallet_params(
+                Ok(wallet_params_with_safety(
                     &dir,
                     &wallet_password,
                     &connect_alias,
                     &username,
                     &password,
+                    &safety,
                 ))
             }
         }
@@ -314,6 +368,7 @@ impl ConnectionService {
                 service_name,
                 username,
                 password,
+                safety,
             } => {
                 if name.trim().is_empty() {
                     return Err(ConnectionError::invalid("name is required"));
@@ -327,6 +382,7 @@ impl ConnectionService {
                 if password.is_empty() && id.is_none() {
                     return Err(ConnectionError::invalid("password is required"));
                 }
+                validate_env(&safety.env)?;
                 let row = self.assemble_basic_row(
                     id.as_deref(),
                     name,
@@ -335,6 +391,7 @@ impl ConnectionService {
                     service_name,
                     username,
                     &now,
+                    safety,
                 )?;
                 self.persist_row(&row, id.is_some())?;
                 if !password.is_empty() {
@@ -350,6 +407,7 @@ impl ConnectionService {
                 connect_alias,
                 username,
                 password,
+                safety,
             } => {
                 if name.trim().is_empty() {
                     return Err(ConnectionError::invalid("name is required"));
@@ -366,12 +424,14 @@ impl ConnectionService {
                 if connect_alias.trim().is_empty() {
                     return Err(ConnectionError::invalid("connect alias is required"));
                 }
+                validate_env(&safety.env)?;
                 let row = self.assemble_wallet_row(
                     id.as_deref(),
                     name,
                     connect_alias.clone(),
                     username,
                     &now,
+                    safety,
                 )?;
 
                 let wallet_dir = self.wallet_dir(&row.id);
@@ -434,6 +494,7 @@ impl ConnectionService {
         service_name: String,
         username: String,
         now: &str,
+        safety: ConnectionSafetyInput,
     ) -> Result<ConnectionRow, ConnectionError> {
         match id {
             None => Ok(ConnectionRow {
@@ -447,6 +508,10 @@ impl ConnectionService {
                 username,
                 created_at: now.into(),
                 updated_at: now.into(),
+                env: safety.env,
+                read_only: safety.read_only,
+                statement_timeout_ms: safety.statement_timeout_ms,
+                warn_unsafe_dml: safety.warn_unsafe_dml,
             }),
             Some(id) => {
                 let existing = {
@@ -469,6 +534,10 @@ impl ConnectionService {
                     username,
                     created_at: existing.created_at,
                     updated_at: now.into(),
+                    env: safety.env,
+                    read_only: safety.read_only,
+                    statement_timeout_ms: safety.statement_timeout_ms,
+                    warn_unsafe_dml: safety.warn_unsafe_dml,
                 })
             }
         }
@@ -481,6 +550,7 @@ impl ConnectionService {
         connect_alias: String,
         username: String,
         now: &str,
+        safety: ConnectionSafetyInput,
     ) -> Result<ConnectionRow, ConnectionError> {
         match id {
             None => Ok(ConnectionRow {
@@ -494,6 +564,10 @@ impl ConnectionService {
                 username,
                 created_at: now.into(),
                 updated_at: now.into(),
+                env: safety.env,
+                read_only: safety.read_only,
+                statement_timeout_ms: safety.statement_timeout_ms,
+                warn_unsafe_dml: safety.warn_unsafe_dml,
             }),
             Some(id) => {
                 let existing = {
@@ -516,6 +590,10 @@ impl ConnectionService {
                     username,
                     created_at: existing.created_at,
                     updated_at: now.into(),
+                    env: safety.env,
+                    read_only: safety.read_only,
+                    statement_timeout_ms: safety.statement_timeout_ms,
+                    warn_unsafe_dml: safety.warn_unsafe_dml,
                 })
             }
         }

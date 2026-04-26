@@ -40,6 +40,14 @@ pub struct ConnectionRow {
     pub username: String,
     pub created_at: String,
     pub updated_at: String,
+    /// dev / staging / prod / null
+    pub env: Option<String>,
+    /// when true, sidecar refuses DML/DDL on this connection
+    pub read_only: bool,
+    /// when set, oracledb.callTimeout for the session (ms); 0/None = unlimited
+    pub statement_timeout_ms: Option<u32>,
+    /// when true, sidecar warns before UPDATE/DELETE without WHERE
+    pub warn_unsafe_dml: bool,
 }
 
 #[derive(Debug)]
@@ -57,17 +65,25 @@ impl From<rusqlite::Error> for StoreError {
 
 const CREATE_CURRENT_SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS connections (
-    id            TEXT PRIMARY KEY,
-    name          TEXT NOT NULL,
-    auth_type     TEXT NOT NULL DEFAULT 'basic'
-                    CHECK (auth_type IN ('basic', 'wallet')),
-    host          TEXT,
-    port          INTEGER,
-    service_name  TEXT,
-    connect_alias TEXT,
-    username      TEXT NOT NULL,
-    created_at    TEXT NOT NULL,
-    updated_at    TEXT NOT NULL
+    id                   TEXT PRIMARY KEY,
+    name                 TEXT NOT NULL,
+    auth_type            TEXT NOT NULL DEFAULT 'basic'
+                           CHECK (auth_type IN ('basic', 'wallet')),
+    host                 TEXT,
+    port                 INTEGER,
+    service_name         TEXT,
+    connect_alias        TEXT,
+    username             TEXT NOT NULL,
+    created_at           TEXT NOT NULL,
+    updated_at           TEXT NOT NULL,
+    env                  TEXT
+                           CHECK (env IS NULL OR env IN ('dev', 'staging', 'prod')),
+    read_only            INTEGER NOT NULL DEFAULT 0
+                           CHECK (read_only IN (0, 1)),
+    statement_timeout_ms INTEGER
+                           CHECK (statement_timeout_ms IS NULL OR statement_timeout_ms >= 0),
+    warn_unsafe_dml      INTEGER NOT NULL DEFAULT 0
+                           CHECK (warn_unsafe_dml IN (0, 1))
 );
 CREATE UNIQUE INDEX IF NOT EXISTS connections_name_unique
     ON connections (LOWER(name));
@@ -76,21 +92,31 @@ CREATE UNIQUE INDEX IF NOT EXISTS connections_name_unique
 const MIGRATE_LEGACY_TO_CURRENT: &str = r#"
 BEGIN;
 CREATE TABLE connections_new (
-    id            TEXT PRIMARY KEY,
-    name          TEXT NOT NULL,
-    auth_type     TEXT NOT NULL DEFAULT 'basic'
-                    CHECK (auth_type IN ('basic', 'wallet')),
-    host          TEXT,
-    port          INTEGER,
-    service_name  TEXT,
-    connect_alias TEXT,
-    username      TEXT NOT NULL,
-    created_at    TEXT NOT NULL,
-    updated_at    TEXT NOT NULL
+    id                   TEXT PRIMARY KEY,
+    name                 TEXT NOT NULL,
+    auth_type            TEXT NOT NULL DEFAULT 'basic'
+                           CHECK (auth_type IN ('basic', 'wallet')),
+    host                 TEXT,
+    port                 INTEGER,
+    service_name         TEXT,
+    connect_alias        TEXT,
+    username             TEXT NOT NULL,
+    created_at           TEXT NOT NULL,
+    updated_at           TEXT NOT NULL,
+    env                  TEXT
+                           CHECK (env IS NULL OR env IN ('dev', 'staging', 'prod')),
+    read_only            INTEGER NOT NULL DEFAULT 0
+                           CHECK (read_only IN (0, 1)),
+    statement_timeout_ms INTEGER
+                           CHECK (statement_timeout_ms IS NULL OR statement_timeout_ms >= 0),
+    warn_unsafe_dml      INTEGER NOT NULL DEFAULT 0
+                           CHECK (warn_unsafe_dml IN (0, 1))
 );
 INSERT INTO connections_new
-    (id, name, auth_type, host, port, service_name, connect_alias, username, created_at, updated_at)
-    SELECT id, name, 'basic', host, port, service_name, NULL, username, created_at, updated_at
+    (id, name, auth_type, host, port, service_name, connect_alias, username, created_at, updated_at,
+     env, read_only, statement_timeout_ms, warn_unsafe_dml)
+    SELECT id, name, 'basic', host, port, service_name, NULL, username, created_at, updated_at,
+           NULL, 0, NULL, 0
     FROM connections;
 DROP TABLE connections;
 ALTER TABLE connections_new RENAME TO connections;
@@ -98,6 +124,36 @@ DROP INDEX IF EXISTS connections_name_unique;
 CREATE UNIQUE INDEX connections_name_unique ON connections (LOWER(name));
 COMMIT;
 "#;
+
+/// Add the four safety columns to a v2-shaped table (post-MIGRATE_LEGACY but
+/// before this iteration). Idempotent: only adds the columns that are missing.
+fn add_safety_columns_if_missing(conn: &Connection) -> rusqlite::Result<()> {
+    if !has_column(conn, "connections", "env")? {
+        conn.execute_batch(
+            "ALTER TABLE connections ADD COLUMN env TEXT \
+               CHECK (env IS NULL OR env IN ('dev', 'staging', 'prod'));",
+        )?;
+    }
+    if !has_column(conn, "connections", "read_only")? {
+        conn.execute_batch(
+            "ALTER TABLE connections ADD COLUMN read_only INTEGER NOT NULL DEFAULT 0 \
+               CHECK (read_only IN (0, 1));",
+        )?;
+    }
+    if !has_column(conn, "connections", "statement_timeout_ms")? {
+        conn.execute_batch(
+            "ALTER TABLE connections ADD COLUMN statement_timeout_ms INTEGER \
+               CHECK (statement_timeout_ms IS NULL OR statement_timeout_ms >= 0);",
+        )?;
+    }
+    if !has_column(conn, "connections", "warn_unsafe_dml")? {
+        conn.execute_batch(
+            "ALTER TABLE connections ADD COLUMN warn_unsafe_dml INTEGER NOT NULL DEFAULT 0 \
+               CHECK (warn_unsafe_dml IN (0, 1));",
+        )?;
+    }
+    Ok(())
+}
 
 fn has_column(conn: &Connection, table: &str, column: &str) -> rusqlite::Result<bool> {
     let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})"))?;
@@ -118,14 +174,17 @@ pub fn init_db(conn: &Connection) -> Result<(), StoreError> {
     } else {
         conn.execute_batch(CREATE_CURRENT_SCHEMA)?;
     }
+    // Safety columns added after auth_type — bring older v2 schemas forward.
+    add_safety_columns_if_missing(conn)?;
     Ok(())
 }
 
 pub fn create(conn: &Connection, row: &ConnectionRow) -> Result<(), StoreError> {
     let res = conn.execute(
         "INSERT INTO connections \
-         (id, name, auth_type, host, port, service_name, connect_alias, username, created_at, updated_at) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+         (id, name, auth_type, host, port, service_name, connect_alias, username, created_at, updated_at, \
+          env, read_only, statement_timeout_ms, warn_unsafe_dml) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         params![
             row.id,
             row.name,
@@ -136,7 +195,11 @@ pub fn create(conn: &Connection, row: &ConnectionRow) -> Result<(), StoreError> 
             row.connect_alias,
             row.username,
             row.created_at,
-            row.updated_at
+            row.updated_at,
+            row.env,
+            row.read_only as i32,
+            row.statement_timeout_ms,
+            row.warn_unsafe_dml as i32,
         ],
     );
     match res {
@@ -166,14 +229,20 @@ fn map_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ConnectionRow> {
         username: row.get(7)?,
         created_at: row.get(8)?,
         updated_at: row.get(9)?,
+        env: row.get(10)?,
+        read_only: row.get::<_, i64>(11)? != 0,
+        statement_timeout_ms: row.get::<_, Option<i64>>(12)?.map(|n| n as u32),
+        warn_unsafe_dml: row.get::<_, i64>(13)? != 0,
     })
 }
 
+const SELECT_COLS: &str =
+    "id, name, auth_type, host, port, service_name, connect_alias, username, created_at, updated_at, \
+     env, read_only, statement_timeout_ms, warn_unsafe_dml";
+
 pub fn list(conn: &Connection) -> Result<Vec<ConnectionRow>, StoreError> {
-    let mut stmt = conn.prepare(
-        "SELECT id, name, auth_type, host, port, service_name, connect_alias, username, created_at, updated_at \
-         FROM connections ORDER BY LOWER(name)",
-    )?;
+    let sql = format!("SELECT {SELECT_COLS} FROM connections ORDER BY LOWER(name)");
+    let mut stmt = conn.prepare(&sql)?;
     let rows = stmt
         .query_map([], map_row)?
         .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -181,10 +250,8 @@ pub fn list(conn: &Connection) -> Result<Vec<ConnectionRow>, StoreError> {
 }
 
 pub fn get(conn: &Connection, id: &str) -> Result<Option<ConnectionRow>, StoreError> {
-    let mut stmt = conn.prepare(
-        "SELECT id, name, auth_type, host, port, service_name, connect_alias, username, created_at, updated_at \
-         FROM connections WHERE id = ?",
-    )?;
+    let sql = format!("SELECT {SELECT_COLS} FROM connections WHERE id = ?");
+    let mut stmt = conn.prepare(&sql)?;
     let row = stmt.query_row(params![id], map_row).optional()?;
     Ok(row)
 }
@@ -193,7 +260,9 @@ pub fn update(conn: &Connection, row: &ConnectionRow) -> Result<(), StoreError> 
     let res = conn.execute(
         "UPDATE connections SET \
          name = ?, auth_type = ?, host = ?, port = ?, service_name = ?, \
-         connect_alias = ?, username = ?, updated_at = ? WHERE id = ?",
+         connect_alias = ?, username = ?, updated_at = ?, \
+         env = ?, read_only = ?, statement_timeout_ms = ?, warn_unsafe_dml = ? \
+         WHERE id = ?",
         params![
             row.name,
             row.auth_type.as_db_str(),
@@ -203,6 +272,10 @@ pub fn update(conn: &Connection, row: &ConnectionRow) -> Result<(), StoreError> 
             row.connect_alias,
             row.username,
             row.updated_at,
+            row.env,
+            row.read_only as i32,
+            row.statement_timeout_ms,
+            row.warn_unsafe_dml as i32,
             row.id
         ],
     );
@@ -252,6 +325,10 @@ mod tests {
             username: "pdbadmin".into(),
             created_at: "2026-04-20T00:00:00Z".into(),
             updated_at: "2026-04-20T00:00:00Z".into(),
+            env: None,
+            read_only: false,
+            statement_timeout_ms: None,
+            warn_unsafe_dml: false,
         }
     }
 
@@ -407,6 +484,10 @@ mod tests {
             username: "admin".into(),
             created_at: "2026-04-21T00:00:00Z".into(),
             updated_at: "2026-04-21T00:00:00Z".into(),
+            env: None,
+            read_only: false,
+            statement_timeout_ms: None,
+            warn_unsafe_dml: false,
         };
         create(&c, &row).unwrap();
         let got = get(&c, "w1").unwrap().unwrap();
@@ -414,5 +495,77 @@ mod tests {
         assert_eq!(got.connect_alias.as_deref(), Some("mydb_high"));
         assert!(got.host.is_none());
         assert!(got.port.is_none());
+    }
+
+    #[test]
+    fn safety_fields_round_trip() {
+        let c = fresh();
+        let mut row = sample("s1", "Safe");
+        row.env = Some("prod".into());
+        row.read_only = true;
+        row.statement_timeout_ms = Some(30_000);
+        row.warn_unsafe_dml = true;
+        create(&c, &row).unwrap();
+        let got = get(&c, "s1").unwrap().unwrap();
+        assert_eq!(got.env.as_deref(), Some("prod"));
+        assert!(got.read_only);
+        assert_eq!(got.statement_timeout_ms, Some(30_000));
+        assert!(got.warn_unsafe_dml);
+    }
+
+    #[test]
+    fn migration_adds_safety_columns_to_v2_schema() {
+        // Simulate a DB that already migrated to auth_type but predates safety columns.
+        let c = Connection::open_in_memory().unwrap();
+        c.execute_batch(
+            "CREATE TABLE connections (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                auth_type TEXT NOT NULL DEFAULT 'basic'
+                  CHECK (auth_type IN ('basic', 'wallet')),
+                host TEXT,
+                port INTEGER,
+                service_name TEXT,
+                connect_alias TEXT,
+                username TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE UNIQUE INDEX connections_name_unique ON connections (LOWER(name));
+            INSERT INTO connections (id, name, auth_type, host, port, service_name, username, created_at, updated_at)
+                VALUES ('v2-1', 'V2', 'basic', 'h', 1521, 'svc', 'u', '2026-04-22T00:00:00Z', '2026-04-22T00:00:00Z');",
+        )
+        .unwrap();
+
+        init_db(&c).unwrap();
+
+        let row = get(&c, "v2-1").unwrap().unwrap();
+        assert_eq!(row.env, None);
+        assert!(!row.read_only);
+        assert_eq!(row.statement_timeout_ms, None);
+        assert!(!row.warn_unsafe_dml);
+    }
+
+    #[test]
+    fn safety_fields_default_to_safe_on_create() {
+        let c = fresh();
+        create(&c, &sample("a", "Alpha")).unwrap();
+        let got = get(&c, "a").unwrap().unwrap();
+        assert_eq!(got.env, None);
+        assert!(!got.read_only);
+        assert_eq!(got.statement_timeout_ms, None);
+        assert!(!got.warn_unsafe_dml);
+    }
+
+    #[test]
+    fn invalid_env_value_rejected() {
+        let c = fresh();
+        let mut row = sample("a", "Alpha");
+        row.env = Some("production".into()); // not in CHECK list
+        // SQLite CHECK violation surfaces as ConstraintViolation, which our
+        // create() helper currently maps to Conflict (originally meant for the
+        // unique-name index). Either variant is acceptable — the point is that
+        // an invalid env value cannot be persisted.
+        assert!(create(&c, &row).is_err());
     }
 }

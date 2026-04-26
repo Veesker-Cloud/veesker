@@ -1,6 +1,23 @@
 use serde_json::{json, Value};
 use std::path::Path;
 
+use super::connections::ConnectionSafety;
+
+fn merge_safety(mut base: Value, safety: Option<&ConnectionSafety>) -> Value {
+    if let Some(s) = safety {
+        let obj = base.as_object_mut().expect("base params object");
+        if let Some(env) = &s.env {
+            obj.insert("env".into(), Value::String(env.clone()));
+        }
+        obj.insert("readOnly".into(), Value::Bool(s.read_only));
+        if let Some(ms) = s.statement_timeout_ms {
+            obj.insert("statementTimeoutMs".into(), Value::Number(ms.into()));
+        }
+        obj.insert("warnUnsafeDml".into(), Value::Bool(s.warn_unsafe_dml));
+    }
+    base
+}
+
 pub fn basic_params(
     host: &str,
     port: u16,
@@ -18,6 +35,20 @@ pub fn basic_params(
     })
 }
 
+pub fn basic_params_with_safety(
+    host: &str,
+    port: u16,
+    service_name: &str,
+    username: &str,
+    password: &str,
+    safety: &ConnectionSafety,
+) -> Value {
+    merge_safety(
+        basic_params(host, port, service_name, username, password),
+        Some(safety),
+    )
+}
+
 pub fn wallet_params(
     wallet_dir: &Path,
     wallet_password: &str,
@@ -33,6 +64,20 @@ pub fn wallet_params(
         "username": username,
         "password": password,
     })
+}
+
+pub fn wallet_params_with_safety(
+    wallet_dir: &Path,
+    wallet_password: &str,
+    connect_alias: &str,
+    username: &str,
+    password: &str,
+    safety: &ConnectionSafety,
+) -> Value {
+    merge_safety(
+        wallet_params(wallet_dir, wallet_password, connect_alias, username, password),
+        Some(safety),
+    )
 }
 
 #[cfg(test)]

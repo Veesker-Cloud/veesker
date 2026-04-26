@@ -1,7 +1,29 @@
 import { invoke } from "@tauri-apps/api/core";
 
+export type ConnectionEnv = "dev" | "staging" | "prod";
+
+export type ConnectionSafety = {
+  /** "dev" | "staging" | "prod" — undefined = unspecified */
+  env?: ConnectionEnv;
+  /** when true, sidecar refuses DML/DDL on this connection */
+  readOnly: boolean;
+  /** per-statement timeout (ms); undefined / 0 = unlimited */
+  statementTimeoutMs?: number;
+  /** when true, warn before UPDATE/DELETE without WHERE */
+  warnUnsafeDml: boolean;
+};
+
+export const DEFAULT_SAFETY: ConnectionSafety = {
+  env: undefined,
+  readOnly: false,
+  statementTimeoutMs: undefined,
+  warnUnsafeDml: false,
+};
+
+type SafetyFields = ConnectionSafety;
+
 export type ConnectionMeta =
-  | {
+  | ({
       authType: "basic";
       id: string;
       name: string;
@@ -11,8 +33,8 @@ export type ConnectionMeta =
       username: string;
       createdAt: string;
       updatedAt: string;
-    }
-  | {
+    } & SafetyFields)
+  | ({
       authType: "wallet";
       id: string;
       name: string;
@@ -20,7 +42,7 @@ export type ConnectionMeta =
       username: string;
       createdAt: string;
       updatedAt: string;
-    };
+    } & SafetyFields);
 
 export type ConnectionFull = {
   meta: ConnectionMeta;
@@ -38,6 +60,7 @@ export type ConnectionInput =
       serviceName: string;
       username: string;
       password: string;
+      safety?: ConnectionSafety;
     }
   | {
       authType: "wallet";
@@ -48,6 +71,7 @@ export type ConnectionInput =
       connectAlias: string;
       username: string;
       password: string;
+      safety?: ConnectionSafety;
     };
 
 export type WalletInfo = { aliases: string[] };

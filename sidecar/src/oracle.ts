@@ -185,6 +185,14 @@ function decorateOracleError(err: unknown): Error {
   return err instanceof Error ? err : new Error(String(err));
 }
 
+export type ConnectionSafety = {
+  env?: "dev" | "staging" | "prod";
+  readOnly?: boolean;
+  /** Per-statement timeout (ms). 0 / undefined = unlimited. */
+  statementTimeoutMs?: number;
+  warnUnsafeDml?: boolean;
+};
+
 export type ConnectionTestParams =
   | {
       authType: "basic";
@@ -193,6 +201,11 @@ export type ConnectionTestParams =
       serviceName: string;
       username: string;
       password: string;
+      // Safety fields (flattened) — present on saved-connection params, absent on test
+      env?: "dev" | "staging" | "prod";
+      readOnly?: boolean;
+      statementTimeoutMs?: number;
+      warnUnsafeDml?: boolean;
     }
   | {
       authType: "wallet";
@@ -201,7 +214,20 @@ export type ConnectionTestParams =
       connectAlias: string;
       username: string;
       password: string;
+      env?: "dev" | "staging" | "prod";
+      readOnly?: boolean;
+      statementTimeoutMs?: number;
+      warnUnsafeDml?: boolean;
     };
+
+function safetyFromParams(p: ConnectionTestParams): ConnectionSafety {
+  return {
+    env: p.env,
+    readOnly: p.readOnly === true,
+    statementTimeoutMs: p.statementTimeoutMs,
+    warnUnsafeDml: p.warnUnsafeDml === true,
+  };
+}
 
 export type ConnectionTestResult = {
   ok: true;
@@ -252,8 +278,24 @@ export async function connectionTest(
   }
 }
 
-import { setSession, clearSession, hasSession, getActiveSession, setSessionParams, withSessionLock } from "./state";
-import { RpcCodedError, SESSION_LOST, ORACLE_ERR } from "./errors";
+import {
+  setSession,
+  clearSession,
+  hasSession,
+  getActiveSession,
+  setSessionParams,
+  setSessionSafety,
+  getSessionSafety,
+  withSessionLock,
+} from "./state";
+import {
+  RpcCodedError,
+  SESSION_LOST,
+  ORACLE_ERR,
+  READ_ONLY_BLOCKED,
+  UNSAFE_DML_WARNING,
+} from "./errors";
+import { classifySql, isReadOnlySafe, isUnsafeBulkDml } from "./sql-kind";
 
 export type OpenSessionParams = ConnectionTestParams;
 export type OpenSessionResult = { serverVersion: string; currentSchema: string };
@@ -310,6 +352,18 @@ export async function openSession(p: OpenSessionParams): Promise<OpenSessionResu
 
     const conn = await buildConnection(p);
     try {
+      const safety = safetyFromParams(p);
+      // Apply per-statement timeout. Setting to 0 means no timeout (oracledb default).
+      // We only set if > 0, so existing sessions are unaffected.
+      if (typeof safety.statementTimeoutMs === "number" && safety.statementTimeoutMs > 0) {
+        try {
+          (conn as any).callTimeout = safety.statementTimeoutMs;
+        } catch (e) {
+          // Non-fatal: log but proceed. Old oracledb versions may not have callTimeout.
+          console.error("[oracle] failed to apply callTimeout", e);
+        }
+      }
+
       const versionRes = await conn.execute<{ V: string }>(
         "SELECT BANNER_FULL AS V FROM V$VERSION WHERE ROWNUM = 1",
         [],
@@ -324,6 +378,7 @@ export async function openSession(p: OpenSessionParams): Promise<OpenSessionResu
       const currentSchema = schemaRes.rows?.[0]?.S ?? p.username.toUpperCase();
       setSession(conn, currentSchema);
       setSessionParams(p);
+      setSessionSafety(safety);
       return { serverVersion, currentSchema };
     } catch (err) {
       // Failed during the version/schema bootstrap — clean up the half-open session.
@@ -682,7 +737,41 @@ async function executeSingleStatement(
   return { columns, rows, rowCount, elapsedMs };
 }
 
-export async function queryExecute(p: { sql: string; requestId?: string; splitMulti?: boolean; fetchAll?: boolean }): Promise<QueryResult | MultiQueryResult> {
+/**
+ * Apply the read-only and unsafe-DML guards to a single statement.
+ * Throws RpcCodedError on block, returns void on pass.
+ *
+ * - acknowledgeUnsafe=true bypasses the unsafe-DML warning (caller already saw it).
+ * - Read-only is never bypassed — caller must edit the connection.
+ */
+function enforceSafetyForStatement(sql: string, opts: { acknowledgeUnsafe?: boolean } = {}): void {
+  const safety = getSessionSafety();
+  const kind = classifySql(sql);
+
+  if (safety.readOnly === true && !isReadOnlySafe(kind)) {
+    throw new RpcCodedError(
+      READ_ONLY_BLOCKED,
+      `This connection is read-only — ${kind.toUpperCase()} statements are blocked. ` +
+        `Edit the connection to disable read-only mode if you need to run ${kind.toUpperCase()}.`
+    );
+  }
+
+  if (safety.warnUnsafeDml === true && !opts.acknowledgeUnsafe && isUnsafeBulkDml(sql)) {
+    throw new RpcCodedError(
+      UNSAFE_DML_WARNING,
+      "This UPDATE/DELETE has no WHERE clause and will affect ALL rows. " +
+        "Confirm you want to run it (the IDE will show a warning modal)."
+    );
+  }
+}
+
+export async function queryExecute(p: {
+  sql: string;
+  requestId?: string;
+  splitMulti?: boolean;
+  fetchAll?: boolean;
+  acknowledgeUnsafe?: boolean;
+}): Promise<QueryResult | MultiQueryResult> {
   if (_running !== null) {
     throw new RpcCodedError(ORACLE_ERR, "Another query is already running on this connection");
   }
@@ -700,6 +789,12 @@ export async function queryExecute(p: { sql: string; requestId?: string; splitMu
       }
       if (statements.length === 0) {
         return { multi: true, results: [] };
+      }
+
+      // Enforce read-only / unsafe-DML BEFORE we run anything: if the batch
+      // contains a forbidden statement, bail out cleanly so we don't half-execute.
+      for (const stmt of statements) {
+        enforceSafetyForStatement(stmt, { acknowledgeUnsafe: p.acknowledgeUnsafe });
       }
 
       const collected: ServerStatementResult[] = [];
@@ -763,6 +858,7 @@ export async function queryExecute(p: { sql: string; requestId?: string; splitMu
 
   // ── Single-statement path (default, back-compat) ──────────────────────────
   try {
+    enforceSafetyForStatement(p.sql, { acknowledgeUnsafe: p.acknowledgeUnsafe });
     return await withActiveSession(async (conn) => {
       return executeSingleStatement(conn, p.sql, requestId, p.fetchAll === true);
     });

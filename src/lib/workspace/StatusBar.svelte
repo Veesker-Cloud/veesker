@@ -14,12 +14,15 @@
     onSwitchConnection: () => void;
     theme?: "light" | "dark";
     onToggleTheme?: () => void;
+    env?: "dev" | "staging" | "prod";
+    readOnly?: boolean;
   };
   let {
     connectionName, userLabel, schema, serverVersion,
     hasPendingTx = false, chatOpen = false, onToggleChat,
     onDisconnect, onSwitchConnection,
     theme = "light", onToggleTheme,
+    env, readOnly = false,
   }: Props = $props();
 
   // Shorten version: "Oracle AI Database 26ai Free Release 23.26.1.0.0 – ..." → "23.26.1.0.0"
@@ -31,13 +34,25 @@
   );
 </script>
 
-<div class="bar">
+<div class="bar" class:bar-prod={env === "prod"} class:bar-staging={env === "staging"}>
   <!-- Left: connection identity -->
   <div class="bar-left">
     <VeeskerMark size={22} bg={false} class="bar-mark" />
     <span class="bar-divider" aria-hidden="true"></span>
     <span class="conn-dot" aria-label="Connected"></span>
     <span class="conn-name">{connectionName}</span>
+    {#if env}
+      <span class="env-badge env-{env}" title="Environment tag — set on the connection">{env}</span>
+    {/if}
+    {#if readOnly}
+      <span class="ro-badge" title="Read-only — DML/DDL blocked on this connection">
+        <svg width="9" height="9" viewBox="0 0 9 9" fill="none" aria-hidden="true">
+          <rect x="1.5" y="3.5" width="6" height="4.5" rx="0.6" stroke="currentColor" stroke-width="1"/>
+          <path d="M3 3.5V2.5a1.5 1.5 0 013 0v1" stroke="currentColor" stroke-width="1" fill="none"/>
+        </svg>
+        RO
+      </span>
+    {/if}
     {#if hasPendingTx}
       <span class="tx-badge" title="Uncommitted transaction pending — remember to COMMIT or ROLLBACK">
         <svg width="8" height="8" viewBox="0 0 8 8" fill="none" aria-hidden="true">
@@ -137,6 +152,37 @@
     box-sizing: border-box;
     font-family: "Inter", -apple-system, system-ui, sans-serif;
     font-size: 12px;
+    flex-shrink: 0;
+    position: relative;
+  }
+  /* Subtle env-tinted top stripe so PROD/STAGING is visible without being noisy */
+  .bar.bar-prod::before, .bar.bar-staging::before {
+    content: "";
+    position: absolute; left: 0; right: 0; top: 0; height: 2px;
+    pointer-events: none;
+  }
+  .bar.bar-prod::before { background: #b33e1f; box-shadow: 0 0 8px rgba(179,62,31,0.5); }
+  .bar.bar-staging::before { background: #d99c2a; }
+  .bar.bar-prod { box-shadow: inset 0 0 0 1px rgba(179,62,31,0.18); }
+  .env-badge {
+    display: inline-flex; align-items: center;
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 9.5px; font-weight: 700; letter-spacing: 0.07em;
+    text-transform: uppercase;
+    border-radius: 3px; padding: 1px 6px;
+    flex-shrink: 0;
+  }
+  .env-prod { color: #f5a08a; background: rgba(179,62,31,0.22); border: 1px solid rgba(179,62,31,0.5); }
+  .env-staging { color: #e8c547; background: rgba(217,153,42,0.18); border: 1px solid rgba(217,153,42,0.4); }
+  .env-dev { color: #4a9eda; background: rgba(74,158,218,0.18); border: 1px solid rgba(74,158,218,0.4); }
+  .ro-badge {
+    display: inline-flex; align-items: center; gap: 3px;
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 9.5px; font-weight: 700; letter-spacing: 0.07em;
+    color: rgba(255,255,255,0.8);
+    background: rgba(106,110,119,0.22);
+    border: 1px solid rgba(106,110,119,0.4);
+    border-radius: 3px; padding: 1px 6px;
     flex-shrink: 0;
   }
 

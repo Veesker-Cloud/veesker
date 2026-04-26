@@ -426,6 +426,7 @@ pub async fn query_execute(
     request_id: String,
     split_multi: Option<bool>,
     fetch_all: Option<bool>,
+    acknowledge_unsafe: Option<bool>,
 ) -> Result<Value, ConnectionTestErr> {
     let started = std::time::Instant::now();
     let result = call_sidecar(
@@ -436,6 +437,7 @@ pub async fn query_execute(
             "requestId": request_id,
             "splitMulti": split_multi.unwrap_or(false),
             "fetchAll": fetch_all.unwrap_or(false),
+            "acknowledgeUnsafe": acknowledge_unsafe.unwrap_or(false),
         }),
     )
     .await;

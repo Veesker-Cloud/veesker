@@ -22,6 +22,12 @@
       return;
     }
     const { meta, passwordSet, walletPasswordSet } = res.data;
+    const safety = {
+      env: meta.env,
+      readOnly: meta.readOnly ?? false,
+      statementTimeoutMs: meta.statementTimeoutMs,
+      warnUnsafeDml: meta.warnUnsafeDml ?? false,
+    };
     if (meta.authType === "basic") {
       initial = {
         authType: "basic",
@@ -32,6 +38,7 @@
         serviceName: meta.serviceName,
         username: meta.username,
         password: "",
+        safety,
       };
     } else {
       initial = {
@@ -42,6 +49,7 @@
         connectAlias: meta.connectAlias,
         username: meta.username,
         password: "",
+        safety,
       };
       walletPasswordMissing = !(walletPasswordSet ?? false);
     }
