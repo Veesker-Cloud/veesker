@@ -44,6 +44,7 @@ export type StaleStat = {
 const BIG_TABLE_THRESHOLD = 100_000;
 const HIGH_COST_THRESHOLD = 100_000;
 const STALE_STATS_DAYS = 30;
+const NL_BIG_OUTER_THRESHOLD = 10_000;
 
 export function classifyCost(cost: number | null): CostClass {
   if (cost === null) return "unknown";
@@ -134,8 +135,10 @@ export function detectRedFlags(
 
     // R010 — NESTED LOOPS with high outer cardinality
     if (node.operation === "NESTED LOOPS" && !seenIds.has("R010")) {
-      const leftChild = plan.find((n) => n.parentId === node.id);
-      if (leftChild && leftChild.cardinality !== null && leftChild.cardinality > 10_000) {
+      const children = plan.filter((n) => n.parentId === node.id);
+      children.sort((a, b) => a.id - b.id);
+      const leftChild = children[0];
+      if (leftChild && leftChild.cardinality !== null && leftChild.cardinality > NL_BIG_OUTER_THRESHOLD) {
         flags.push({
           id: "R010", severity: "warn",
           message: `NESTED LOOPS with ${leftChild.cardinality.toLocaleString("en-US")} rows on outer side — consider HASH JOIN`,
