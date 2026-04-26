@@ -31,20 +31,25 @@ fn resolve_oracledb_binding_dir(app: &AppHandle) -> Option<String> {
             .join("build")
             .join("Release");
         if dev.is_dir() {
-            return dev
-                .canonicalize()
-                .ok()
-                .map(|p| p.to_string_lossy().into_owned());
+            return dev.canonicalize().ok().map(strip_extended_prefix);
         }
     }
     // Production: look for `oracledb-bindings/` in resource_dir alongside the bundled app.
     if let Ok(res_dir) = app.path().resource_dir() {
         let prod = res_dir.join("oracledb-bindings");
         if prod.is_dir() {
-            return Some(prod.to_string_lossy().into_owned());
+            return prod.canonicalize().ok().map(strip_extended_prefix);
         }
     }
     None
+}
+
+/// On Windows, std::fs::canonicalize returns paths with the `\\?\` extended-length prefix.
+/// Node.js's require() and oracledb's binary loader can't handle that format and fail
+/// silently with NJS-045. Strip the prefix so we pass plain `C:\foo\bar` style paths.
+fn strip_extended_prefix(p: PathBuf) -> String {
+    let s = p.to_string_lossy().into_owned();
+    s.strip_prefix(r"\\?\").map(String::from).unwrap_or(s)
 }
 
 #[derive(Debug, Serialize)]
