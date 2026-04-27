@@ -10,6 +10,7 @@
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { listen } from "@tauri-apps/api/event";
+  import AboutDialog from "$lib/workspace/AboutDialog.svelte";
   import HelpModal from "$lib/workspace/HelpModal.svelte";
   import UpdateNotification from "$lib/workspace/UpdateNotification.svelte";
   import CommercialUseModal from "$lib/workspace/CommercialUseModal.svelte";
@@ -19,11 +20,13 @@
   import type { Snippet } from "svelte";
 
   let { children }: { children: Snippet } = $props();
+  let showAbout = $state(false);
   let showHelp = $state(false);
   let showCommercialModal = $state(license.needsFirstLaunchPrompt);
   let showPluginManager = $state(false);
 
   onMount(() => {
+    const unlistenAbout = listen("open-about", () => { showAbout = true; });
     const unlistenHelp = listen("open-help", () => { showHelp = true; });
     const unlistenPlugins = listen("open-plugins", () => { showPluginManager = true; });
     const unlistenNewConn = listen("menu-new-connection", () => { void goto("/connections/new"); });
@@ -32,6 +35,7 @@
     });
     const unlistenTrayDisconnect = listen("tray-disconnect", () => { void goto("/"); });
     return () => {
+      unlistenAbout.then((fn) => fn());
       unlistenHelp.then((fn) => fn());
       unlistenPlugins.then((fn) => fn());
       unlistenNewConn.then((fn) => fn());
@@ -55,6 +59,10 @@
 </svelte:head>
 
 {@render children()}
+
+{#if showAbout}
+  <AboutDialog onClose={() => { showAbout = false; }} />
+{/if}
 
 {#if showHelp}
   <HelpModal onClose={() => { showHelp = false; }} />

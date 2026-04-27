@@ -7,7 +7,7 @@ mod persistence;
 mod sidecar;
 mod tray;
 
-use tauri::menu::{AboutMetadataBuilder, MenuBuilder, MenuItemBuilder, SubmenuBuilder};
+use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{Emitter, Manager};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
@@ -27,6 +27,8 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .menu(|app| {
+            let about_item =
+                MenuItemBuilder::with_id("open_about", "About Veesker").build(app)?;
             let help_item = MenuItemBuilder::with_id("open_help", "Help")
                 .accelerator("F1")
                 .build(app)?;
@@ -34,12 +36,7 @@ pub fn run() {
                 MenuItemBuilder::with_id("open_plugins", "Plugins & License…").build(app)?;
 
             let about = SubmenuBuilder::new(app, "Veesker")
-                .about(Some(
-                    AboutMetadataBuilder::new()
-                        .name(Some("Veesker"))
-                        .comments(Some("Oracle 23ai Vector Search Studio"))
-                        .build(),
-                ))
+                .item(&about_item)
                 .separator()
                 .item(&plugins_item)
                 .item(&help_item)
@@ -196,6 +193,9 @@ pub fn run() {
             });
 
             app.on_menu_event(|app, event| match event.id().as_ref() {
+                "open_about" => {
+                    let _ = app.emit("open-about", ());
+                }
                 "open_help" => {
                     let _ = app.emit("open-help", ());
                 }
