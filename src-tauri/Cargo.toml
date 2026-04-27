@@ -2,8 +2,11 @@
 name = "veesker"
 version = "0.2.3"
 description = "The studio for Oracle 23ai vector search"
-authors = ["Geraldo F. Viana Júnior <geefatec@gmail.com>"]
-edition = "2021"
+authors = ["Geraldo Ferreira Viana Júnior <geefatec@gmail.com>"]
+homepage = "https://veesker.cloud"
+repository = "https://github.com/gevianajr/veesker"
+license = "Apache-2.0"
+edition = "2024"
 
 [lib]
 name = "veesker_lib"

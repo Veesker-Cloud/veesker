@@ -2,6 +2,19 @@
   "name": "veesker-sidecar",
   "version": "0.0.1",
   "private": true,
+  "author": {
+    "name": "Geraldo Ferreira Viana Júnior",
+    "email": "geefatec@gmail.com",
+    "url": "https://github.com/gevianajr"
+  },
+  "homepage": "https://veesker.cloud",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gevianajr/veesker.git"
+  },
+  "bugs": {
+    "url": "https://github.com/gevianajr/veesker/issues"
+  },
   "type": "module",
   "scripts": {
     "test": "bun test",
