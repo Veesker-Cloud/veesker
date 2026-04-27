@@ -64,6 +64,27 @@ pub fn delete_api_key(service: &str) -> keyring::Result<()> {
     delete_account(&api_key_account(service))
 }
 
+fn git_account(connection_id: &str) -> String {
+    format!("git:{connection_id}")
+}
+
+pub fn set_git_pat(connection_id: &str, pat: &str) -> keyring::Result<()> {
+    entry(&git_account(connection_id))?.set_password(pat)
+}
+
+pub fn get_git_pat(connection_id: &str) -> keyring::Result<Option<String>> {
+    match entry(&git_account(connection_id))?.get_password() {
+        Ok(p) => Ok(Some(p)),
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
+#[allow(dead_code)]
+pub fn delete_git_pat(connection_id: &str) -> keyring::Result<()> {
+    delete_account(&git_account(connection_id))
+}
+
 fn delete_account(account: &str) -> keyring::Result<()> {
     match entry(account)?.delete_credential() {
         Ok(()) => Ok(()),
