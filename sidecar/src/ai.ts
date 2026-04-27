@@ -107,12 +107,24 @@ async function executeTool(name: string, input: Record<string, string>): Promise
       if (!isReadOnlySql(sql)) {
         return "Error: only read-only SELECT or WITH queries are permitted";
       }
-      const res = await queryExecute({ sql: sql.endsWith(";") ? sql.slice(0, -1) : sql });
-      if ("results" in res) {
-        const first = (res as any).results?.[0];
-        return JSON.stringify({ columns: first?.columns, rows: first?.rows?.slice(0, 50) }, null, 2);
+      // Use a dedicated requestId so AI tool runs don't masquerade as a user query.
+      // queryExecute will refuse with a clean error if a user query is already running
+      // (rather than racing on the shared connection).
+      const requestId = `ai:${crypto.randomUUID()}`;
+      try {
+        const res = await queryExecute({
+          sql: sql.endsWith(";") ? sql.slice(0, -1) : sql,
+          requestId,
+        });
+        if ("results" in res) {
+          const first = (res as any).results?.[0];
+          return JSON.stringify({ columns: first?.columns, rows: first?.rows?.slice(0, 50) }, null, 2);
+        }
+        return JSON.stringify({ columns: (res as any).columns, rows: (res as any).rows?.slice(0, 50) }, null, 2);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return `Error executing query: ${msg}`;
       }
-      return JSON.stringify({ columns: (res as any).columns, rows: (res as any).rows?.slice(0, 50) }, null, 2);
     }
     case "get_ddl": {
       const res = await objectDdl({ owner: input.owner, kind: input.kind as any, name: input.name });
@@ -150,6 +162,21 @@ Rules:
 - Never suggest or execute DML/DDL via run_query — only SELECT/WITH
 - Prefer using tools to verify before asserting
 ${ctxLines.length > 0 ? "\n[Current IDE context]\n" + ctxLines.join("\n") : ""}`;
+}
+
+/**
+ * Probe for the locally-installed `claude` CLI. We only fall back to it if the
+ * binary is actually present — otherwise users without the CLI got an opaque
+ * spawn error instead of a clear "configure your API key" message.
+ */
+async function claudeCliAvailable(): Promise<boolean> {
+  try {
+    const proc = Bun.spawn(["claude", "--version"], { stdout: "ignore", stderr: "ignore" });
+    await proc.exited;
+    return proc.exitCode === 0;
+  } catch {
+    return false;
+  }
 }
 
 async function aiChatViaCli(params: AiChatParams): Promise<AiChatResult> {
@@ -192,8 +219,18 @@ async function aiChatViaCli(params: AiChatParams): Promise<AiChatResult> {
 export async function aiChat(params: AiChatParams): Promise<AiChatResult> {
   const key = params.apiKey || process.env.ANTHROPIC_API_KEY;
 
-  // No API key — try the locally installed claude CLI (uses Claude Code auth)
-  if (!key) return aiChatViaCli(params);
+  // No API key — try the locally installed claude CLI (uses Claude Code auth).
+  // If the CLI isn't installed either, throw a structured error the renderer
+  // can show as a "configure your API key" prompt instead of a cryptic spawn error.
+  if (!key) {
+    if (await claudeCliAvailable()) return aiChatViaCli(params);
+    throw {
+      code: -32603,
+      message:
+        "Anthropic API key not configured and no local `claude` CLI found. " +
+        "Add an ANTHROPIC_API_KEY in Settings or install the Claude CLI.",
+    };
+  }
 
   const client = new Anthropic({ apiKey: key });
 

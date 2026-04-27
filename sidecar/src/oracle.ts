@@ -660,22 +660,45 @@ function isCancelError(err: unknown): boolean {
 }
 
 async function drainDbmsOutput(conn: oracledb.Connection): Promise<string[] | null> {
+  // Use DBMS_OUTPUT.GET_LINES (plural) — fetches up to numlines per round-trip
+  // instead of one-line-per-call. Without this, a procedure that prints 10k
+  // lines costs 10k Oracle round-trips (potentially several seconds).
+  const BATCH = 100;
+  const HARD_CAP = 10_000;
   try {
     const lines: string[] = [];
-    let iterations = 0;
-    const MAX_LINES = 10_000;
-    while (iterations < MAX_LINES) {
-      iterations++;
-      const r = await conn.execute<{ LINE: string; STATUS: number }>(
-        `BEGIN DBMS_OUTPUT.GET_LINE(:line, :status); END;`,
+    let total = 0;
+    while (total < HARD_CAP) {
+      const r = await conn.execute<{ NUM: number; LINES: string[] }>(
+        `DECLARE
+           v_lines DBMS_OUTPUT.CHARARR;
+           v_num   INTEGER := :requested;
+         BEGIN
+           DBMS_OUTPUT.GET_LINES(v_lines, v_num);
+           :num := v_num;
+           :lines := v_lines;
+         END;`,
         {
-          line:   { dir: oracledb.BIND_OUT, type: oracledb.STRING, maxSize: 32767 },
-          status: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+          requested: { dir: oracledb.BIND_IN, type: oracledb.NUMBER, val: BATCH },
+          num:       { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+          lines:     {
+            dir: oracledb.BIND_OUT,
+            type: oracledb.STRING,
+            maxArraySize: BATCH,
+            maxSize: 32767,
+          },
         }
       );
-      const ob = r.outBinds as { LINE: string | null; STATUS: number } | undefined;
-      if (!ob || ob.STATUS !== 0) break;
-      lines.push(ob.LINE ?? "");
+      const ob = r.outBinds as { NUM: number; LINES: string[] | null } | undefined;
+      const got = ob?.NUM ?? 0;
+      if (got <= 0) break;
+      const batchLines = ob?.LINES ?? [];
+      for (let i = 0; i < got && lines.length < HARD_CAP; i++) {
+        lines.push(batchLines[i] ?? "");
+      }
+      total += got;
+      // If the server returned fewer than we asked, the buffer is drained.
+      if (got < BATCH) break;
     }
     return lines;
   } catch (e) {
