@@ -64,7 +64,7 @@ export function costBadgeGutter(): Extension {
       lineMarker(view, line) {
         const data = view.state.field(costBadgeField);
         if (data === null) return null;
-        if (line.number !== data.line) return null;
+        if (view.state.doc.lineAt(line.from).number !== data.line) return null;
         return new CostBadgeMarker(data);
       },
       initialSpacer: () => new CostBadgeMarker({ line: 1, cost: 999_999, costClass: "yellow" }),
