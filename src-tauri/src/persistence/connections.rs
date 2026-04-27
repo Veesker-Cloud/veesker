@@ -10,7 +10,7 @@ use rusqlite::Connection as SqliteConnection;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::{history, secrets, store, tnsnames, wallet};
+use super::{history, object_versions, secrets, store, tnsnames, wallet};
 use store::{AuthType, ConnectionRow, StoreError};
 
 #[derive(Debug, Clone, Serialize)]
@@ -235,6 +235,7 @@ impl From<wallet::WalletError> for ConnectionError {
 pub struct ConnectionService {
     conn: Mutex<SqliteConnection>,
     wallets_root: PathBuf,
+    data_dir: PathBuf,
 }
 
 impl ConnectionService {
@@ -252,9 +253,13 @@ impl ConnectionService {
             history::HistoryError::Sqlite(s) => ConnectionError::from(StoreError::from(s)),
             history::HistoryError::InvalidArg(m) => ConnectionError::internal(m),
         })?;
+        object_versions::init_db_object_versions(&conn)
+            .map_err(|e| ConnectionError::internal(format!("object_versions init: {e}")))?;
+        let data_dir = db_path.parent().unwrap_or(Path::new(".")).to_path_buf();
         Ok(Self {
             conn: Mutex::new(conn),
             wallets_root,
+            data_dir,
         })
     }
 
@@ -693,5 +698,92 @@ impl ConnectionService {
         Ok(WalletInfo {
             aliases: tnsnames::parse_aliases(&body),
         })
+    }
+
+    pub fn object_version_capture(
+        &self,
+        connection_id: &str,
+        owner: &str,
+        object_type: &str,
+        object_name: &str,
+        ddl: &str,
+        reason: &str,
+    ) -> bool {
+        let conn = match self.lock() {
+            Ok(c) => c,
+            Err(_) => return false,
+        };
+        object_versions::capture(&conn, &self.data_dir, connection_id, owner, object_type, object_name, ddl, reason)
+            .unwrap_or(false)
+    }
+
+    pub fn object_version_list(
+        &self,
+        connection_id: &str,
+        owner: &str,
+        object_type: &str,
+        object_name: &str,
+    ) -> Result<Vec<object_versions::ObjectVersionEntry>, ConnectionError> {
+        let conn = self.lock()?;
+        object_versions::list_versions(&conn, connection_id, owner, object_type, object_name)
+            .map_err(|e| ConnectionError::internal(format!("object_version_list: {e}")))
+    }
+
+    pub fn object_version_diff(
+        &self,
+        connection_id: &str,
+        sha_a: &str,
+        sha_b: &str,
+        file_path: &str,
+    ) -> Result<String, ConnectionError> {
+        object_versions::diff_commits(&self.data_dir, connection_id, sha_a, sha_b, file_path)
+            .map_err(|e| ConnectionError::internal(format!("object_version_diff: {e}")))
+    }
+
+    pub fn object_version_load(
+        &self,
+        connection_id: &str,
+        commit_sha: &str,
+        file_path: &str,
+    ) -> Result<String, ConnectionError> {
+        object_versions::load_at_commit(&self.data_dir, connection_id, commit_sha, file_path)
+            .map_err(|e| ConnectionError::internal(format!("object_version_load: {e}")))
+    }
+
+    pub fn object_version_set_label(
+        &self,
+        connection_id: &str,
+        version_id: i64,
+        owner: &str,
+        object_type: &str,
+        object_name: &str,
+        label: Option<&str>,
+    ) -> Result<(), ConnectionError> {
+        let conn = self.lock()?;
+        object_versions::set_label(&conn, &self.data_dir, connection_id, version_id, owner, object_type, object_name, label)
+            .map_err(|e| ConnectionError::internal(format!("object_version_set_label: {e}")))
+    }
+
+    pub fn object_version_set_remote(
+        &self,
+        connection_id: &str,
+        remote_url: &str,
+        pat: &str,
+    ) -> Result<(), ConnectionError> {
+        object_versions::set_remote(&self.data_dir, connection_id, remote_url, pat)
+            .map_err(|e| ConnectionError::internal(format!("object_version_set_remote: {e}")))
+    }
+
+    pub fn object_version_get_remote(
+        &self,
+        connection_id: &str,
+    ) -> Result<Option<String>, ConnectionError> {
+        object_versions::get_remote(&self.data_dir, connection_id)
+            .map_err(|e| ConnectionError::internal(format!("object_version_get_remote: {e}")))
+    }
+
+    pub fn object_version_push(&self, connection_id: &str) -> Result<u32, ConnectionError> {
+        object_versions::push(&self.data_dir, connection_id)
+            .map_err(|e| ConnectionError::internal(format!("object_version_push: {e}")))
     }
 }
