@@ -116,6 +116,21 @@ If you need warranty, SLA, or commercial support, that requires a separate signe
 
 ---
 
+## Created by
+
+**[Geraldo Ferreira Viana Júnior](https://github.com/gevianajr)** — Senior Oracle Engineer with 14 years of experience building mission-critical PL/SQL, ERP, and APEX systems.
+
+I started designing Veesker in 2022 — sketching the architecture, the feature set, and the developer experience based on years of real-world Oracle pain points. The bottleneck was never the vision; it was solo implementation velocity. In 2026, with Claude Code mature enough to act as a serious engineering collaborator, I turned four years of design into a working product.
+
+- **GitHub:** [@gevianajr](https://github.com/gevianajr)
+- **LinkedIn:** [Geraldo Viana Jr](https://www.linkedin.com/in/geraldovianajr/)
+- **Website:** [veesker.cloud](https://veesker.cloud)
+- **Email:** [geraldo@veesker.cloud](mailto:geraldo@veesker.cloud)
+
+For commercial inquiries, partnerships, or trademark permission, reach out via email.
+
+---
+
 ## Features
 
 ### Connections & Authentication
@@ -374,8 +389,10 @@ For security issues, please report privately via [SECURITY.md](SECURITY.md).
 
 <div align="center">
 
-Built by [Geraldo Viana Jr](https://github.com/gevianajr) - Brazil
+**Veesker** is created and maintained by [Geraldo Ferreira Viana Júnior](https://github.com/gevianajr).
 
-[veesker.cloud](https://veesker.cloud) · [GitHub](https://github.com/gevianajr/veesker) · [Issues](https://github.com/gevianajr/veesker/issues) · [![LinkedIn](https://img.shields.io/badge/LinkedIn-0A66C2?logo=linkedin&logoColor=white)](https://www.linkedin.com/in/geraldovianajr/)
+Designed in 2022 · Shipped in 2026 · Made in São Paulo, Brazil.
+
+[veesker.cloud](https://veesker.cloud) · [GitHub](https://github.com/gevianajr/veesker) · [LinkedIn](https://www.linkedin.com/in/geraldovianajr/) · [Issues](https://github.com/gevianajr/veesker/issues)
 
 </div>
