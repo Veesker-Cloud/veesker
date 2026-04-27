@@ -67,6 +67,22 @@ If you need warranty, SLA, or commercial support, that requires a separate signe
   </tr>
   <tr>
     <td align="center">
+      <img src="docs/screenshots/ai-chart-select.png" width="460" alt="Veesker AI chart — column selection" /><br/>
+      <sub>Veesker AI — select columns and chart type in natural language</sub>
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/ai-chart-preview.png" width="460" alt="Veesker AI chart — preview" /><br/>
+      <sub>AI generates the chart and offers to pin it to the Dashboard</sub>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center">
+      <img src="docs/screenshots/ai-dashboard.png" width="940" alt="Dashboard with AI-generated chart" /><br/>
+      <sub>Dashboard — AI-generated charts pinned and ready to export as PDF</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
       <img src="docs/screenshots/plsql-procedure-editor.png" width="460" alt="PL/SQL procedure editor" /><br/>
       <sub>PL/SQL editor — compile, save, view DDL</sub>
     </td>
