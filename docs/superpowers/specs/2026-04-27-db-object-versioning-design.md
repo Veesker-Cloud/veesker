@@ -14,9 +14,9 @@ When working on PL/SQL objects in a development database, changes are often push
 
 ## Scope
 
-**In scope:** PL/SQL objects only — PROCEDURE, FUNCTION, PACKAGE, PACKAGE BODY, TRIGGER, TYPE.
+**In scope:** PL/SQL objects only — PROCEDURE, FUNCTION, PACKAGE, PACKAGE BODY, TRIGGER, TYPE. Push to remote via HTTPS + PAT.
 
-**Out of scope:** TABLE, VIEW, INDEX, SEQUENCE, standalone SQL scripts (future phases).
+**Out of scope:** TABLE, VIEW, INDEX, SEQUENCE, standalone SQL scripts, SSH auth, branching, multi-user (future phases).
 
 ---
 
@@ -103,7 +103,7 @@ CREATE INDEX IF NOT EXISTS object_versions_hash_idx
 - Commit author: `Veesker <local>` (fixed).
 - Commit message: `[baseline] SCOTT.PROCEDURE.MY_PROC` or `[compile] SCOTT.PACKAGE.MY_PKG`.
 - Single branch: `main`.
-- No remote configured by default (local-only).
+- Remote `origin` configured optionally via `object_version_set_remote`. PAT stored in keyring under key `veesker:git:<conn-id>`. Remote URL stored in the repo's own git config (`git remote add origin <url>`) — no extra SQLite column needed; read back via `repo.find_remote("origin")?.url()`.
 
 ---
 
@@ -133,7 +133,7 @@ Steps 3–6 are synchronous in the Rust command handler. On failure at any step,
 New file: `src-tauri/src/persistence/object_versions.rs`  
 Added to: `src-tauri/src/persistence/mod.rs`
 
-### Four new Tauri commands (in `commands.rs`)
+### Seven new Tauri commands (in `commands.rs`)
 
 | Command | Params | Returns |
 |---|---|---|
@@ -142,6 +142,9 @@ Added to: `src-tauri/src/persistence/mod.rs`
 | `object_version_diff` | `connection_id, sha_a, sha_b, file_path` | `{ diff: string }` |
 | `object_version_load` | `connection_id, commit_sha, file_path` | `{ ddl: string }` |
 | `object_version_label` | `connection_id, version_id, label` | `{}` |
+| `object_version_set_remote` | `connection_id, remote_url, pat` | `{}` |
+| `object_version_push` | `connection_id` | `{ pushed_commits: u32 }` |
+| `object_version_get_remote` | `connection_id` | `{ url: string \| null }` |
 
 `ObjectVersionEntry`:
 ```typescript
@@ -167,7 +170,7 @@ Updates the `label` column in SQLite. If label is non-empty, also creates a git 
 
 ### `src/lib/oracle.ts`
 
-Five new `invoke()` wrappers mirroring the command signatures above.
+Eight new `invoke()` wrappers mirroring the command signatures above.
 
 ### `src/lib/workspace/ObjectVersionBadge.svelte`
 
@@ -183,6 +186,7 @@ Layout: two-column panel (`220px + flex`).
 
 - **Left column:** scrollable list of `ObjectVersionEntry` rows. Each row shows timestamp, short SHA, reason badge (`compile` in green, `baseline` in muted). Selected row highlighted with `#b33e1f` left border. Double-click on label area opens inline `<input>` — Enter saves, Escape cancels. "Abrir no editor" button at bottom.
 - **Right column:** unified diff between the selected version and the most recent committed version (head of the object's history). Clicking a different row updates the diff target. Green/salmon colors matching Veesker palette. "Carregar no editor" button at bottom right.
+- **Footer remote strip:** collapsed by default, toggled by a `⚙` icon. When expanded: shows current remote URL (if configured) or a URL + PAT input form. "↑ Push" button (green) pushes `main` to `origin` using the stored PAT. Shows "✓ pushed N commits" or an error inline. PAT field always masked.
 
 Opened as an absolutely-positioned panel anchored below the badge button, z-index above the editor, dismissed by clicking outside or pressing Escape.
 
@@ -222,6 +226,9 @@ Using `Connection::open_in_memory()` for SQLite and `tempfile::TempDir` for the 
 - `label_clear_removes_git_tag`
 - `capture_creates_repo_on_first_call` (repo init idempotence)
 - `package_body_uses_underscore_directory`
+- `set_remote_stores_url_in_git_config_and_pat_in_keyring`
+- `get_remote_returns_null_when_not_configured`
+- `push_returns_error_when_no_remote_configured`
 
 ### Manual verification
 
@@ -240,18 +247,31 @@ Using `Connection::open_in_memory()` for SQLite and `tempfile::TempDir` for the 
 Add to `src-tauri/Cargo.toml`:
 
 ```toml
-git2 = { version = "0.19", default-features = false }
+git2 = { version = "0.19", default-features = false, features = ["https", "vendored-openssl"] }
 sha2 = "0.10"
 ```
 
-`git2` with `default-features = false` disables SSH/HTTPS transport — not needed for local-only repos. Reduces binary size and eliminates OpenSSL dependency.
+`default-features = false` disables SSH transport (not needed). `https` enables HTTPS push/fetch. `vendored-openssl` bundles OpenSSL so no system dependency is required on Windows or Linux — avoids the common "openssl not found" build error on Windows MSVC. Adds ~3 MB to the binary but eliminates all system OpenSSL setup.
+
+---
+
+## Error Handling — Push
+
+| Scenario | Behavior |
+|---|---|
+| No remote configured | Returns error "No remote configured for this connection" |
+| Invalid PAT / 401 | Returns error "Authentication failed — check your PAT" |
+| Network unavailable | Returns error with git2 message; flyout shows inline error |
+| Nothing to push (already up to date) | Returns `{ pushed_commits: 0 }` — not an error |
+| PAT stored but remote URL missing | Treated as "no remote configured" |
 
 ---
 
 ## Out of Scope (explicitly)
 
-- Push to GitHub/GitLab remote (future).
+- SSH authentication for push.
 - Branching or merging.
 - Versioning TABLE/VIEW/INDEX/SEQUENCE (future phase).
 - Conflict resolution between versions.
 - Multi-user / shared version history.
+- Auto-push on every commit (user-initiated only).
