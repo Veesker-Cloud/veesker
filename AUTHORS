@@ -1,14 +1,30 @@
 Veesker — Authors
 =================
 
-Original creator and lead maintainer
-------------------------------------
-Geraldo Ferreira Viana Júnior <geefatec@gmail.com>
-GitHub:   https://github.com/gevianajr
-LinkedIn: https://www.linkedin.com/in/geraldovianajr/
-Started designing Veesker in 2022. First public release in 2026.
+Veesker is created and maintained by:
+
+  Geraldo Ferreira Viana Júnior <geefatec@gmail.com>
+  GitHub:   https://github.com/gevianajr
+  LinkedIn: https://www.linkedin.com/in/geraldovianajr/
+  Website:  https://veesker.cloud
+  Role:     Original creator, lead architect, and sole maintainer
+  Started:  2022 (design)
+  Shipped:  2026 (first public release)
+
+  All architecture decisions, product direction, and technical
+  choices are mine, informed by 14 years of Oracle development
+  experience. Implementation acceleration was provided by Claude
+  Code (Anthropic) acting as an engineering collaborator under
+  my direction.
 
 Contributors
 ------------
+
 (Add yourself when contributing meaningful changes.
  Format: Name <email> (GitHub handle))
+
+# Inclusion rules:
+#   - Open a PR adding yourself to this section
+#   - Provide a real name (no anonymous contributors for legal clarity)
+#   - Sign your commits (GPG verified preferred)
+#   - One line per contributor, sorted alphabetically by surname
