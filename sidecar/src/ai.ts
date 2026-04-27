@@ -144,6 +144,7 @@ function buildSystem(ctx: AiContext): string {
 You have live access to the connected Oracle database via tools. Use them proactively — describe tables before suggesting queries, run a quick SELECT to verify assumptions, fetch DDL when discussing objects.
 
 Rules:
+- Always respond in English, regardless of the language used in the user's message
 - Keep responses concise and actionable
 - Use \`\`\`sql code blocks for all SQL
 - Never suggest or execute DML/DDL via run_query — only SELECT/WITH
@@ -249,7 +250,7 @@ export async function aiChat(params: AiChatParams): Promise<AiChatResult> {
   return { content: text, toolsUsed };
 }
 
-const ENDPOINT_SYSTEM_PROMPT = `You are an Oracle ORDS expert helping a developer design a REST endpoint.
+const ENDPOINT_SYSTEM_PROMPT = `You are an Oracle ORDS expert helping a developer design a REST endpoint. Always respond in English.
 
 Given the user's description and the available database objects, suggest the best endpoint configuration.
 

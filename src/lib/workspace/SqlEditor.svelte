@@ -15,6 +15,7 @@
   import { showMinimap } from "@replit/codemirror-minimap";
   import type { CompileError } from "$lib/workspace";
   import { costBadgeGutter, setCostBadgeEffect, type CostBadgeData } from "./CostBadgeGutter";
+  import { makeAliasCompletionExtension } from "./sql-alias-completion";
 
   type Props = {
     value: string;
@@ -28,13 +29,15 @@
     onExplain: (sql: string) => void;
     compileErrors?: CompileError[] | null;
     completionSchema?: Record<string, string[]>;
+    getColumns?: (table: string) => Promise<string[]>;
     costBadge?: CostBadgeData | null;
   };
-  let { value, onChange, onRunCursor, onRunAll, onSave, onSaveAs, onExplain, compileErrors = null, completionSchema, costBadge = null }: Props = $props();
+  let { value, onChange, onRunCursor, onRunAll, onSave, onSaveAs, onExplain, compileErrors = null, completionSchema, getColumns, costBadge = null }: Props = $props();
 
   let host: HTMLDivElement | undefined = $state();
   let view: EditorView | null = null;
   const sqlLangCompartment = new Compartment();
+  const aliasCompletionCompartment = new Compartment();
 
   export function gotoLine(n: number): void {
     if (!view) return;
@@ -108,6 +111,7 @@
           ),
           basicSetup,
           sqlLangCompartment.of(sql({ dialect: PLSQL })),
+          aliasCompletionCompartment.of([]),
           oneDark,
           lintGutter(),
           costBadgeGutter(),
@@ -163,6 +167,15 @@
         completionSchema
           ? sql({ dialect: PLSQL, schema: completionSchema })
           : sql({ dialect: PLSQL })
+      ),
+    });
+  });
+
+  $effect(() => {
+    if (!view) return;
+    view.dispatch({
+      effects: aliasCompletionCompartment.reconfigure(
+        getColumns ? makeAliasCompletionExtension(getColumns) : []
       ),
     });
   });

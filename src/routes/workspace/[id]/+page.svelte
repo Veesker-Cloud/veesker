@@ -76,6 +76,17 @@
   } | null>(null);
   let refreshing = $state(false);
   let completionSchema = $state<Record<string, string[]>>({});
+  let colCache = new Map<string, string[]>();
+
+  async function getColumns(table: string): Promise<string[]> {
+    if (colCache.has(table)) return colCache.get(table)!;
+    const owner = schemas.find((s) => s.isCurrent)?.name;
+    if (!owner) return [];
+    const res = await tableDescribe(owner, table);
+    const cols = res.ok ? res.data.columns.map((c) => c.name) : [];
+    colCache.set(table, cols);
+    return cols;
+  }
   let procExecTarget = $state<{ owner: string; name: string; objectType: "PROCEDURE" | "FUNCTION" } | null>(null);
   let detailError = $state<string | null>(null);
   let dataflow = $state<DataFlowResult | null>(null);
@@ -370,6 +381,7 @@
   async function bootstrap(): Promise<void> {
     fatal = null;
     sessionLost = false;
+    colCache.clear();
     const id = page.params.id!;
 
     const metaRes = await getConnection(id);
@@ -727,6 +739,7 @@
       }}
       onAnalyze={handleAnalyze}
       {completionSchema}
+      {getColumns}
     />
   </div>
   {#if showPalette}
