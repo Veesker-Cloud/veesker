@@ -25,7 +25,7 @@
     onExplainWithAI: (msg: string) => void;
     onAnalyze?: () => void;
     completionSchema?: Record<string, string[]>;
-    getColumns?: (table: string) => Promise<string[]>;
+    getColumns?: (table: string, owner: string | null) => Promise<string[]>;
   };
   let { onCancel, onExplainWithAI, onAnalyze, completionSchema, getColumns }: Props = $props();
 

@@ -29,7 +29,7 @@
     onExplain: (sql: string) => void;
     compileErrors?: CompileError[] | null;
     completionSchema?: Record<string, string[]>;
-    getColumns?: (table: string) => Promise<string[]>;
+    getColumns?: (table: string, owner: string | null) => Promise<string[]>;
     costBadge?: CostBadgeData | null;
   };
   let { value, onChange, onRunCursor, onRunAll, onSave, onSaveAs, onExplain, compileErrors = null, completionSchema, getColumns, costBadge = null }: Props = $props();

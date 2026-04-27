@@ -14,31 +14,36 @@ const SQL_KW = new Set([
   "UNPIVOT", "MODEL", "PARTITION", "ROWS", "RANGE", "OVER", "WITHIN",
 ]);
 
-function buildAliasMap(doc: string): Map<string, string> {
-  const map = new Map<string, string>();
-  // Matches: FROM/JOIN "TABLE" alias  or  FROM/JOIN TABLE alias  (with optional AS)
-  const re = /(?:FROM|JOIN)\s+"?([A-Z0-9_$#]+)"?\s+(?:AS\s+)?([A-Z0-9_$#]+)/gi;
+export type TableRef = { owner: string | null; table: string };
+
+export function buildAliasMap(doc: string): Map<string, TableRef> {
+  const map = new Map<string, TableRef>();
+  // Matches: FROM/JOIN [SCHEMA.]TABLE [AS] alias — handles quoted and dotted names
+  const re =
+    /(?:FROM|JOIN)\s+(?:"?([A-Z0-9_$#]+)"?\s*\.\s*)?"?([A-Z0-9_$#]+)"?\s+(?:AS\s+)?([A-Z0-9_$#]+)/gi;
   let m: RegExpExecArray | null;
   while ((m = re.exec(doc)) !== null) {
-    const table = m[1].toUpperCase();
-    const alias = m[2].toUpperCase();
-    if (!SQL_KW.has(alias)) map.set(alias, table);
-    // table name itself also resolves (e.g. EMPLOYEES.EMPLOYEE_ID)
-    map.set(table, table);
+    const owner = m[1] ? m[1].toUpperCase() : null;
+    const table = m[2].toUpperCase();
+    const alias = m[3].toUpperCase();
+    const ref: TableRef = { owner, table };
+    if (!SQL_KW.has(alias)) map.set(alias, ref);
+    // The table name itself also resolves so EMPLOYEES.SALARY works without alias.
+    map.set(table, ref);
   }
   return map;
 }
 
 export function makeAliasCompletionExtension(
-  getColumns: (table: string) => Promise<string[]>
+  getColumns: (table: string, owner: string | null) => Promise<string[]>
 ) {
   const source = async (ctx: CompletionContext): Promise<CompletionResult | null> => {
     const before = ctx.matchBefore(/\w+\./);
     if (!before) return null;
     const alias = before.text.slice(0, -1).toUpperCase();
-    const table = buildAliasMap(ctx.state.doc.toString()).get(alias);
-    if (!table) return null;
-    const cols = await getColumns(table);
+    const ref = buildAliasMap(ctx.state.doc.toString()).get(alias);
+    if (!ref) return null;
+    const cols = await getColumns(ref.table, ref.owner);
     if (!cols.length) return null;
     return {
       from: before.to,

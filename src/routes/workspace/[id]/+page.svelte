@@ -78,13 +78,14 @@
   let completionSchema = $state<Record<string, string[]>>({});
   let colCache = new Map<string, string[]>();
 
-  async function getColumns(table: string): Promise<string[]> {
-    if (colCache.has(table)) return colCache.get(table)!;
-    const owner = schemas.find((s) => s.isCurrent)?.name;
-    if (!owner) return [];
-    const res = await tableDescribe(owner, table);
+  async function getColumns(table: string, owner: string | null = null): Promise<string[]> {
+    const effectiveOwner = owner ?? schemas.find((s) => s.isCurrent)?.name ?? null;
+    if (!effectiveOwner) return [];
+    const cacheKey = `${effectiveOwner}.${table}`;
+    if (colCache.has(cacheKey)) return colCache.get(cacheKey)!;
+    const res = await tableDescribe(effectiveOwner, table);
     const cols = res.ok ? res.data.columns.map((c) => c.name) : [];
-    colCache.set(table, cols);
+    colCache.set(cacheKey, cols);
     return cols;
   }
   let procExecTarget = $state<{ owner: string; name: string; objectType: "PROCEDURE" | "FUNCTION" } | null>(null);
