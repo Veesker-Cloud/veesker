@@ -1,105 +1,93 @@
-# Veesker — Pricing
+# Pricing
 
-> Pre-launch reference. Final pricing and tiers may adjust before public availability. Contact geefatec@gmail.com for any custom arrangement.
+The Veesker source code is fully open under Apache 2.0 — for everyone, forever, with no feature gating.
 
-## Tiers
+## Currently: free for all uses
 
-| | **Personal** | **Pro** | **Business** | **Enterprise** |
-|---|---|---|---|---|
-| **Price** | Free | R$ 49 / month per user | R$ 199 / month per seat | Custom |
-| **Eligible** | Personal, OSS, education, ≤50 emp / ≤R$ 5M rev | Individuals, freelancers, small commercial use | Companies of any size | Companies with custom needs |
-| **Veesker IDE** | ✅ Full | ✅ Full | ✅ Full | ✅ Full |
-| **All open-source features** | ✅ All | ✅ All | ✅ All | ✅ All |
-| **AI Sheep (BYO API key)** | ✅ | ✅ | ✅ | ✅ |
-| **Vector search studio** | ✅ | ✅ | ✅ | ✅ |
-| **PL/SQL Debugger** | ✅ | ✅ | ✅ | ✅ |
-| **VRAS REST API Studio** | ✅ | ✅ | ✅ | ✅ |
-| **Auto-update** | ✅ | ✅ | ✅ | ✅ |
-| **Local audit log (.jsonl)** | ✅ | ✅ | ✅ | ✅ |
-| **Commercial use right** | Limited (see [COMMERCIAL_USE.md](../COMMERCIAL_USE.md)) | ✅ Yes | ✅ Yes | ✅ Yes |
-| **Email support** | Best-effort (GitHub issues) | 5 business days | 1 business day | 4 hours |
-| **Slack/Teams private channel** | ❌ | ❌ | ✅ | ✅ |
-| **SLA** | None | None | 99.5% feature availability | 99.9% + custom |
-| **Veesker Cloud (team sync, when available)** | ❌ | ❌ | ✅ Included | ✅ Included |
-| **SSO / SAML / Active Directory** | ❌ | ❌ | ➕ Add-on | ✅ Included |
-| **Audit log shipping (Splunk/DD/S3)** | ❌ | ❌ | ➕ Add-on | ✅ Included |
-| **Multi-environment promote (VRAS)** | ❌ | ❌ | ✅ | ✅ |
-| **EBS Pack (Oracle E-Business Suite)** | ❌ | ➕ Add-on | ➕ Add-on | ✅ Included |
-| **On-prem AI gateway (Azure / AWS / Llama)** | ❌ | ❌ | ➕ Add-on | ✅ Included |
-| **White-label / OEM build** | ❌ | ❌ | ❌ | ✅ Available |
-| **Dedicated customer success engineer** | ❌ | ❌ | ❌ | ✅ |
-| **Indemnification clause** | ❌ | ❌ | ❌ | ✅ Available |
-| **Onboarding session** | ❌ | ❌ | 2h remote included | Custom (in-person available) |
-| **Training credits** | ❌ | ❌ | 4h / year | Custom |
+Veesker is in early access. Until commercial subscriptions launch, the packaged app is free for all uses — personal, open source, education, and commercial.
 
-## Add-ons (à la carte)
+[Download free →](https://veesker.cloud/download)
 
-These can be purchased separately by Pro / Business customers, or are included with Enterprise:
+---
 
-| Add-on | Description | Price |
-|---|---|---|
-| **EBS Pack** | Oracle E-Business Suite wizards, GL/AP integration templates, Forms converter | R$ 4.000 / year per company |
-| **AWR Analyzer** | AWR/Statspack visualization, performance regression detection | R$ 1.500 / year per seat |
-| **Azure OpenAI Connector** | Use your Azure OpenAI subscription for Sheep AI | R$ 500 / month per company |
-| **AWS Bedrock Connector** | Use AWS Bedrock for Sheep AI | R$ 500 / month per company |
-| **On-prem LLM gateway** | Connect Sheep to local Llama/Mistral via Ollama server | R$ 1.000 / month per company |
-| **Compliance Pack (BR)** | LGPD audit reports, BACEN-ready logs, ANPD breach response template | R$ 2.000 / year per company |
+## Coming soon: commercial subscriptions
 
-## Annual billing discount
+In the spirit of Docker Desktop, larger organizations will support continued development through a paid subscription for the packaged app + commercial-grade support.
 
-10% off if paid annually upfront. 20% off for 3-year commitment.
+**Plans being prepared:**
 
-## Volume discount
+### Personal — free forever
 
-| Seats | Discount |
-|---|---|
-| 25-49 | 10% |
-| 50-99 | 15% |
-| 100-249 | 20% |
-| 250+ | Contact us |
+For individuals, OSS contributors, and small organizations (≤50 employees AND ≤US$ 5M revenue).
 
-## Government / Education
+### Pro — for individual professionals
 
-Public-sector institutions, federal/state universities, and registered NGOs: **50% off Business and Enterprise tiers**. Contact us with proof of eligibility.
+Commercial use right + email support for freelancers and consultants.
 
-## Free for open-source projects
+### Business — for teams
 
-If you maintain a public open-source project (≥6 months active, ≥50 GitHub stars or equivalent), you qualify for a **free Pro license**. Apply with your project link to geefatec@gmail.com.
+Veesker Cloud (when available), faster support, team features.
 
-## Veesker Cloud (in development, ETA TBD)
+### Enterprise — for regulated industries
 
-Self-hosted SaaS product launching after the open-source community grows. Will provide:
-- Shared connection registry across the team
-- Audit log central dashboard
-- Query approval workflow
-- SSO authentication
-- Template management
-- Veesker Marketplace (paid plugins distribution)
+SSO, indemnification, dedicated support, on-prem options.
 
-Pricing model when launched: per-seat add-on for Business/Enterprise tiers, or standalone subscription for organizations not using the desktop client.
+> Pricing will be in USD. Billing is not yet active.
+
+---
+
+## Want early access to commercial support?
+
+If your organization wants to support development now or be among the first commercial customers, [reach out](mailto:geefatec@gmail.com).
+
+We are particularly interested in hearing from:
+
+- Companies running Oracle 23ai with vector search needs
+- Active open-source maintainers (free Pro license available once subscriptions launch)
+- Public sector and education (discount on commercial tiers when launched)
+
+---
+
+## Add-ons (planned)
+
+Niche-deep paid plugins for specific use cases will be available à la carte once commercial billing launches:
+
+- **Oracle EBS Pack** — GL/AP integration templates, Forms converter
+- **AWR Analyzer** — performance regression detection
+- **Compliance Pack BR** — LGPD / BACEN-ready audit reports
+- **Azure OpenAI / AWS Bedrock connectors** — bring your own cloud LLM
+- **On-prem LLM gateway** — Llama / Mistral via Ollama
+- **Audit Log Shipper** — Splunk / Datadog / S3 destinations
+
+Contact [geefatec@gmail.com](mailto:geefatec@gmail.com) to express interest in any add-on.
+
+---
 
 ## Frequently asked
 
-**Q: We're a 30-person company. Do we need to pay?**
-A: No. Personal tier covers up to 50 employees AND less than US$ 5M revenue. You can use Veesker free indefinitely.
+**Are paid features hidden in the source?**
+No. Every feature lives in the open-source repo, and every tier uses the exact same codebase. A subscription, when available, will give you the right to use the packaged app commercially plus support and (in higher tiers) Veesker Cloud — never extra source-level features.
 
-**Q: I'm using Veesker for a freelance gig at a Fortune-500 client. Who pays?**
-A: The client (or whichever entity is invoicing the work). Use is by-organization, not by-person.
+**Will Veesker have a kill-switch?**
+No. The app keeps working regardless. Compliance, when commercial plans launch, will be contractual and honor-based — same model as Docker Desktop.
 
-**Q: Can we self-host Veesker Cloud?**
-A: Enterprise tier includes self-hosted Cloud option. Business tier uses our managed cloud only.
+**Can I self-host Veesker Cloud?**
+When Veesker Cloud launches, the Enterprise tier will support self-hosted deployment. Business will use the managed cloud only.
 
-**Q: What if we miss compliance — does the app stop working?**
-A: No. Veesker has no kill-switch, no degraded experience, no telemetry-driven enforcement. Compliance is contractual / honor-based.
+**Are open-source maintainers eligible for free Pro?**
+Yes. If you maintain a public OSS project (≥6 months active, ≥50 stars or equivalent), you will qualify for a free Pro license once subscriptions launch. [Apply here](mailto:geefatec@gmail.com?subject=OSS%20license).
 
-**Q: Can we evaluate Business or Enterprise before committing?**
-A: 30-day free trial available on request. Contact geefatec@gmail.com.
+**Government / education discount?**
+Discounted Business and Enterprise tiers are planned for public sector, federal/state universities, and registered NGOs.
 
-**Q: Is the source code different between tiers?**
-A: **No.** All tiers use the exact same open-source codebase. Subscription gives you the right to use the packaged app commercially + support + (in higher tiers) access to the Cloud SaaS layer.
+**We are a 30-person company. Do we need to pay?**
+No. Personal tier covers up to 50 employees AND less than US$ 5M revenue. You can use Veesker free indefinitely — and during early access, everyone can regardless of size.
+
+**What if we miss compliance — does the app stop working?**
+No. Veesker has no kill-switch, no degraded experience, no telemetry-driven enforcement. Compliance is contractual and honor-based.
+
+---
 
 ## Contact
 
-**Sales / billing:** geefatec@gmail.com
-**Support:** geefatec@gmail.com (use "[Support - <tier>]" in subject)
-**Custom arrangements:** geefatec@gmail.com
+**Sales / billing / custom arrangements:** [geefatec@gmail.com](mailto:geefatec@gmail.com)
