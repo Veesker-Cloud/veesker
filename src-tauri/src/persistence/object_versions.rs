@@ -2,6 +2,8 @@
 // Licensed under the Apache License, Version 2.0
 // https://github.com/gevianajr/veesker
 
+#![allow(dead_code)]
+
 use std::path::{Path, PathBuf};
 
 use chrono::Utc;
@@ -91,6 +93,7 @@ pub fn last_ddl_hash(
     .optional()
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn insert_version(
     conn: &SqliteConnection,
     connection_id: &str,
@@ -189,7 +192,8 @@ pub fn file_rel_path(owner: &str, object_type: &str, object_name: &str) -> PathB
 pub fn open_or_init_repo(repo_root: &Path) -> Result<git2::Repository, git2::Error> {
     match git2::Repository::open(repo_root) {
         Ok(r) => Ok(r),
-        Err(_) => git2::Repository::init(repo_root),
+        Err(e) if e.code() == git2::ErrorCode::NotFound => git2::Repository::init(repo_root),
+        Err(e) => Err(e),
     }
 }
 

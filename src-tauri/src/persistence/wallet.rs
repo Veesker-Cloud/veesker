@@ -40,7 +40,7 @@ const REQUIRED_FILES: &[&str] = &["tnsnames.ora", "cwallet.sso"];
 /// Cap on a single file extracted from a wallet zip. tnsnames.ora is normally a
 /// few KB; even very large enterprise wallets stay well under 1 MB. This bounds
 /// memory exposure if a malicious zip claims a huge uncompressed size.
-const MAX_WALLET_FILE_BYTES: u64 = 1 * 1024 * 1024;
+const MAX_WALLET_FILE_BYTES: u64 = 1024 * 1024;
 
 pub fn read_tnsnames_from_zip(zip_path: &Path) -> Result<String, WalletError> {
     let file = fs::File::open(zip_path)?;
