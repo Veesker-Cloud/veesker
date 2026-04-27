@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+message: "If you use Veesker in research, teaching, or commercial work, please cite it as below."
+type: software
+title: "Veesker — The Oracle 23ai studio"
+abstract: "Open-source desktop IDE for Oracle 23ai. Combines a multi-statement SQL editor, an AI assistant with live database access, a vector search studio, a PL/SQL debugger, and a no-code REST API builder."
+authors:
+  - family-names: "Viana Júnior"
+    given-names: "Geraldo Ferreira"
+    email: "geefatec@gmail.com"
+    affiliation: "Independent"
+    orcid: ""
+repository-code: "https://github.com/gevianajr/veesker"
+url: "https://veesker.cloud"
+license: "Apache-2.0"
+date-released: "2026-04"
+keywords:
+  - oracle
+  - oracle-23ai
+  - vector-search
+  - plsql
+  - sql-editor
+  - ide
+  - tauri
+  - svelte
+  - rust
+  - ai-assistant
+  - rag
