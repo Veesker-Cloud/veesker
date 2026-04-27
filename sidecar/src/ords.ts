@@ -248,7 +248,13 @@ export async function ordsModuleGet(params: { owner: string; name: string }): Pr
 
 export async function ordsEnableSchema(_params: Record<string, unknown> = {}): Promise<{ ok: true }> {
   const conn = getActiveSession();
-  await conn.execute(`BEGIN ORDS.ENABLE_SCHEMA(p_enabled => TRUE); COMMIT; END;`, []);
+  try {
+    await conn.execute(`BEGIN ORDS.ENABLE_SCHEMA(p_enabled => TRUE); COMMIT; END;`, []);
+  } catch (e: any) {
+    // ORA-20000 means schema is already enabled — treat as success
+    if (String(e?.message ?? e).includes("ORA-20000")) return { ok: true };
+    throw e;
+  }
   return { ok: true };
 }
 
@@ -746,11 +752,14 @@ export async function ordsClientsCreate(params: {
     throw e;
   }
 
-  for (const role of params.roles) {
-    await conn.execute(
-      `BEGIN OAUTH.GRANT_CLIENT_ROLE(p_client_name => :n, p_role_name => :r); COMMIT; END;`,
-      { n: params.name, r: role }
-    );
+  // Grant all roles in a single atomic block so partial failures leave no inconsistent state
+  if (params.roles.length > 0) {
+    const grantBlock = params.roles
+      .map((_, i) => `  OAUTH.GRANT_CLIENT_ROLE(p_client_name => :n, p_role_name => :r${i});`)
+      .join("\n");
+    const binds: Record<string, string> = { n: params.name };
+    params.roles.forEach((r, i) => { binds[`r${i}`] = r; });
+    await conn.execute(`BEGIN\n${grantBlock}\n  COMMIT;\nEND;`, binds);
   }
 
   const credsRes = await conn.execute<any>(

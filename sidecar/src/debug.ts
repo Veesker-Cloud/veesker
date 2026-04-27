@@ -7,6 +7,11 @@ import { withActiveSession, buildConnection, quoteIdent } from "./oracle";
 import { getSessionParams } from "./state";
 import { RpcCodedError, ORACLE_ERR } from "./errors";
 
+const DEBUG_LOG = Boolean(process.env.VEESKER_DEBUG_LOG);
+function debugLog(msg: string): void {
+  if (DEBUG_LOG) process.stderr.write(`[debug] ${msg}\n`);
+}
+
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export type ParamDef = {
@@ -311,7 +316,9 @@ function libunitTypeToString(n: number): string {
     case 7: return "TRIGGER";
     case 8: return "TYPE";
     case 9: return "TYPE BODY";
-    default: return "PROCEDURE";
+    default:
+      debugLog(`unknown LibunitType value: ${n} — defaulting to PROCEDURE`);
+      return "PROCEDURE";
   }
 }
 
@@ -367,7 +374,7 @@ export class DebugSession {
     // indefinitely until the debug session calls SYNCHRONIZE. Combining them here means
     // after this block returns, targetConn is idle until startTarget() fires it
     // concurrently with SYNCHRONIZE.
-    process.stderr.write("[debug] initializing target session (ENABLE+INITIALIZE+DEBUG_ON in one block)\n");
+    debugLog("initializing target session (ENABLE+INITIALIZE+DEBUG_ON in one block)");
     const res = await this.targetConn.execute(
       `BEGIN
          DBMS_OUTPUT.ENABLE(1000000);
@@ -377,12 +384,12 @@ export class DebugSession {
       { sid: { dir: oracledb.BIND_OUT, type: oracledb.STRING, maxSize: 100 } }
     );
     const sid = (res.outBinds as any).sid as string;
-    process.stderr.write(`[debug] INITIALIZE+DEBUG_ON OK, sid=${sid}\n`);
+    debugLog(`INITIALIZE+DEBUG_ON OK, sid=${sid}`);
     await this.debugConn.execute(
       `BEGIN DBMS_DEBUG.ATTACH_SESSION(:sid, 0); END;`,
       { sid }
     );
-    process.stderr.write("[debug] ATTACH_SESSION OK\n");
+    debugLog("ATTACH_SESSION OK");
     return sid;
   }
 
@@ -462,7 +469,7 @@ export class DebugSession {
     this._targetExecution = this.targetConn
       .execute(script, execBinds)
       .catch((err) => {
-        process.stderr.write(`[debug] target execute error: ${String(err)}\n`);
+        debugLog(`target execute error: ${String(err)}`);
         return null;
       });
   }
@@ -515,7 +522,7 @@ export class DebugSession {
         outBinds[name] = val === null || val === undefined ? null : String(val);
       }
     }
-    process.stderr.write(`[debug] completion extracted: ${refCursors.length} cursors, ${Object.keys(outBinds).length} outBinds\n`);
+    debugLog(`completion extracted: ${refCursors.length} cursors, ${Object.keys(outBinds).length} outBinds`);
     return { refCursors, outBinds };
   }
 
@@ -523,14 +530,14 @@ export class DebugSession {
   // If Oracle SYNCHRONIZE doesn't return within `ms` milliseconds, the debugConn
   // is closed (which causes the blocking execute to reject), and we return "completed".
   async synchronizeWithTimeout(ms: number): Promise<PauseInfo> {
-    process.stderr.write(`[debug] SYNCHRONIZE loop started, timeout=${ms}ms\n`);
+    debugLog(`SYNCHRONIZE loop started, timeout=${ms}ms`);
     const finished: PauseInfo = { status: "completed", frame: null, reason: REASON_FINISHED };
     let timer: ReturnType<typeof setTimeout> | null = null;
 
     const runLoop = async (): Promise<PauseInfo> => {
       // Initial SYNCHRONIZE — blocks until Oracle fires the first debug event.
       let info = await this.synchronize();
-      process.stderr.write(`[debug] SYNCHRONIZE: status=${info.status} reason=${info.reason} frame=${JSON.stringify(info.frame)}\n`);
+      debugLog(`SYNCHRONIZE: status=${info.status} reason=${info.reason} frame=${JSON.stringify(info.frame)}`);
 
       // Oracle fires unnamed events when the anonymous block enters the PL/SQL interpreter
       // (obj=null, reason=REASON_BREAKPOINT). These are not the user's breakpoints —
@@ -540,22 +547,22 @@ export class DebugSession {
         if (info.status !== "completed") break;   // "paused" = got a real named location
         if (isDoneReason(info.reason)) break;     // target program ended
         // Intermediate event (reason=2 interpreter_starting etc.): tell Oracle to resume
-        process.stderr.write(`[debug] intermediate event reason=${info.reason} iter=${i + 1}, CONTINUE(0)\n`);
+        debugLog(`intermediate event reason=${info.reason} iter=${i + 1}, CONTINUE(0)`);
         info = await this.continueExecution(0);
-        process.stderr.write(`[debug] CONTINUE(0): status=${info.status} reason=${info.reason} frame=${JSON.stringify(info.frame)}\n`);
+        debugLog(`CONTINUE(0): status=${info.status} reason=${info.reason} frame=${JSON.stringify(info.frame)}`);
       }
 
       return info;
     };
 
     const syncPromise = runLoop().catch((err) => {
-      process.stderr.write(`[debug] sync loop error: ${String(err)}\n`);
+      debugLog(`sync loop error: ${String(err)}`);
       return finished;
     });
 
     const timeoutClose = new Promise<PauseInfo>((resolve) => {
       timer = setTimeout(() => {
-        process.stderr.write(`[debug] SYNCHRONIZE timed out after ${ms}ms — closing debugConn\n`);
+        debugLog(`SYNCHRONIZE timed out after ${ms}ms — closing debugConn`);
         this.debugConn.close().catch(() => {});
         resolve(finished);
       }, ms);
@@ -563,7 +570,7 @@ export class DebugSession {
 
     const result = await Promise.race([syncPromise, timeoutClose]);
     if (timer !== null) clearTimeout(timer);
-    process.stderr.write(`[debug] sync loop final: ${JSON.stringify(result)}\n`);
+    debugLog(`sync loop final: ${JSON.stringify(result)}`);
     if (result.status === "completed") {
       const extras = await this.extractCompletionResults();
       // Target program finished — release Oracle connections so we don't leak
@@ -678,8 +685,9 @@ export class DebugSession {
   }
 
   async getValuesForVars(varNames: string[]): Promise<VarValue[]> {
+    const names = varNames.slice(0, 256);
     const result: VarValue[] = [];
-    for (const name of varNames) {
+    for (const name of names) {
       try {
         const r = await this.debugConn.execute(
           `DECLARE
@@ -756,9 +764,7 @@ export type DebugStartParams = {
 let _debugStartLock: Promise<void> = Promise.resolve();
 
 export async function debugStart(p: DebugStartParams): Promise<PauseInfo> {
-  process.stderr.write(
-    `[debug] debugStart: owner=${p.owner} obj=${p.objectName} type=${p.objectType} pkg=${p.packageName ?? "null"} userBps=${p.breakpoints.length}\n`
-  );
+  debugLog(`debugStart: owner=${p.owner} obj=${p.objectName} type=${p.objectType} pkg=${p.packageName ?? "null"} userBps=${p.breakpoints.length}`);
 
   // Acquire start lock so any prior debugStart finishes its setup before this one runs.
   const prior = _debugStartLock;
@@ -774,7 +780,7 @@ export async function debugStart(p: DebugStartParams): Promise<PauseInfo> {
 
 async function _debugStartImpl(p: DebugStartParams): Promise<PauseInfo> {
   if (_debugSession) {
-    process.stderr.write("[debug] stopping previous session\n");
+    debugLog("stopping previous session");
     const previous = _debugSession;
     previous.stop();
     // Wait for previous session's connections to actually close before creating new ones.
@@ -783,12 +789,12 @@ async function _debugStartImpl(p: DebugStartParams): Promise<PauseInfo> {
   }
 
   const session = await DebugSession.create();
-  process.stderr.write("[debug] connections created\n");
+  debugLog("connections created");
 
   try {
     await session.initialize();
   } catch (e) {
-    process.stderr.write(`[debug] initialize FAILED: ${String(e)}\n`);
+    debugLog(`initialize FAILED: ${String(e)}`);
     session.stop();
     throw e;
   }
@@ -797,15 +803,15 @@ async function _debugStartImpl(p: DebugStartParams): Promise<PauseInfo> {
   // compiled objects for specific lines) — skip failed ones and continue with valid ones.
   let validUserBps = 0;
   for (const bp of p.breakpoints) {
-    process.stderr.write(`[debug] setting user bp: ${bp.objectName}:${bp.line}\n`);
+    debugLog(`setting user bp: ${bp.objectName}:${bp.line}`);
     try {
       await session.setBreakpoint(bp.owner, bp.objectName, bp.objectType, bp.line);
       validUserBps++;
     } catch (e) {
-      process.stderr.write(`[debug] user bp ${bp.objectName}:${bp.line} skipped: ${String(e)}\n`);
+      debugLog(`user bp ${bp.objectName}:${bp.line} skipped: ${String(e)}`);
     }
   }
-  process.stderr.write(`[debug] user bps: ${validUserBps}/${p.breakpoints.length} set\n`);
+  debugLog(`user bps: ${validUserBps}/${p.breakpoints.length} set`);
 
   // Auto-set an entry breakpoint at line 1 of the target procedure.
   // DBMS_DEBUG never auto-pauses on entry — without at least one breakpoint the
@@ -816,11 +822,11 @@ async function _debugStartImpl(p: DebugStartParams): Promise<PauseInfo> {
   const entryType   = p.packageName ? "PACKAGE BODY" : p.objectType;
   let entryBpId: number | null = null;
   try {
-    process.stderr.write(`[debug] setting entry bp: ${entryTarget} (${entryType}) line=1\n`);
+    debugLog(`setting entry bp: ${entryTarget} (${entryType}) line=1`);
     entryBpId = await session.setBreakpoint(p.owner, entryTarget, entryType, 1);
-    process.stderr.write(`[debug] entry bp OK, bpId=${entryBpId}\n`);
+    debugLog(`entry bp OK, bpId=${entryBpId}`);
   } catch (e) {
-    process.stderr.write(`[debug] entry bp FAILED: ${String(e)}\n`);
+    debugLog(`entry bp FAILED: ${String(e)}`);
     // If no valid breakpoints at all, fail immediately rather than hanging 30s silently.
     if (validUserBps === 0) {
       session.stop();
@@ -835,7 +841,7 @@ async function _debugStartImpl(p: DebugStartParams): Promise<PauseInfo> {
   }
 
   // Fire target asynchronously, then SYNCHRONIZE waits for the entry breakpoint.
-  process.stderr.write("[debug] firing startTarget\n");
+  debugLog("firing startTarget");
   session.startTarget(p.script, p.binds, p.cursorBinds ?? []);
 
   try {
@@ -851,7 +857,7 @@ async function _debugStartImpl(p: DebugStartParams): Promise<PauseInfo> {
     // lacks debug symbols (compiled with PLSQL_OPTIMIZE_LEVEL>1 or NATIVE).
     if (result.status === "completed" && result.frame === null) {
       session.stop();
-      process.stderr.write(`[debug] target ran to completion without pausing — likely not debug-compiled\n`);
+      debugLog("target ran to completion without pausing — likely not debug-compiled");
       throw new RpcCodedError(
         ORACLE_ERR,
         `${entryTarget} ran without pausing — the object likely lacks debug information.\n` +
@@ -862,11 +868,11 @@ async function _debugStartImpl(p: DebugStartParams): Promise<PauseInfo> {
       );
     }
 
-    process.stderr.write(`[debug] debugStart complete: ${result.status}\n`);
+    debugLog(`debugStart complete: ${result.status}`);
     return result;
   } catch (e) {
     if (e instanceof RpcCodedError) throw e;
-    process.stderr.write(`[debug] synchronizeWithTimeout threw: ${String(e)}\n`);
+    debugLog(`synchronizeWithTimeout threw: ${String(e)}`);
     return { status: "completed", frame: null, reason: REASON_FINISHED };
   }
 }

@@ -169,18 +169,23 @@ async function aiChatViaCli(params: AiChatParams): Promise<AiChatResult> {
   proc.stdin.end();
 
   const timeout = AbortSignal.timeout(120_000);
-  const [stdout, stderr] = await Promise.race([
-    Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]),
-    new Promise<never>((_, reject) => timeout.addEventListener("abort", () => reject(new Error("claude CLI timed out after 120s")))),
-  ]);
-  await proc.exited;
+  try {
+    const [stdout, stderr] = await Promise.race([
+      Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]),
+      new Promise<never>((_, reject) => timeout.addEventListener("abort", () => reject(new Error("claude CLI timed out after 120s")))),
+    ]);
+    await proc.exited;
 
-  if (proc.exitCode !== 0) {
-    const errMsg = stderr.trim() || "claude CLI returned non-zero exit code";
-    throw new Error(`claude CLI error: ${errMsg}`);
+    if (proc.exitCode !== 0) {
+      const errMsg = stderr.trim() || "claude CLI returned non-zero exit code";
+      throw new Error(`claude CLI error: ${errMsg}`);
+    }
+
+    return { content: stdout.trim(), toolsUsed: [] };
+  } finally {
+    // Kill the process if still running (e.g. timeout fired before stdout drained)
+    proc.kill();
   }
-
-  return { content: stdout.trim(), toolsUsed: [] };
 }
 
 export async function aiChat(params: AiChatParams): Promise<AiChatResult> {

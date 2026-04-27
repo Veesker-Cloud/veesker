@@ -43,10 +43,20 @@ function isNumericCol(columns: { name: string; dataType: string }[], colName: st
   return NUMERIC_TYPES.has(baseType);
 }
 
+// 64 chart sessions ≈ 250 KB memory ceiling (config objects are small); evict LRU when exceeded.
 const MAX_SESSIONS = 64;
 const sessions = new Map<string, ChartConfig>();
 
-function evictOldestSession() {
+function touchSession(id: string) {
+  const cfg = sessions.get(id);
+  if (cfg) {
+    // Re-insert to move to end of Map iteration order (LRU: least-recently-used at front)
+    sessions.delete(id);
+    sessions.set(id, cfg);
+  }
+}
+
+function evictLruSession() {
   if (sessions.size >= MAX_SESSIONS) {
     sessions.delete(sessions.keys().next().value!);
   }
@@ -147,7 +157,11 @@ export async function chartConfigure(p: ConfigureParams): Promise<ChartConfigure
   if (patch.aggregation !== undefined && patch.aggregation !== null) config.aggregation = patch.aggregation;
   if (patch.title !== undefined && patch.title !== null) config.title = patch.title;
 
-  if (!sessions.has(p.sessionId)) evictOldestSession();
+  if (sessions.has(p.sessionId)) {
+    touchSession(p.sessionId);
+  } else {
+    evictLruSession();
+  }
   sessions.set(p.sessionId, config);
 
   const previewData = buildPreview(config, p.columns, p.rows);
