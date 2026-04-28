@@ -52,6 +52,9 @@ export type SqlTab = {
   isDirty: boolean;                   // true when sql !== savedContent
   savedContent: string | null;        // content at last save/load; null if new tab
   plsqlMeta: PlsqlMeta | null;
+  packageSpec: string | undefined;
+  packageActiveTab: "spec" | "body" | undefined;
+  specMeta: PlsqlMeta | undefined;
 };
 
 /** Returns the active TabResult for a tab, or null if none. */
@@ -184,6 +187,9 @@ function makeTab(title: string, sql: string): SqlTab {
     isDirty: false,
     savedContent: null,
     plsqlMeta: null,
+    packageSpec: undefined,
+    packageActiveTab: undefined,
+    specMeta: undefined,
   };
 }
 
@@ -400,6 +406,32 @@ export const sqlEditor = {
     }
   },
 
+  setPackageActiveTab(tabId: string, tab: "spec" | "body"): void {
+    const t = findTab(tabId);
+    if (t !== null) {
+      t.packageActiveTab = tab;
+      _tabs = [..._tabs];
+    }
+  },
+
+  updatePackageSpec(tabId: string, sql: string): void {
+    const t = findTab(tabId);
+    if (t !== null) {
+      t.packageSpec = sql;
+      _tabs = [..._tabs];
+    }
+  },
+
+  setPackageSpec(tabId: string, spec: string, specMeta: PlsqlMeta): void {
+    const t = findTab(tabId);
+    if (t !== null) {
+      t.packageSpec = spec;
+      t.specMeta = specMeta;
+      t.packageActiveTab = "spec";
+      _tabs = [..._tabs];
+    }
+  },
+
   toggleDrawer(): void {
     _drawerOpen = !_drawerOpen;
   },
@@ -408,7 +440,8 @@ export const sqlEditor = {
   async runActive(): Promise<void> {
     const tab = this.active;
     if (tab === null) return;
-    const sql = stripTrailingSemicolon(tab.sql);
+    const rawSql = tab.packageActiveTab === "spec" ? (tab.packageSpec ?? tab.sql) : tab.sql;
+    const sql = stripTrailingSemicolon(rawSql);
     if (sql === "") return;
     { const _c = askConfirm(sql); if (_c !== true && !(await _c)) return; }
     const requestId = crypto.randomUUID();
@@ -462,8 +495,12 @@ export const sqlEditor = {
               _tabs = [..._tabs];
             }
             if (ceRes.ok && ceRes.data.length === 0 && t.plsqlMeta) {
-              const { connectionId, owner, objectType, objectName } = t.plsqlMeta;
-              void objectVersionCapture(connectionId, owner, objectType, objectName, t.sql, "compile");
+              const meta = t.packageActiveTab === "spec" ? t.specMeta : t.plsqlMeta;
+              const captureSql = t.packageActiveTab === "spec" ? (t.packageSpec ?? t.sql) : t.sql;
+              if (meta) {
+                const { connectionId, owner, objectType, objectName } = meta;
+                void objectVersionCapture(connectionId, owner, objectType, objectName, captureSql, "compile");
+              }
             }
           });
         }
@@ -478,7 +515,7 @@ export const sqlEditor = {
   async runActiveAll(): Promise<void> {
     const tab = this.active;
     if (tab === null) return;
-    const sql = tab.sql;
+    const sql = tab.packageActiveTab === "spec" ? (tab.packageSpec ?? tab.sql) : tab.sql;
     if (sql.trim() === "") return;
 
     // Pre-flight: check splitter on the frontend to show the error banner early.
@@ -494,7 +531,7 @@ export const sqlEditor = {
       }
     }
 
-    { const _c = askConfirm(tab.sql); if (_c !== true && !(await _c)) return; }
+    { const _c = askConfirm(sql); if (_c !== true && !(await _c)) return; }
     const requestId = crypto.randomUUID();
     tab.running = true;
     tab.runningRequestId = requestId;
@@ -619,8 +656,12 @@ export const sqlEditor = {
             _tabs = [..._tabs];
           }
           if (ceRes.ok && ceRes.data.length === 0 && t.plsqlMeta) {
-            const { connectionId, owner, objectType, objectName } = t.plsqlMeta;
-            void objectVersionCapture(connectionId, owner, objectType, objectName, t.sql, "compile");
+            const meta = t.packageActiveTab === "spec" ? t.specMeta : t.plsqlMeta;
+            const captureSql = t.packageActiveTab === "spec" ? (t.packageSpec ?? t.sql) : t.sql;
+            if (meta) {
+              const { connectionId, owner, objectType, objectName } = meta;
+              void objectVersionCapture(connectionId, owner, objectType, objectName, captureSql, "compile");
+            }
           }
         });
       }
@@ -783,8 +824,12 @@ export const sqlEditor = {
               _tabs = [..._tabs];
             }
             if (ceRes.ok && ceRes.data.length === 0 && t.plsqlMeta) {
-              const { connectionId, owner, objectType, objectName } = t.plsqlMeta;
-              void objectVersionCapture(connectionId, owner, objectType, objectName, t.sql, "compile");
+              const meta = t.packageActiveTab === "spec" ? t.specMeta : t.plsqlMeta;
+              const captureSql = t.packageActiveTab === "spec" ? (t.packageSpec ?? t.sql) : t.sql;
+              if (meta) {
+                const { connectionId, owner, objectType, objectName } = meta;
+                void objectVersionCapture(connectionId, owner, objectType, objectName, captureSql, "compile");
+              }
             }
           });
         }
@@ -918,6 +963,9 @@ export const sqlEditor = {
       isDirty: false,
       savedContent: null,
       plsqlMeta,
+      packageSpec: undefined,
+      packageActiveTab: undefined,
+      specMeta: undefined,
     };
     _tabs = [..._tabs, tab];
     _activeId = id;
