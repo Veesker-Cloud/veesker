@@ -6,6 +6,7 @@
 
 <script lang="ts">
   import { sqlEditor, COMPILE_REGEX, runExplain, setActiveResult } from "$lib/stores/sql-editor.svelte";
+  import { formatSql } from "$lib/workspace/format-sql";
   import { createPerfAnalyzer } from "$lib/stores/perf-analyzer.svelte";
   import { flowTraceSql } from "$lib/workspace";
   import { visualFlow } from "$lib/stores/visual-flow.svelte";
@@ -185,6 +186,23 @@
     if (sql.trim()) void runExplain(sql);
   }
 
+  function handleFormat() {
+    const t = sqlEditor.active;
+    if (!t) return;
+    const current = t.packageActiveTab === "spec" ? (t.packageSpec ?? t.sql) : t.sql;
+    if (!current.trim()) return;
+    try {
+      const formatted = formatSql(current, !!t.plsqlMeta);
+      if (t.packageActiveTab === "spec") {
+        sqlEditor.updatePackageSpec(t.id, formatted);
+      } else {
+        sqlEditor.updateSql(t.id, formatted);
+      }
+    } catch {
+      // sql-formatter throws on severely malformed input — leave the editor unchanged
+    }
+  }
+
   async function explainWithVisualFlow(withRuntimeStats: boolean): Promise<void> {
     const sql = active?.sql ?? "";
     if (!sql.trim()) return;
@@ -265,175 +283,34 @@
         {/each}
         <button class="plus" aria-label="New query" onclick={() => sqlEditor.openBlank()}>+</button>
       </div>
-      <div class="file-actions">
-        <button
-          class="file-btn"
-          title="New query (⌘N)"
-          aria-label="New query"
-          onclick={() => sqlEditor.openBlank()}
-        >
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
-            <path d="M2 1.5h5.5L11 5v6.5H2V1.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
-            <path d="M7 1.5V5.5h4" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
-            <line x1="4.5" y1="6.5" x2="8.5" y2="6.5" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
-            <line x1="4.5" y1="8.5" x2="7" y2="8.5" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
-          </svg>
-          New
-        </button>
-        <button
-          class="file-btn"
-          title="Open file (⌘O)"
-          aria-label="Open file"
-          onclick={() => void sqlEditor.openFromFile()}
-        >
-          <svg width="14" height="13" viewBox="0 0 14 13" fill="none" aria-hidden="true">
-            <path d="M1 4.5h4.5l1 1.5H13V11H1V4.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
-            <path d="M1 4.5V2.5h3.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          Open
-        </button>
-        <button
-          class="file-btn"
-          title="Save (⌘S)"
-          aria-label="Save"
-          onclick={() => void sqlEditor.saveActive()}
-        >
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
-            <rect x="1.5" y="1.5" width="10" height="10" rx="1" stroke="currentColor" stroke-width="1.2"/>
-            <rect x="4" y="1.5" width="5" height="3.5" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/>
-            <rect x="3" y="7" width="7" height="3.5" rx="0.5" stroke="currentColor" stroke-width="1"/>
-            <line x1="7" y1="2" x2="7" y2="4.5" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
-          </svg>
-          Save
-        </button>
-        <button
-          class="file-btn"
-          title="Save as… (⌘⇧S)"
-          aria-label="Save as"
-          onclick={() => void sqlEditor.saveAsActive()}
-        >
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
-            <rect x="1.5" y="1.5" width="10" height="10" rx="1" stroke="currentColor" stroke-width="1.2"/>
-            <rect x="4" y="1.5" width="5" height="3.5" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/>
-            <rect x="3" y="7" width="7" height="3.5" rx="0.5" stroke="currentColor" stroke-width="1"/>
-            <path d="M9.5 10l1.5-1.5-1.5-1.5" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          Save As
-        </button>
-        {#if active && COMPILE_REGEX.test(active.packageActiveTab === "spec" ? (active.packageSpec ?? active.sql) : active.sql)}
-          <button
-            class="file-btn compile-btn"
-            title="Compile (run and check for errors)"
-            aria-label="Compile"
-            onclick={() => void sqlEditor.runActiveAll()}
-          >
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
-              <polygon points="2,1 11,6 2,11"/>
-            </svg>
-            Compile
-          </button>
-        {/if}
-        {#if active?.plsqlMeta}
-          {@const badgeMeta = (active.packageActiveTab === "spec" && active.specMeta) ? active.specMeta : active.plsqlMeta}
-          <div style="position:relative; display:flex; align-items:stretch;">
-            <ObjectVersionBadge
+      {#if active?.plsqlMeta}
+        {@const badgeMeta = (active.packageActiveTab === "spec" && active.specMeta) ? active.specMeta : active.plsqlMeta}
+        <div style="position:relative; display:flex; align-items:stretch;">
+          <ObjectVersionBadge
+            connectionId={badgeMeta.connectionId}
+            owner={badgeMeta.owner}
+            objectType={badgeMeta.objectType}
+            objectName={badgeMeta.objectName}
+            onOpen={() => { flyoutOpen = true; }}
+          />
+          {#if flyoutOpen}
+            <ObjectVersionFlyout
               connectionId={badgeMeta.connectionId}
               owner={badgeMeta.owner}
               objectType={badgeMeta.objectType}
               objectName={badgeMeta.objectName}
-              onOpen={() => { flyoutOpen = true; }}
+              onLoadInEditor={(ddl) => {
+                if (active) {
+                  if (active.packageActiveTab === "spec") sqlEditor.updatePackageSpec(active.id, ddl);
+                  else sqlEditor.updateSql(active.id, ddl);
+                }
+                flyoutOpen = false;
+              }}
+              onClose={() => { flyoutOpen = false; }}
             />
-            {#if flyoutOpen}
-              <ObjectVersionFlyout
-                connectionId={badgeMeta.connectionId}
-                owner={badgeMeta.owner}
-                objectType={badgeMeta.objectType}
-                objectName={badgeMeta.objectName}
-                onLoadInEditor={(ddl) => {
-                  if (active) {
-                    if (active.packageActiveTab === "spec") sqlEditor.updatePackageSpec(active.id, ddl);
-                    else sqlEditor.updateSql(active.id, ddl);
-                  }
-                  flyoutOpen = false;
-                }}
-                onClose={() => { flyoutOpen = false; }}
-              />
-            {/if}
-          </div>
-        {/if}
-        {#if !active?.plsqlMeta}
-          <button
-            class="file-btn"
-            title="Explain Plan (F6)"
-            aria-label="Explain Plan"
-            onclick={() => triggerExplain(active?.sql ?? "")}
-          >
-            Explain
-          </button>
-          <button
-            class="file-btn"
-            title="Visual Flow — static execution trace"
-            aria-label="Visual Flow (static)"
-            disabled={!active?.sql?.trim()}
-            onclick={() => void explainWithVisualFlow(false)}
-          >
-            Visual Flow (static)
-          </button>
-          <button
-            class="file-btn"
-            title="Visual Flow — with runtime statistics"
-            aria-label="Visual Flow with stats"
-            disabled={!active?.sql?.trim()}
-            onclick={() => void explainWithVisualFlow(true)}
-          >
-            Visual Flow + Stats
-          </button>
-        {/if}
-      </div>
-      <div class="txn-actions">
-        <button
-          class="txn-btn commit-btn"
-          title="Commit transaction"
-          aria-label="Commit"
-          disabled={!sqlEditor.pendingTx}
-          onclick={() => void sqlEditor.commit().catch(e => { window.alert("Commit failed: " + String(e)); })}
-        >
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-            <circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.2"/>
-            <polyline points="3.5,6 5.5,8 8.5,4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          Commit
-        </button>
-        <button
-          class="txn-btn rollback-btn"
-          title="Rollback transaction"
-          aria-label="Rollback"
-          disabled={!sqlEditor.pendingTx}
-          onclick={() => void sqlEditor.rollback().catch(e => { window.alert("Rollback failed: " + String(e)); })}
-        >
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-            <path d="M9.5 2.5 A4.5 4.5 0 1 0 11 6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-            <polyline points="9.5,2.5 9.5,5 12,5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          Rollback
-        </button>
-      </div>
-      <button
-        class="expand-btn"
-        aria-label={sqlEditor.editorExpanded ? "Restore editor" : "Expand editor (⌘⇧E)"}
-        title={sqlEditor.editorExpanded ? "Restore (⌘⇧E)" : "Expand (⌘⇧E)"}
-        onclick={() => sqlEditor.toggleEditorExpanded()}
-      >
-        {#if sqlEditor.editorExpanded}
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
-            <path d="M5 1H1v4M8 1h4v4M5 12H1V8M8 12h4V8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        {:else}
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
-            <path d="M1 5V1h4M12 5V1H8M1 8v4h4M12 8v4H8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        {/if}
-      </button>
+          {/if}
+        </div>
+      {/if}
       <button
         class="collapse"
         aria-label="Collapse drawer"
@@ -505,6 +382,118 @@
                 {completionSchema}
                 {getColumns}
               />
+              <div class="dock" aria-label="Editor actions">
+                <button class="dock-btn" title="New query (⌘N)" aria-label="New query" onclick={() => sqlEditor.openBlank()}>
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <path d="M4 2.5h5.5L13 6v7.5H4V2.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+                    <path d="M9.5 2.5V6.5H13" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+                    <line x1="6.5" y1="9.5" x2="9.5" y2="9.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                    <line x1="8" y1="8" x2="8" y2="11" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                  </svg>
+                </button>
+                <button class="dock-btn" title="Open file (⌘O)" aria-label="Open file" onclick={() => void sqlEditor.openFromFile()}>
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <path d="M2 7.5h12V13H2V7.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+                    <path d="M2 7.5V5H5.5l1.5 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+                <button class="dock-btn" title="Save (⌘S)" aria-label="Save" onclick={() => void sqlEditor.saveActive()}>
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <rect x="2" y="2" width="12" height="12" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
+                    <rect x="5" y="2" width="6" height="4.5" stroke="currentColor" stroke-width="1.1"/>
+                    <rect x="3.5" y="9" width="9" height="5" rx="0.5" stroke="currentColor" stroke-width="1.1"/>
+                    <line x1="8.5" y1="2.5" x2="8.5" y2="6" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+                  </svg>
+                </button>
+                <button class="dock-btn" title="Save as… (⌘⇧S)" aria-label="Save as" onclick={() => void sqlEditor.saveAsActive()}>
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <rect x="1.5" y="2" width="10.5" height="12" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
+                    <rect x="4.5" y="2" width="5" height="4" stroke="currentColor" stroke-width="1.1"/>
+                    <rect x="3" y="8.5" width="7.5" height="4.5" rx="0.5" stroke="currentColor" stroke-width="1.1"/>
+                    <path d="M14 6l2.5 3-2.5 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                    <line x1="11.5" y1="9" x2="16" y2="9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                  </svg>
+                </button>
+                <div class="dock-sep"></div>
+                <button class="dock-btn dock-format" title="Beautify / Format code" aria-label="Format code" disabled={!tab.sql?.trim()} onclick={handleFormat}>
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <path d="M2.5 13.5L9.5 6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    <rect x="1.2" y="12.2" width="2.8" height="2.8" rx="0.4" transform="rotate(-45 2.6 13.6)" stroke="currentColor" stroke-width="1.1" fill="none"/>
+                    <line x1="10.5" y1="4" x2="10.5" y2="7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                    <line x1="9" y1="5.5" x2="12" y2="5.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                    <line x1="13.5" y1="1.5" x2="13.5" y2="3.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+                    <line x1="12.5" y1="2.5" x2="14.5" y2="2.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+                  </svg>
+                </button>
+                <div class="dock-sep"></div>
+                {#if COMPILE_REGEX.test(tab.packageActiveTab === "spec" ? (tab.packageSpec ?? tab.sql) : tab.sql)}
+                  <button class="dock-btn dock-compile" title="Compile" aria-label="Compile" onclick={() => void sqlEditor.runActiveAll()}>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                      <polygon points="3,2 14,8 3,14"/>
+                    </svg>
+                  </button>
+                  <div class="dock-sep"></div>
+                {/if}
+                {#if !tab.plsqlMeta}
+                  <button class="dock-btn" title="Explain Plan (F6)" aria-label="Explain Plan" onclick={() => triggerExplain(tab.sql)}>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.3"/>
+                      <line x1="10.2" y1="10.2" x2="14.5" y2="14.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                      <line x1="7" y1="4.5" x2="7" y2="9.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                      <line x1="4.5" y1="7" x2="9.5" y2="7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                    </svg>
+                  </button>
+                  <button class="dock-btn" title="Visual Flow — static trace" aria-label="Visual Flow (static)" disabled={!tab.sql?.trim()} onclick={() => void explainWithVisualFlow(false)}>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <circle cx="2.5" cy="8" r="1.8" stroke="currentColor" stroke-width="1.2"/>
+                      <circle cx="8" cy="3.5" r="1.8" stroke="currentColor" stroke-width="1.2"/>
+                      <circle cx="13.5" cy="8" r="1.8" stroke="currentColor" stroke-width="1.2"/>
+                      <circle cx="8" cy="12.5" r="1.8" stroke="currentColor" stroke-width="1.2"/>
+                      <line x1="4.3" y1="8" x2="11.7" y2="8" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+                      <line x1="3.4" y1="6.5" x2="6.4" y2="4.9" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+                      <line x1="9.6" y1="4.9" x2="12.6" y2="6.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+                      <line x1="3.4" y1="9.5" x2="6.4" y2="11.1" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+                      <line x1="9.6" y1="11.1" x2="12.6" y2="9.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+                    </svg>
+                  </button>
+                  <button class="dock-btn" title="Visual Flow + runtime stats" aria-label="Visual Flow with stats" disabled={!tab.sql?.trim()} onclick={() => void explainWithVisualFlow(true)}>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <circle cx="2.5" cy="8" r="1.8" stroke="currentColor" stroke-width="1.2"/>
+                      <circle cx="7" cy="3.5" r="1.8" stroke="currentColor" stroke-width="1.2"/>
+                      <circle cx="11" cy="8" r="1.8" stroke="currentColor" stroke-width="1.2"/>
+                      <line x1="4.3" y1="8" x2="9.2" y2="8" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+                      <line x1="3.4" y1="6.5" x2="5.5" y2="4.9" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+                      <line x1="8.5" y1="4.9" x2="11" y2="6.2" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+                      <path d="M14 5l-1.8 3h1.4l-1.8 4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                  <div class="dock-sep"></div>
+                {/if}
+                <button class="dock-btn dock-commit" title="Commit transaction" aria-label="Commit" disabled={!sqlEditor.pendingTx} onclick={() => void sqlEditor.commit().catch(e => { window.alert("Commit failed: " + String(e)); })}>
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.3"/>
+                    <polyline points="5,8 7.5,10.5 11.5,5.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+                <button class="dock-btn dock-rollback" title="Rollback transaction" aria-label="Rollback" disabled={!sqlEditor.pendingTx} onclick={() => void sqlEditor.rollback().catch(e => { window.alert("Rollback failed: " + String(e)); })}>
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <path d="M5.5 4C8 1.5 14 2.5 14 8s-6 6.5-8.5 4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                    <polyline points="2,8.5 5.5,4 9,7.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+                <div class="dock-sep"></div>
+                <button class="dock-btn" title={sqlEditor.editorExpanded ? "Restore (⌘⇧E)" : "Expand (⌘⇧E)"} aria-label={sqlEditor.editorExpanded ? "Restore editor" : "Expand editor"} onclick={() => sqlEditor.toggleEditorExpanded()}>
+                  {#if sqlEditor.editorExpanded}
+                    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <path d="M6 1v5H1M10 1v5h5M6 15v-5H1M10 15v-5h5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  {:else}
+                    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <path d="M1 6V1h5M15 6V1h-5M1 10v5h5M15 10v5h-5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  {/if}
+                </button>
+              </div>
             {/if}
           </div>
 
@@ -697,56 +686,6 @@
     border-radius: 3px;
   }
   .tab-close:hover { opacity: 1; background: rgba(255,255,255,0.1); }
-  .file-actions {
-    display: flex;
-    align-items: stretch;
-    border-left: 1px solid rgba(255,255,255,0.06);
-    border-right: 1px solid rgba(255,255,255,0.06);
-  }
-  .file-btn {
-    background: transparent;
-    border: none;
-    border-right: 1px solid rgba(255,255,255,0.04);
-    padding: 0 0.6rem;
-    color: rgba(255,255,255,0.45);
-    cursor: pointer;
-    font-size: 11px;
-    font-family: "Space Grotesk", sans-serif;
-    white-space: nowrap;
-    display: flex;
-    align-items: center;
-    gap: 0.3rem;
-    transition: background 0.1s, color 0.1s;
-  }
-  .file-btn:hover { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.85); }
-  .file-btn svg { flex-shrink: 0; }
-  .compile-btn { color: #f5a08a; }
-  .compile-btn:hover { background: rgba(179, 62, 31, 0.2); color: #f5a08a; }
-  .txn-actions {
-    display: flex;
-    align-items: stretch;
-    border-left: 1px solid rgba(255,255,255,0.06);
-    border-right: 1px solid rgba(255,255,255,0.06);
-  }
-  .txn-btn {
-    background: transparent;
-    border: none;
-    border-right: 1px solid rgba(255,255,255,0.04);
-    padding: 0 0.6rem;
-    cursor: pointer;
-    font-size: 11px;
-    font-family: "Space Grotesk", sans-serif;
-    white-space: nowrap;
-    display: flex;
-    align-items: center;
-    gap: 0.3rem;
-    transition: background 0.1s, color 0.1s;
-  }
-  .commit-btn { color: #7ec96a; }
-  .commit-btn:hover:not(:disabled) { background: rgba(126,201,106,0.12); color: #7ec96a; }
-  .rollback-btn { color: #f5a08a; }
-  .rollback-btn:hover:not(:disabled) { background: rgba(245,160,138,0.12); color: #f5a08a; }
-  .txn-btn:disabled { opacity: 0.28; cursor: default; }
   .plus, .collapse, .history-toggle {
     background: transparent;
     border: none;
@@ -758,21 +697,6 @@
     transition: background 0.1s, color 0.1s;
   }
   .plus:hover, .collapse:hover, .history-toggle:hover {
-    background: rgba(255,255,255,0.06);
-    color: rgba(255,255,255,0.8);
-  }
-  .expand-btn {
-    background: transparent;
-    border: none;
-    border-left: 1px solid rgba(255,255,255,0.06);
-    padding: 0 0.65rem;
-    color: rgba(255,255,255,0.35);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    transition: background 0.1s, color 0.1s;
-  }
-  .expand-btn:hover {
     background: rgba(255,255,255,0.06);
     color: rgba(255,255,255,0.8);
   }
@@ -804,10 +728,68 @@
     font-size: 12px;
   }
   .editor-pane {
+    position: relative;
     min-height: 80px;
     border-bottom: 1px solid rgba(26, 22, 18, 0.1);
     overflow: hidden;
   }
+
+  /* ── Floating dock ──────────────────────────────────────────────────────── */
+  .dock {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    gap: 1px;
+    padding: 4px 6px;
+    background: rgba(14, 12, 10, 0.84);
+    backdrop-filter: blur(18px) saturate(160%);
+    -webkit-backdrop-filter: blur(18px) saturate(160%);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 14px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.55), 0 1px 0 rgba(255,255,255,0.06) inset;
+    white-space: nowrap;
+    pointer-events: auto;
+  }
+  .dock-btn {
+    background: transparent;
+    border: none;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255,255,255,0.48);
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s, transform 0.1s;
+    flex-shrink: 0;
+  }
+  .dock-btn:hover:not(:disabled) {
+    background: rgba(255,255,255,0.10);
+    color: rgba(255,255,255,0.92);
+    transform: scale(1.15) translateY(-2px);
+  }
+  .dock-btn:active:not(:disabled) { transform: scale(1.04); }
+  .dock-btn:disabled { opacity: 0.22; cursor: default; }
+  .dock-sep {
+    width: 1px;
+    height: 18px;
+    background: rgba(255,255,255,0.10);
+    margin: 0 3px;
+    flex-shrink: 0;
+  }
+  .dock-format { color: #a0c4ff; }
+  .dock-format:hover:not(:disabled) { background: rgba(100,160,255,0.14); color: #c4d9ff; transform: scale(1.15) translateY(-2px); }
+  .dock-compile { color: #f5a08a; }
+  .dock-compile:hover:not(:disabled) { background: rgba(179,62,31,0.18); color: #f5c4a8; transform: scale(1.15) translateY(-2px); }
+  .dock-commit { color: #7ec96a; }
+  .dock-commit:hover:not(:disabled) { background: rgba(126,201,106,0.15); color: #9fe88a; transform: scale(1.15) translateY(-2px); }
+  .dock-rollback { color: #f5a08a; }
+  .dock-rollback:hover:not(:disabled) { background: rgba(245,160,138,0.15); color: #f5c4a8; transform: scale(1.15) translateY(-2px); }
 
   /* ── Middle resize handle ──────────────────────────────────────────────── */
   .mid-handle {
