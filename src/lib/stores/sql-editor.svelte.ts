@@ -461,6 +461,10 @@ export const sqlEditor = {
               r.compileErrors = ceRes.ok ? ceRes.data : [];
               _tabs = [..._tabs];
             }
+            if (ceRes.ok && ceRes.data.length === 0 && t.plsqlMeta) {
+              const { connectionId, owner, objectType, objectName } = t.plsqlMeta;
+              void objectVersionCapture(connectionId, owner, objectType, objectName, t.sql, "compile");
+            }
           });
         }
       }
@@ -777,6 +781,10 @@ export const sqlEditor = {
             if (r) {
               r.compileErrors = ceRes.ok ? ceRes.data : [];
               _tabs = [..._tabs];
+            }
+            if (ceRes.ok && ceRes.data.length === 0 && t.plsqlMeta) {
+              const { connectionId, owner, objectType, objectName } = t.plsqlMeta;
+              void objectVersionCapture(connectionId, owner, objectType, objectName, t.sql, "compile");
             }
           });
         }

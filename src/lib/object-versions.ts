@@ -129,5 +129,5 @@ export async function objectVersionGetRemote(
 }
 
 export function objectFilePath(owner: string, objectType: string, objectName: string): string {
-  return `${owner}/${objectType.replace(" ", "_")}/${objectName}.sql`;
+  return `${owner}/${objectType.replaceAll(" ", "_")}/${objectName}.sql`;
 }
