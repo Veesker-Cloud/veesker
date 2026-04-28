@@ -52,6 +52,9 @@ export type SqlTab = {
   isDirty: boolean;                   // true when sql !== savedContent
   savedContent: string | null;        // content at last save/load; null if new tab
   plsqlMeta: PlsqlMeta | null;
+  packageSpec: string | undefined;
+  packageActiveTab: "spec" | "body" | undefined;
+  specMeta: PlsqlMeta | undefined;
 };
 
 /** Returns the active TabResult for a tab, or null if none. */
@@ -184,6 +187,9 @@ function makeTab(title: string, sql: string): SqlTab {
     isDirty: false,
     savedContent: null,
     plsqlMeta: null,
+    packageSpec: undefined,
+    packageActiveTab: undefined,
+    specMeta: undefined,
   };
 }
 
@@ -397,6 +403,32 @@ export const sqlEditor = {
     if (tab !== null) {
       tab.sql = sql;
       tab.isDirty = tab.savedContent !== null && tab.sql !== tab.savedContent;
+    }
+  },
+
+  setPackageActiveTab(tabId: string, tab: "spec" | "body"): void {
+    const t = findTab(tabId);
+    if (t !== null) {
+      t.packageActiveTab = tab;
+      _tabs = [..._tabs];
+    }
+  },
+
+  updatePackageSpec(tabId: string, sql: string): void {
+    const t = findTab(tabId);
+    if (t !== null) {
+      t.packageSpec = sql;
+      _tabs = [..._tabs];
+    }
+  },
+
+  setPackageSpec(tabId: string, spec: string, specMeta: PlsqlMeta): void {
+    const t = findTab(tabId);
+    if (t !== null) {
+      t.packageSpec = spec;
+      t.specMeta = specMeta;
+      t.packageActiveTab = "spec";
+      _tabs = [..._tabs];
     }
   },
 
@@ -918,6 +950,9 @@ export const sqlEditor = {
       isDirty: false,
       savedContent: null,
       plsqlMeta,
+      packageSpec: undefined,
+      packageActiveTab: undefined,
+      specMeta: undefined,
     };
     _tabs = [..._tabs, tab];
     _activeId = id;
