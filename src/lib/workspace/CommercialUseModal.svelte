@@ -40,28 +40,33 @@
     onkeydown={(e) => e.stopPropagation()}
   >
     <div class="head">
+      <span class="ce-badge">Community Edition</span>
       <span class="title">Welcome to Veesker</span>
     </div>
 
     <div class="body">
-      <p>Veesker is open source under Apache 2.0. The packaged desktop application has a tiered commercial-use policy:</p>
+      <p class="ce-promise">
+        The Community Edition is <strong>free forever</strong> — all core IDE features, PL/SQL debugger, ORDS studio, and BYOK AI included. No limits, no expiry, no credit card.
+      </p>
 
-      <ul class="usage-list">
-        <li>
-          <strong>Free</strong> for personal use, open-source contributors, education, and companies with fewer than 50 employees and less than US$ 5M annual revenue.
-        </li>
-        <li>
-          <strong>Paid subscription</strong> for organizations above those thresholds — see <button class="link" onclick={openPricing}>pricing</button>.
-        </li>
-      </ul>
+      <div class="tier-row">
+        <div class="tier ce">
+          <span class="tier-name">🟢 Community Edition</span>
+          <span class="tier-desc">Full IDE · BYOK AI · Apache 2.0 · free forever</span>
+        </div>
+        <div class="tier cloud">
+          <span class="tier-name">☁ Veesker Cloud</span>
+          <span class="tier-desc">Schema-aware AI · managed execution · team features — <button class="link" onclick={openPricing}>see plans</button></span>
+        </div>
+      </div>
 
-      <p class="prompt">How will you be using Veesker?</p>
+      <p class="prompt">How will you be using Veesker CE?</p>
 
       <label class="choice" class:selected={selected === "personal"}>
         <input type="radio" bind:group={selected} value="personal" />
         <div>
-          <span class="choice-title">Personal / small team</span>
-          <span class="choice-desc">Individual use, open source, education, or a small company (under 50 employees and US$ 5M revenue)</span>
+          <span class="choice-title">Personal / open source / education</span>
+          <span class="choice-desc">Individual use, contributors, students, or small teams (under 50 employees and US$ 5M revenue)</span>
         </div>
       </label>
 
@@ -74,7 +79,7 @@
       </label>
 
       <p class="hint">
-        This choice is honor-based — Veesker does not technically restrict features by tier. You can change it later in Settings.
+        This choice is honor-based. You can change it later in Settings.
         See <button class="link" onclick={() => void openUrl('https://github.com/gevianajr/veesker/blob/main/COMMERCIAL_USE.md')}>COMMERCIAL_USE.md</button> for details.
       </p>
     </div>
@@ -99,6 +104,13 @@
   }
   .head {
     padding: 14px 18px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .ce-badge {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.08em; color: #E85D3C;
+    border: 1px solid rgba(232,93,60,0.4); border-radius: 4px;
+    padding: 2px 7px; flex-shrink: 0;
   }
   .title {
     font-weight: 600; color: var(--text-primary); font-size: 14px;
@@ -109,10 +121,24 @@
   .body p {
     font-size: 12.5px; line-height: 1.55; margin: 0 0 12px;
   }
-  .usage-list {
-    margin: 8px 0 16px; padding-left: 18px; font-size: 12px; line-height: 1.55;
+  .ce-promise {
+    background: rgba(232,93,60,0.07); border: 1px solid rgba(232,93,60,0.2);
+    border-radius: 6px; padding: 10px 12px; margin-bottom: 14px !important;
   }
-  .usage-list li { margin: 4px 0; }
+  .tier-row {
+    display: flex; gap: 8px; margin-bottom: 16px;
+  }
+  .tier {
+    flex: 1; border-radius: 6px; padding: 9px 11px;
+    display: flex; flex-direction: column; gap: 3px;
+    border: 1px solid var(--border);
+  }
+  .tier.ce { border-color: rgba(126,201,106,0.3); background: rgba(126,201,106,0.05); }
+  .tier.cloud { border-color: rgba(106,160,245,0.3); background: rgba(106,160,245,0.05); }
+  .tier-name { font-weight: 700; font-size: 11.5px; }
+  .tier.ce .tier-name { color: #7ec96a; }
+  .tier.cloud .tier-name { color: #6aa0f5; }
+  .tier-desc { font-size: 11px; color: var(--text-muted); line-height: 1.4; }
   .prompt {
     font-weight: 600; margin: 14px 0 10px;
   }

@@ -37,3 +37,8 @@ addons/
 *-key
 *-key.pub
 !ssh-keys/
+
+# Internal session files (Claude Code, audit reports, local ops notes)
+.claude/
+.remember/
+audit-report.md

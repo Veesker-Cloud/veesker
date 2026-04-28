@@ -1,18 +1,50 @@
 ﻿<div align="center">
 
-<img src="static/veesker-sheep.png" width="180" alt="Veesker mascot — cyberpunk sheep" />
+<img src="static/ce-logo.png" width="220" alt="Veesker Community Edition" />
 
-# Veesker
+# Veesker Community Edition
 
-**The Oracle studio for SQL, AI, vectors, and APIs. Works with Oracle 9i through 26ai.**
+**The Oracle desktop IDE — free forever. Works with Oracle 9i through 26ai.**
 
-A native desktop IDE that combines a multi-statement SQL editor, an AI assistant with live database access, a vector search studio, a PL/SQL debugger, and a no-code REST API builder — all in one app, no Oracle client required. Supports every Oracle version from 9i to 26ai, including full 23ai vector search.
+A native desktop IDE with a multi-statement SQL editor, AI assistant (BYOK), PL/SQL debugger, vector search studio, and no-code REST API builder — all in one app, no Oracle client required. 100% open-source under Apache 2.0.
 
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-E85D3C.svg)](LICENSE) [![Built with Tauri 2](https://img.shields.io/badge/built%20with-Tauri%202-24C8D8?logo=tauri&logoColor=white)](https://tauri.app) [![Svelte 5](https://img.shields.io/badge/Svelte-5-FF3E00?logo=svelte&logoColor=white)](https://svelte.dev) [![Oracle 9i–26ai](https://img.shields.io/badge/Oracle-9i%E2%80%9326ai-F80000?logo=oracle&logoColor=white)](https://oracle.com) [![Open Source](https://img.shields.io/badge/open%20source-Apache%202.0-E85D3C.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-E85D3C.svg)](LICENSE) [![Community Edition](https://img.shields.io/badge/edition-Community-E85D3C.svg)](https://veesker.cloud) [![Built with Tauri 2](https://img.shields.io/badge/built%20with-Tauri%202-24C8D8?logo=tauri&logoColor=white)](https://tauri.app) [![Svelte 5](https://img.shields.io/badge/Svelte-5-FF3E00?logo=svelte&logoColor=white)](https://svelte.dev) [![Oracle 9i–26ai](https://img.shields.io/badge/Oracle-9i%E2%80%9326ai-F80000?logo=oracle&logoColor=white)](https://oracle.com)
 
-[veesker.cloud](https://veesker.cloud) · [Install](#install) · [Features](#features) · [Build from source](#build-from-source) · [License & disclaimer](#license--disclaimer)
+[veesker.cloud](https://veesker.cloud) · [Install](#install) · [CE vs Cloud](#community-edition-vs-cloud) · [Build from source](#build-from-source) · [License](#license--disclaimer)
 
 </div>
+
+---
+
+## Community Edition vs Cloud
+
+Veesker follows the **DBeaver model**: the Community Edition is a fully functional standalone IDE, free forever. Veesker Cloud adds managed AI with deep database context — no API key required, schema-aware, with usage controls and billing.
+
+| Feature | Community Edition | Cloud |
+|---|:---:|:---:|
+| SQL Editor (multi-statement) | ✅ | ✅ |
+| PL/SQL Editor + Compile + Debug | ✅ | ✅ |
+| Schema Browser (tables, views, packages…) | ✅ | ✅ |
+| Table Inspector (columns, indexes, FKs, DDL) | ✅ | ✅ |
+| EXPLAIN PLAN | ✅ | ✅ |
+| Transaction management (commit/rollback) | ✅ | ✅ |
+| Terminal (PTY) | ✅ | ✅ |
+| ORDS / REST API Studio | ✅ | ✅ |
+| Object Versioning | ✅ | ✅ |
+| Visual Flow / DataFlow | ✅ | ✅ |
+| Local query history + audit log | ✅ | ✅ |
+| Auto-update | ✅ | ✅ |
+| **AI — Explain SQL / Generate SQL (BYOK)** | ✅ free | ✅ |
+| **AI — Schema-aware (knows your DB)** | — | ✅ Cloud |
+| **AI — Query execution via AI** | — | ✅ Cloud |
+| **AI — Query optimization + performance** | — | ✅ Cloud |
+| **Vector Search Studio** | — | ✅ Cloud |
+| **Team features + shared queries** | — | ✅ Cloud |
+| **Usage dashboard + billing** | — | ✅ Cloud |
+
+> CE AI uses your own Anthropic key (BYOK) and works as a text assistant — SQL explanation and generation without database access. Cloud AI connects directly to your schema for context-aware answers.
+
+**[→ See Cloud plans at veesker.cloud/pricing](https://veesker.cloud/pricing)**
 
 ---
 
