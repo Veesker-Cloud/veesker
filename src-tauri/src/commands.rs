@@ -681,25 +681,31 @@ pub async fn compile_errors_get(
     Ok(errors)
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObjectDdlResult {
+    pub ddl: String,
+    pub spec: Option<String>,
+    pub body: Option<String>,
+}
+
 #[tauri::command]
 pub async fn object_ddl_get(
     app: AppHandle,
     owner: String,
     object_type: String,
     object_name: String,
-) -> Result<String, ConnectionTestErr> {
+) -> Result<ObjectDdlResult, ConnectionTestErr> {
     let res = call_sidecar(
         &app,
         "object.ddl",
         json!({ "owner": owner, "objectType": object_type, "objectName": object_name }),
     )
     .await?;
-    let ddl = res
-        .get("ddl")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-    Ok(ddl)
+    let ddl = res.get("ddl").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let spec = res.get("spec").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let body = res.get("body").and_then(|v| v.as_str()).map(|s| s.to_string());
+    Ok(ObjectDdlResult { ddl, spec, body })
 }
 
 #[derive(Debug, Serialize, Deserialize)]
