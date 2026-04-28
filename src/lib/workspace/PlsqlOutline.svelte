@@ -89,7 +89,6 @@
         {#each bodyItems as item (item.line)}
           <button
             class="item"
-            class:item-active={activeTab === "body"}
             onclick={() => handleClick(item, "body")}
           >
             <span class="icon" class:icon-fn={item.kind === "FUNCTION"} class:icon-proc={item.kind === "PROCEDURE"}>
