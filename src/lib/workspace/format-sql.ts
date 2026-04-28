@@ -7,35 +7,76 @@ import { format } from "sql-formatter";
 const PLSQL_BLOCK_RE =
   /^\s*(?:CREATE\s+(?:OR\s+REPLACE\s+)?(?:EDITIONABLE\s+)?(?:PACKAGE|PROCEDURE|FUNCTION|TRIGGER|TYPE)\b|DECLARE\b|BEGIN\b)/i;
 
-// Oracle-specific keyword fragments that sql-formatter doesn't always uppercase
-const ORACLE_KEYWORDS_RE =
-  /\b(or\s+replace|editionable|noneditionable|deterministic|authid|current_user|definer|invoker_rights|pipelined|parallel_enable|result_cache|aggregate|using)\b/gi;
+// Oracle reserved keywords + common built-ins to uppercase
+const ORACLE_KW = new Set<string>([
+  "ACCESS","ADD","ALL","ALTER","AND","ANY","AS","ASC","AUDIT","AUTHID",
+  "BEGIN","BETWEEN","BINARY_INTEGER","BLOB","BOOLEAN","BULK","BY",
+  "CASE","CHAR","CHECK","CLOB","CLOSE","CLUSTER","COLLECT","COLUMN",
+  "COMMENT","COMMIT","COMPRESS","CONNECT","CONSTANT","CREATE","CROSS",
+  "CURRENT","CURSOR","DATE","DECIMAL","DECLARE","DEFAULT","DELETE",
+  "DESC","DETERMINISTIC","DISTINCT","DROP","EDITIONABLE","ELSE","ELSIF",
+  "END","EXCEPTION","EXCEPTION_INIT","EXECUTE","EXISTS","EXIT","FALSE",
+  "FETCH","FLOAT","FOR","FORALL","FORCE","FROM","FULL","FUNCTION","GOTO",
+  "GRANT","GROUP","HAVING","IF","IMMEDIATE","IN","INDEX","INNER","INSERT",
+  "INTEGER","INTERSECT","INTO","IS","JOIN","LEFT","LIKE","LIMIT","LOCK",
+  "LONG","LOOP","MERGE","MINUS","MODE","NATURAL","NOCOPY","NONEDITIONABLE",
+  "NOT","NULL","NUMBER","OBJECT","OF","ON","OPEN","OPTION","OR","ORDER",
+  "OTHERS","OUT","OUTER","OVER","PACKAGE","PARALLEL_ENABLE","PARTITION",
+  "PIPELINED","PLS_INTEGER","PRAGMA","PRIOR","PROCEDURE","RAISE",
+  "RAISE_APPLICATION_ERROR","RAW","REAL","RECORD","REPLACE","RESULT_CACHE",
+  "RETURN","REVERSE","REVOKE","RIGHT","ROLLBACK","ROW","ROWID","ROWNUM",
+  "ROWTYPE","SAVEPOINT","SELECT","SEQUENCE","SERIALLY_REUSABLE","SET",
+  "SIZE","SMALLINT","START","SUBTYPE","SYNONYM","SYSDATE","SYSTIMESTAMP",
+  "TABLE","THEN","TIMESTAMP","TO","TRIGGER","TRUE","TRUNCATE","TYPE",
+  "UNION","UNIQUE","UPDATE","USING","VALUES","VARCHAR","VARCHAR2","VIEW",
+  "WHEN","WHERE","WHILE","WITH",
+]);
 
-function postProcess(sql: string): string {
-  return (
-    sql
-      // sql-formatter splits `CREATE\nOR REPLACE` across lines — rejoin
-      .replace(/\bCREATE\s*\n(\s*)OR\s+/gi, "CREATE OR ")
-      // Uppercase remaining Oracle keywords that the formatter misses
-      .replace(ORACLE_KEYWORDS_RE, (m) => m.toUpperCase())
+/**
+ * Uppercase Oracle reserved keywords in PL/SQL source, leaving string literals,
+ * double-quoted identifiers, and comments untouched.
+ */
+function uppercasePlsql(sql: string): string {
+  return sql.replace(
+    /'(?:[^']|'')*'|"[^"]*"|--[^\n]*|\/\*[\s\S]*?\*\/|[A-Za-z_$#][A-Za-z0-9_$#]*/g,
+    (match) => {
+      const ch = match[0];
+      if (ch === "'" || ch === '"' || ch === "-" || ch === "/") return match;
+      return ORACLE_KW.has(match.toUpperCase()) ? match.toUpperCase() : match;
+    },
   );
 }
 
-export function formatSql(sql: string, isPlsql?: boolean): string {
-  const usePlsql = isPlsql ?? PLSQL_BLOCK_RE.test(sql);
-
-  const result = format(sql, {
+/**
+ * Format SQL SELECT/DML with sql-formatter (plsql dialect).
+ * Not used for PL/SQL blocks — sql-formatter collapses their structure.
+ */
+function formatSelectDml(sql: string): string {
+  return format(sql, {
     language: "plsql",
     tabWidth: 2,
     keywordCase: "upper",
     functionCase: "upper",
     identifierCase: "preserve",
     dataTypeCase: "upper",
-    expressionWidth: usePlsql ? 100 : 80,
+    expressionWidth: 80,
     linesBetweenQueries: 2,
     logicalOperatorNewline: "before",
     indentStyle: "standard",
   });
+}
 
-  return usePlsql ? postProcess(result) : result;
+/**
+ * Format SQL or PL/SQL code.
+ *
+ * - PL/SQL (CREATE PACKAGE/PROCEDURE/FUNCTION/TRIGGER, DECLARE, BEGIN):
+ *   Uppercases Oracle keywords while preserving the original line structure.
+ *   sql-formatter is intentionally avoided here because it collapses PL/SQL
+ *   blocks into long lines, destroying package specs and procedure bodies.
+ *
+ * - SQL SELECT/DML: reformatted fully via sql-formatter.
+ */
+export function formatSql(sql: string, isPlsql?: boolean): string {
+  const usePlsql = isPlsql ?? PLSQL_BLOCK_RE.test(sql);
+  return usePlsql ? uppercasePlsql(sql) : formatSelectDml(sql);
 }
