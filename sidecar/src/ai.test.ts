@@ -42,7 +42,7 @@ describe("buildSystem", () => {
 
   test("CE mode: no activeSql → no context section injected", () => {
     const sys = buildSystem({ currentSchema: "HR" }, false);
-    expect(sys).not.toContain("[Current IDE context]");
+    expect(sys).not.toContain("Current schema:");
   });
 
   test("CE mode: system prompt mentions text-only assistant", () => {
