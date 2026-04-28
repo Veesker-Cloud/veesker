@@ -151,7 +151,7 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="flyout-backdrop" onclick={onClose} onkeydown={() => {}}></div>
 
-<div class="flyout" role="dialog" aria-modal="true" style="top: {anchorTop}px; right: {anchorRight}px; max-height: min(480px, calc(100vh - {anchorTop}px - 12px));">
+<div class="flyout" role="dialog" aria-modal="true" style="top: {anchorTop}px; right: {anchorRight}px; height: min(480px, calc(100vh - {anchorTop}px - 12px));">
   <div class="fly-list">
     <div class="fly-header">{owner} · {objectType} · {objectName}</div>
     <div class="fly-body">
@@ -282,6 +282,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    min-height: 0;
   }
   .fly-header {
     padding: 8px 12px;
@@ -353,7 +354,7 @@
   }
   .restore-btn:hover { background: rgba(126,201,106,0.16); }
   .restore-btn:disabled { opacity: 0.4; cursor: default; }
-  .fly-diff { display: flex; flex-direction: column; overflow: hidden; }
+  .fly-diff { display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
   .diff-header {
     padding: 8px 14px;
     border-bottom: 1px solid var(--border);

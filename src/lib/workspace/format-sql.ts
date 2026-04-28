@@ -33,12 +33,23 @@ const ORACLE_KW = new Set<string>([
 ]);
 
 function normalizePlsqlWhitespace(sql: string): string {
-  return sql
-    .split("\n")
-    .map((line) => line.trimEnd())
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trimEnd();
+  const lines = sql.split("\n").map((line) => line.trimEnd());
+
+  // Normalize 4-space indent → 2-space (DBMS_METADATA uses 4-space by default)
+  const indents = lines.map((l) => l.match(/^ +/)?.[0].length ?? 0).filter((n) => n > 0);
+  if (indents.length > 0) {
+    const minIndent = indents.reduce((a, b) => (b < a ? b : a));
+    if (minIndent === 4) {
+      for (let i = 0; i < lines.length; i++) {
+        const sp = lines[i].match(/^ */)?.[0].length ?? 0;
+        if (sp > 0) {
+          lines[i] = "  ".repeat(Math.floor(sp / 4)) + " ".repeat(sp % 4) + lines[i].slice(sp);
+        }
+      }
+    }
+  }
+
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd();
 }
 
 /**
