@@ -8,6 +8,9 @@ import { join, basename } from "node:path";
 import { embedText, type EmbedParams } from "./embedding";
 import { log } from "./logger";
 
+// Guarantee DML never auto-commits regardless of driver version or future defaults.
+oracledb.autoCommit = false;
+
 /** Validate and quote an Oracle identifier for use in double-quoted SQL interpolation. */
 export function quoteIdent(name: string): string {
   if (!/^[A-Za-z0-9_$#]{1,128}$/.test(name)) {
@@ -745,10 +748,12 @@ async function executeSingleStatement(
       // :name patterns and misidentifies :old/:new trigger references as bind variables.
       r = await conn.execute(sqlToSend);
     } else {
+      // autoCommit: false is the global default but stated explicitly so that DML
+      // never commits on its own — the user must use the Commit button.
       // maxRows: 0 means unlimited (oracledb convention)
       const opts = fetchAll
-        ? { maxRows: 0, outFormat: oracledb.OUT_FORMAT_ARRAY }
-        : { maxRows: 100, outFormat: oracledb.OUT_FORMAT_ARRAY };
+        ? { maxRows: 0, outFormat: oracledb.OUT_FORMAT_ARRAY, autoCommit: false }
+        : { maxRows: 100, outFormat: oracledb.OUT_FORMAT_ARRAY, autoCommit: false };
       r = await conn.execute(sqlToSend, [], opts);
     }
   } catch (execErr) {
