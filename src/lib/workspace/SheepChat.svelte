@@ -5,7 +5,8 @@
 -->
 
 <script lang="ts">
-  import { aiChat, aiKeySave, aiKeyGet, type AiMessage, type AiContext, chartConfigureRpc, chartResetRpc, type ChartConfig, type PreviewData } from "$lib/workspace";
+  import { aiKeySave, aiKeyGet, type AiMessage, type AiContext, chartConfigureRpc, chartResetRpc, type ChartConfig, type PreviewData } from "$lib/workspace";
+  import { AIService } from "$lib/ai/AIService";
   import { dashboard } from "$lib/stores/dashboard.svelte";
   import ChartWidget from "./ChartWidget.svelte";
   import { tick, onMount } from "svelte";
@@ -321,13 +322,21 @@
     }
 
     loading = true;
-    const res = await aiChat(apiKey, messages.map(({ role, content }) => ({ role, content })), context);
+    const res = await AIService.chat({
+      apiKey,
+      messages: messages.map(({ role, content }) => ({ role, content })),
+      context,
+    });
     loading = false;
 
     if (res.ok) {
       messages = [...messages, { role: "assistant" as const, content: res.data.content }];
     } else {
-      error = (res.error as any)?.message ?? "Unknown error";
+      if (res.error.code === "CLOUD_NOT_IMPLEMENTED") {
+        error = "Veesker Cloud is coming soon. Using BYOK in the meantime.";
+      } else {
+        error = res.error.message ?? "Unknown error";
+      }
     }
     await scrollToBottom();
     inputEl?.focus();

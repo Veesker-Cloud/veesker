@@ -139,21 +139,27 @@ async function executeTool(name: string, input: Record<string, string>): Promise
   }
 }
 
-function buildSystem(ctx: AiContext): string {
+export function getTools(enabled: boolean): Anthropic.Tool[] {
+  return enabled ? TOOLS : [];
+}
+
+export function buildSystem(ctx: AiContext, tools: boolean): string {
   const ctxLines: string[] = [];
-  if (ctx.currentSchema) ctxLines.push(`Current schema: ${ctx.currentSchema}`);
-  if (ctx.selectedOwner && ctx.selectedName) {
-    ctxLines.push(`Selected object: ${ctx.selectedKind ?? "OBJECT"} ${ctx.selectedOwner}.${ctx.selectedName}`);
+  // Schema/object context only when tools are enabled (Cloud mode)
+  if (tools) {
+    if (ctx.currentSchema) ctxLines.push(`Current schema: ${ctx.currentSchema}`);
+    if (ctx.selectedOwner && ctx.selectedName) {
+      ctxLines.push(`Selected object: ${ctx.selectedKind ?? "OBJECT"} ${ctx.selectedOwner}.${ctx.selectedName}`);
+    }
   }
+  // Active SQL always included — user is asking about what's on screen
   if (ctx.activeSql?.trim()) {
-    // Strip triple-backtick sequences that could break the code fence
     const safeSql = ctx.activeSql.slice(0, 800).replace(/`{3,}/g, "~~~");
     ctxLines.push(`Active SQL in editor:\n\`\`\`sql\n${safeSql}\n\`\`\``);
   }
 
   return `You are Veesker's Oracle database assistant — a knowledgeable, concise expert with the persona of a cyberpunk sheep mascot. You help developers understand Oracle schemas, debug queries, write PL/SQL, optimise performance, and give design insights.
-
-You have live access to the connected Oracle database via tools. Use them proactively — describe tables before suggesting queries, run a quick SELECT to verify assumptions, fetch DDL when discussing objects.
+${tools ? "\nYou have live access to the connected Oracle database via tools. Use them proactively — describe tables before suggesting queries, run a quick SELECT to verify assumptions, fetch DDL when discussing objects." : "\nYou work as a text-only assistant. You do not have access to the database. Explain and generate SQL based on what the user describes and the active SQL shown below."}
 
 Rules:
 - Always respond in English, regardless of the language used in the user's message
@@ -179,8 +185,8 @@ async function claudeCliAvailable(): Promise<boolean> {
   }
 }
 
-async function aiChatViaCli(params: AiChatParams): Promise<AiChatResult> {
-  const system = buildSystem(params.context);
+async function aiChatViaCli(params: AiChatParams, tools: boolean): Promise<AiChatResult> {
+  const system = buildSystem(params.context, tools);
   const lastUser = params.messages.filter((m) => m.role === "user").pop()?.content ?? "";
 
   const history = params.messages.slice(0, -1).map((m) =>
@@ -216,14 +222,14 @@ async function aiChatViaCli(params: AiChatParams): Promise<AiChatResult> {
   }
 }
 
-export async function aiChat(params: AiChatParams): Promise<AiChatResult> {
+export async function aiChat(params: AiChatParams, tools: boolean = false): Promise<AiChatResult> {
   const key = params.apiKey || process.env.ANTHROPIC_API_KEY;
 
   // No API key — try the locally installed claude CLI (uses Claude Code auth).
   // If the CLI isn't installed either, throw a structured error the renderer
   // can show as a "configure your API key" prompt instead of a cryptic spawn error.
   if (!key) {
-    if (await claudeCliAvailable()) return aiChatViaCli(params);
+    if (await claudeCliAvailable()) return aiChatViaCli(params, tools);
     throw {
       code: -32603,
       message:
@@ -240,13 +246,14 @@ export async function aiChat(params: AiChatParams): Promise<AiChatResult> {
   }));
 
   const toolsUsed: string[] = [];
-  const system = buildSystem(params.context);
+  const activeTools = getTools(tools);
+  const system = buildSystem(params.context, tools);
 
   let response = await client.messages.create({
     model: "claude-haiku-4-5-20251001",
     max_tokens: 2048,
     system,
-    tools: TOOLS,
+    tools: activeTools,
     messages,
   });
 
@@ -274,7 +281,7 @@ export async function aiChat(params: AiChatParams): Promise<AiChatResult> {
       model: "claude-haiku-4-5-20251001",
       max_tokens: 2048,
       system,
-      tools: TOOLS,
+      tools: activeTools,
       messages,
     });
   }
