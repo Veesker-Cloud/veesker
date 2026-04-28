@@ -292,13 +292,34 @@
         if (ddlLoading?.owner === owner && ddlLoading?.name === name) ddlLoading = null;
         if (res.ok) {
           const connId = page.params.id!;
-          sqlEditor.openWithDdl(`${owner}.${name}`, res.data, {
-            connectionId: connId,
-            owner,
-            objectType: kind,
-            objectName: name,
-          });
-          void objectVersionCapture(connId, owner, kind, name, res.data, "baseline");
+          const ddlData = res.data;
+          if (kind === "PACKAGE" && ddlData.spec !== undefined) {
+            sqlEditor.openWithDdl(`${owner}.${name}`, ddlData.body ?? ddlData.ddl, {
+              connectionId: connId,
+              owner,
+              objectType: "PACKAGE BODY",
+              objectName: name,
+            });
+            const activeTab = sqlEditor.active;
+            if (activeTab) {
+              sqlEditor.setPackageSpec(activeTab.id, ddlData.spec, {
+                connectionId: connId,
+                owner,
+                objectType: "PACKAGE",
+                objectName: name,
+              });
+            }
+            void objectVersionCapture(connId, owner, "PACKAGE", name, ddlData.spec, "baseline");
+            void objectVersionCapture(connId, owner, "PACKAGE BODY", name, ddlData.body ?? "", "baseline");
+          } else {
+            sqlEditor.openWithDdl(`${owner}.${name}`, ddlData.ddl, {
+              connectionId: connId,
+              owner,
+              objectType: kind,
+              objectName: name,
+            });
+            void objectVersionCapture(connId, owner, kind, name, ddlData.ddl, "baseline");
+          }
         } else {
           if (res.error.code === SESSION_LOST) {
             sessionLost = true;
@@ -700,13 +721,34 @@
                   const res = await objectDdlGet(owner, kind as any, name);
                   if (res.ok) {
                     const connId = page.params.id!;
-                    sqlEditor.openWithDdl(`${owner}.${name}`, res.data, {
-                      connectionId: connId,
-                      owner,
-                      objectType: kind,
-                      objectName: name,
-                    });
-                    void objectVersionCapture(connId, owner, kind, name, res.data, "baseline");
+                    const ddlData = res.data;
+                    if (kind === "PACKAGE" && ddlData.spec !== undefined) {
+                      sqlEditor.openWithDdl(`${owner}.${name}`, ddlData.body ?? ddlData.ddl, {
+                        connectionId: connId,
+                        owner,
+                        objectType: "PACKAGE BODY",
+                        objectName: name,
+                      });
+                      const activeTab = sqlEditor.active;
+                      if (activeTab) {
+                        sqlEditor.setPackageSpec(activeTab.id, ddlData.spec, {
+                          connectionId: connId,
+                          owner,
+                          objectType: "PACKAGE",
+                          objectName: name,
+                        });
+                      }
+                      void objectVersionCapture(connId, owner, "PACKAGE", name, ddlData.spec, "baseline");
+                      void objectVersionCapture(connId, owner, "PACKAGE BODY", name, ddlData.body ?? "", "baseline");
+                    } else {
+                      sqlEditor.openWithDdl(`${owner}.${name}`, ddlData.ddl, {
+                        connectionId: connId,
+                        owner,
+                        objectType: kind,
+                        objectName: name,
+                      });
+                      void objectVersionCapture(connId, owner, kind, name, ddlData.ddl, "baseline");
+                    }
                   } else if (res.error.code === SESSION_LOST) sessionLost = true;
                 } finally {
                   if (ddlLoading?.owner === owner && ddlLoading?.name === name) ddlLoading = null;

@@ -228,8 +228,9 @@ export const aiSuggestEndpoint = (params: {
 export const objectsListPlsql = (owner: string, kind: string) =>
   call<ObjectRefWithStatus[]>("objects_list_plsql", { owner, kind });
 
+export type ObjectDdlResult = { ddl: string; spec?: string; body?: string };
 export const objectDdlGet = (owner: string, objectType: string, objectName: string) =>
-  call<string>("object_ddl_get", { owner, objectType, objectName });
+  call<ObjectDdlResult>("object_ddl_get", { owner, objectType, objectName });
 
 export type DataFlowNode = { owner: string; name: string; objectType: string };
 export type DataFlowTriggerInfo = { name: string; triggerType: string; event: string; status: string };

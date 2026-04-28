@@ -948,7 +948,7 @@ export async function objectDdl(p: {
   owner: string;
   objectType: string;
   objectName: string;
-}): Promise<{ ddl: string }> {
+}): Promise<{ ddl: string; spec?: string; body?: string }> {
   return withActiveSession(async (conn) => {
     const fetchOpts = {
       outFormat: oracledb.OUT_FORMAT_ARRAY,
@@ -963,21 +963,22 @@ export async function objectDdl(p: {
     );
     const specDdl: string = (specRes.rows?.[0]?.[0] as string) ?? "";
 
-    // For PACKAGE, also fetch the body (may not exist — ORA-31603 is non-fatal)
     if (p.objectType.toUpperCase() === "PACKAGE") {
+      let bodyDdl = "";
       try {
         const bodyRes = await conn.execute<[string]>(
           `SELECT DBMS_METADATA.GET_DDL('PACKAGE BODY', UPPER(:name), UPPER(:owner)) FROM dual`,
           { name: p.objectName, owner: p.owner },
           fetchOpts
         );
-        const bodyDdl: string = (bodyRes.rows?.[0]?.[0] as string) ?? "";
-        if (bodyDdl.trim()) {
-          return { ddl: specDdl.trimEnd() + "\n\n" + bodyDdl };
-        }
+        bodyDdl = (bodyRes.rows?.[0]?.[0] as string) ?? "";
       } catch {
-        // No body exists — return spec only
+        // No body exists — body stays ""
       }
+      const combined = bodyDdl.trim()
+        ? specDdl.trimEnd() + "\n\n" + bodyDdl
+        : specDdl;
+      return { ddl: combined, spec: specDdl, body: bodyDdl };
     }
 
     return { ddl: specDdl };

@@ -21,6 +21,7 @@
   import type { CostBadgeData } from "./CostBadgeGutter";
   import ObjectVersionBadge from "./ObjectVersionBadge.svelte";
   import ObjectVersionFlyout from "./ObjectVersionFlyout.svelte";
+  import PlsqlOutline from "./PlsqlOutline.svelte";
 
   type Props = {
     onCancel: () => void;
@@ -319,7 +320,7 @@
           </svg>
           Save As
         </button>
-        {#if active && COMPILE_REGEX.test(active.sql)}
+        {#if active && COMPILE_REGEX.test(active.packageActiveTab === "spec" ? (active.packageSpec ?? active.sql) : active.sql)}
           <button
             class="file-btn compile-btn"
             title="Compile (run and check for errors)"
@@ -439,6 +440,16 @@
       {#if sqlEditor.historyPanelOpen}
         <QueryHistory />
       {/if}
+      {#if active?.plsqlMeta}
+        <PlsqlOutline
+          sql={active.sql}
+          packageSpec={active.packageSpec}
+          objectType={active.plsqlMeta.objectType}
+          activeTab={active.packageActiveTab}
+          onNavigate={(line) => editorRef?.gotoLine(line)}
+          onTabChange={(tab) => { if (active) sqlEditor.setPackageActiveTab(active.id, tab); }}
+        />
+      {/if}
 
       <div class="main-area">
         {#if sqlEditor.activeId === null}
@@ -447,12 +458,34 @@
           {@const tab = sqlEditor.active}
           <div class="editor-pane" style="flex: 0 0 {sqlEditor.editorRatio * 100}%">
             {#if tab}
+              {#if tab.packageSpec != null}
+                <div class="pkg-subtabs">
+                  <button
+                    class="pkg-subtab"
+                    class:pkg-subtab-active={tab.packageActiveTab === "spec"}
+                    onclick={() => sqlEditor.setPackageActiveTab(tab.id, "spec")}
+                  >Spec</button>
+                  <button
+                    class="pkg-subtab"
+                    class:pkg-subtab-active={tab.packageActiveTab === "body"}
+                    onclick={() => sqlEditor.setPackageActiveTab(tab.id, "body")}
+                  >Body</button>
+                </div>
+              {/if}
+              {@const editorSql = tab.packageActiveTab === "spec" ? (tab.packageSpec ?? tab.sql) : tab.sql}
               <SqlEditor
                 bind:this={editorRef}
-                value={tab.sql}
+                value={editorSql}
                 compileErrors={activeTabResult?.compileErrors ?? null}
                 {costBadge}
-                onChange={(s) => { sqlEditor.updateSql(tab.id, s); perf.scheduleAnalysis(s); }}
+                onChange={(s) => {
+                  if (tab.packageActiveTab === "spec") {
+                    sqlEditor.updatePackageSpec(tab.id, s);
+                  } else {
+                    sqlEditor.updateSql(tab.id, s);
+                    perf.scheduleAnalysis(s);
+                  }
+                }}
                 onRunCursor={(selection, cursorPos, docText) => {
                   if (selection !== null) {
                     void sqlEditor.runSelection(selection);
@@ -804,5 +837,27 @@
     background: rgba(231, 76, 60, 0.08);
     border-top: 1px solid rgba(231, 76, 60, 0.2);
     flex-shrink: 0;
+  }
+  .pkg-subtabs {
+    display: flex;
+    background: var(--bg-page);
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    flex-shrink: 0;
+  }
+  .pkg-subtab {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 3px 12px;
+    font-size: 10px;
+    font-family: "Space Grotesk", sans-serif;
+    color: rgba(255,255,255,0.35);
+    cursor: pointer;
+    transition: color 0.1s;
+  }
+  .pkg-subtab:hover { color: rgba(255,255,255,0.7); }
+  .pkg-subtab-active {
+    color: #f6f1e8;
+    border-bottom-color: #7ec96a;
   }
 </style>
