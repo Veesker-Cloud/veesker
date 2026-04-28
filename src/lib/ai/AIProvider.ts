@@ -13,7 +13,7 @@ export type ChatParams = {
 export type ChatResult = AiChatResult;
 
 export type ProviderError = {
-  code: string;
+  code?: string;
   message: string;
 };
 

@@ -8,7 +8,7 @@ vi.mock("$lib/workspace", () => ({
 import { aiChat } from "$lib/workspace";
 
 describe("BYOKProvider", () => {
-  const provider = new BYOKProvider();
+  const provider = BYOKProvider();
 
   test("delegates to aiChat with correct params", async () => {
     vi.mocked(aiChat).mockResolvedValue({ ok: true, data: { content: "hello", toolsUsed: [] } });

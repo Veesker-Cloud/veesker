@@ -19,7 +19,7 @@ export const AIService = {
 
     if (!cloudResult.ok) {
       // Only fall back on infra errors — never on auth or billing failures (would bypass payment)
-      if (FALLBACK_CODES.has(cloudResult.error.code) && params.apiKey) {
+      if (cloudResult.error.code && FALLBACK_CODES.has(cloudResult.error.code) && params.apiKey) {
         return BYOKProvider().chat(params);
       }
     }
