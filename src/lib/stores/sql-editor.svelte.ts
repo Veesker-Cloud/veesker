@@ -410,7 +410,6 @@ export const sqlEditor = {
     const t = findTab(tabId);
     if (t !== null) {
       t.packageActiveTab = tab;
-      _tabs = [..._tabs];
     }
   },
 
@@ -418,7 +417,6 @@ export const sqlEditor = {
     const t = findTab(tabId);
     if (t !== null) {
       t.packageSpec = sql;
-      _tabs = [..._tabs];
     }
   },
 
@@ -428,7 +426,6 @@ export const sqlEditor = {
       t.packageSpec = spec;
       t.specMeta = specMeta;
       t.packageActiveTab = "spec";
-      _tabs = [..._tabs];
     }
   },
 
@@ -942,9 +939,16 @@ export const sqlEditor = {
   },
 
   openWithDdl(title: string, ddl: string, plsqlMeta: PlsqlMeta | null = null): void {
-    // If a tab with this title already exists, just activate it
     const existing = _tabs.find(t => t.title === title);
     if (existing) {
+      existing.sql = ddl;
+      existing.plsqlMeta = plsqlMeta;
+      existing.packageSpec = undefined;
+      existing.packageActiveTab = undefined;
+      existing.specMeta = undefined;
+      existing.results = [];
+      existing.activeResultId = null;
+      existing.isDirty = false;
       _activeId = existing.id;
       if (!_drawerOpen) _drawerOpen = true;
       return;
