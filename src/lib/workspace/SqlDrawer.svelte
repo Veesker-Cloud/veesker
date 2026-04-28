@@ -334,7 +334,7 @@
         {/if}
         {#if active?.plsqlMeta}
           {@const meta = active.plsqlMeta}
-          <div style="position:relative">
+          <div style="position:relative; display:flex; align-items:stretch;">
             <ObjectVersionBadge
               connectionId={meta.connectionId}
               owner={meta.owner}
