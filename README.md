@@ -20,6 +20,8 @@ A native desktop IDE with a multi-statement SQL editor, AI assistant (BYOK), PL/
 
 Veesker follows the **DBeaver model**: the Community Edition is a fully functional standalone IDE, free forever. Veesker Cloud adds managed AI with deep database context — no API key required, schema-aware, with usage controls and billing.
 
+<div align="center">
+
 | Feature | Community Edition | Cloud |
 |---|:---:|:---:|
 | SQL Editor (multi-statement) | ✅ | ✅ |
@@ -41,6 +43,8 @@ Veesker follows the **DBeaver model**: the Community Edition is a fully function
 | **Vector Search Studio** | — | ✅ Cloud |
 | **Team features + shared queries** | — | ✅ Cloud |
 | **Usage dashboard + billing** | — | ✅ Cloud |
+
+</div>
 
 > CE AI uses your own Anthropic key (BYOK) and works as a text assistant — SQL explanation and generation without database access. Cloud AI connects directly to your schema for context-aware answers.
 
