@@ -47,6 +47,11 @@
     view.focus();
   }
 
+  export function setValue(s: string): void {
+    if (!view) return;
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: s } });
+  }
+
   // Editor keyboard shortcuts (all preventDefault to override the webview's
   // default handler for the same combo):
   //   Mod-Enter        run statement at cursor / selection

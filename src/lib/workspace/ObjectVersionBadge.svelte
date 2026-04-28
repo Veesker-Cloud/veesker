@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from "svelte";
   import { objectVersionList } from "$lib/object-versions";
 
   type Props = {
@@ -34,7 +33,19 @@
     return `${Math.floor(diff / 86400)}d`;
   }
 
-  onMount(refresh);
+  // Re-fetch whenever any identifying prop changes (covers tab switching between PL/SQL objects).
+  // Reading props synchronously before the async call registers them as effect dependencies.
+  $effect(() => {
+    void objectVersionList(connectionId, owner, objectType, objectName).then((res) => {
+      if (res.ok && res.data.length > 0) {
+        count = res.data.length;
+        latestAt = res.data[0].capturedAt;
+      } else {
+        count = 0;
+        latestAt = null;
+      }
+    });
+  });
 
   export function reloadVersions() {
     void refresh();

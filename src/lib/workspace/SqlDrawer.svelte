@@ -43,6 +43,44 @@
   let flyoutAnchorRight = $state(0);
   let badgeAnchorEl = $state<HTMLDivElement | null>(null);
 
+  // ── Draggable dock ────────────────────────────────────────────────────────────
+  type DockPos = { x: number; y: number };
+  let dockPos = $state<DockPos | null>((() => {
+    try { const s = localStorage.getItem("veesker:dock:pos"); return s ? (JSON.parse(s) as DockPos) : null; } catch { return null; }
+  })());
+  let dockEl = $state<HTMLDivElement | null>(null);
+  let editorPaneEl = $state<HTMLDivElement | null>(null);
+  let _dockDragOffset = { x: 0, y: 0 };
+
+  function onDockGripDown(e: PointerEvent) {
+    if (!dockEl || !editorPaneEl) return;
+    e.preventDefault();
+    const paneRect = editorPaneEl.getBoundingClientRect();
+    const dockRect = dockEl.getBoundingClientRect();
+    _dockDragOffset = { x: e.clientX - dockRect.left, y: e.clientY - dockRect.top };
+    if (dockPos === null) {
+      dockPos = { x: dockRect.left - paneRect.left, y: dockRect.top - paneRect.top };
+    }
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+
+  function onDockGripMove(e: PointerEvent) {
+    if (e.buttons === 0 || !editorPaneEl || dockPos === null) return;
+    const paneRect = editorPaneEl.getBoundingClientRect();
+    const dockW = dockEl?.offsetWidth ?? 200;
+    const dockH = dockEl?.offsetHeight ?? 40;
+    dockPos = {
+      x: Math.max(0, Math.min(paneRect.width - dockW, e.clientX - paneRect.left - _dockDragOffset.x)),
+      y: Math.max(0, Math.min(paneRect.height - dockH, e.clientY - paneRect.top - _dockDragOffset.y)),
+    };
+  }
+
+  function onDockGripUp() {
+    if (dockPos) {
+      try { localStorage.setItem("veesker:dock:pos", JSON.stringify(dockPos)); } catch { /* ignore */ }
+    }
+  }
+
   // ── Perf analyzer ────────────────────────────────────────────────────────────
   const perf = createPerfAnalyzer();
   let perfEnabled = $state(true);
@@ -194,16 +232,18 @@
     if (!t) return;
     const current = t.packageActiveTab === "spec" ? (t.packageSpec ?? t.sql) : t.sql;
     if (!current.trim()) return;
+    let formatted: string;
     try {
-      const formatted = formatSql(current, !!t.plsqlMeta);
-      if (t.packageActiveTab === "spec") {
-        sqlEditor.updatePackageSpec(t.id, formatted);
-      } else {
-        sqlEditor.updateSql(t.id, formatted);
-      }
+      formatted = formatSql(current, !!t.plsqlMeta);
     } catch {
-      // sql-formatter throws on severely malformed input — leave the editor unchanged
+      return; // sql-formatter throws on severely malformed input
     }
+    if (t.packageActiveTab === "spec") {
+      sqlEditor.updatePackageSpec(t.id, formatted);
+    } else {
+      sqlEditor.updateSql(t.id, formatted);
+    }
+    editorRef?.setValue(formatted); // direct CodeMirror dispatch — bypasses reactive chain
   }
 
   async function explainWithVisualFlow(withRuntimeStats: boolean): Promise<void> {
@@ -350,7 +390,7 @@
           <div class="empty">Click + to open a new query.</div>
         {:else}
           {@const tab = sqlEditor.active}
-          <div class="editor-pane" style="flex: 0 0 {sqlEditor.editorRatio * 100}%">
+          <div bind:this={editorPaneEl} class="editor-pane" style="flex: 0 0 {sqlEditor.editorRatio * 100}%">
             {#if tab}
               {#if tab.packageSpec != null}
                 <div class="pkg-subtabs">
@@ -394,7 +434,23 @@
                 {completionSchema}
                 {getColumns}
               />
-              <div class="dock" aria-label="Editor actions">
+              <div bind:this={dockEl} class="dock" aria-label="Editor actions" style={dockPos ? `top:${dockPos.y}px;left:${dockPos.x}px;transform:none;bottom:auto;` : ""}>
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <div
+                  class="dock-grip"
+                  title="Drag to move · double-click to reset"
+                  onpointerdown={onDockGripDown}
+                  onpointermove={onDockGripMove}
+                  onpointerup={onDockGripUp}
+                  ondblclick={() => { dockPos = null; try { localStorage.removeItem("veesker:dock:pos"); } catch { /* ignore */ } }}
+                >
+                  <svg width="10" height="14" viewBox="0 0 10 14" fill="none" aria-hidden="true">
+                    <circle cx="3" cy="3" r="1.2" fill="currentColor"/><circle cx="7" cy="3" r="1.2" fill="currentColor"/>
+                    <circle cx="3" cy="7" r="1.2" fill="currentColor"/><circle cx="7" cy="7" r="1.2" fill="currentColor"/>
+                    <circle cx="3" cy="11" r="1.2" fill="currentColor"/><circle cx="7" cy="11" r="1.2" fill="currentColor"/>
+                  </svg>
+                </div>
+                <div class="dock-sep"></div>
                 <button class="dock-btn" title="New query (⌘N)" aria-label="New query" onclick={() => sqlEditor.openBlank()}>
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                     <path d="M4 2.5h5.5L13 6v7.5H4V2.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
@@ -766,6 +822,21 @@
     white-space: nowrap;
     pointer-events: auto;
   }
+  .dock-grip {
+    width: 18px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: grab;
+    color: rgba(255,255,255,0.18);
+    border-radius: 6px;
+    flex-shrink: 0;
+    touch-action: none;
+    user-select: none;
+  }
+  .dock-grip:hover { color: rgba(255,255,255,0.38); background: rgba(255,255,255,0.05); }
+  .dock-grip:active { cursor: grabbing; }
   .dock-btn {
     background: transparent;
     border: none;
