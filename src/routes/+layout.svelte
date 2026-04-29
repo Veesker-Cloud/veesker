@@ -18,6 +18,7 @@
   import VisualFlowPanel from "$lib/workspace/VisualFlowPanel.svelte";
   import { license } from "$lib/stores/license.svelte";
   import type { Snippet } from "svelte";
+  import { initAuth } from "$lib/services/auth";
 
   let { children }: { children: Snippet } = $props();
   let showAbout = $state(false);
@@ -26,6 +27,7 @@
   let showPluginManager = $state(false);
 
   onMount(() => {
+    void initAuth();
     const unlistenAbout = listen("open-about", () => { showAbout = true; });
     const unlistenHelp = listen("open-help", () => { showHelp = true; });
     const unlistenPlugins = listen("open-plugins", () => { showPluginManager = true; });

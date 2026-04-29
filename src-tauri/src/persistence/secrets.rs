@@ -85,6 +85,26 @@ pub fn delete_git_pat(connection_id: &str) -> keyring::Result<()> {
     delete_account(&git_account(connection_id))
 }
 
+fn auth_token_account() -> &'static str {
+    "auth:cloud_token"
+}
+
+pub fn set_auth_token(token: &str) -> keyring::Result<()> {
+    entry(auth_token_account())?.set_password(token)
+}
+
+pub fn get_auth_token() -> keyring::Result<Option<String>> {
+    match entry(auth_token_account())?.get_password() {
+        Ok(t) => Ok(Some(t)),
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
+pub fn delete_auth_token() -> keyring::Result<()> {
+    delete_account(auth_token_account())
+}
+
 fn delete_account(account: &str) -> keyring::Result<()> {
     match entry(account)?.delete_credential() {
         Ok(()) => Ok(()),
