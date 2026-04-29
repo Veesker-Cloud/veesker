@@ -30,6 +30,20 @@
   --accent-shadow: rgba(43, 180, 238, 0.1);
 }
 
+[data-tier="cloud"][data-theme="dark"] {
+  --bg-page: #0d1117;
+  --bg-surface: #111318;
+  --bg-surface-alt: #161b22;
+  --bg-surface-raised: #1c2128;
+  --text-primary: rgba(230, 237, 243, 0.88);
+  --text-secondary: rgba(139, 148, 158, 0.85);
+  --text-muted: rgba(110, 118, 129, 0.7);
+  --border: rgba(48, 54, 61, 0.9);
+  --border-strong: rgba(70, 78, 88, 0.9);
+  --row-hover: rgba(255, 255, 255, 0.04);
+  --bg: #111318;
+}
+
 [data-theme="dark"] {
   --bg-page: #18140f;
   --bg-surface: #1a1612;

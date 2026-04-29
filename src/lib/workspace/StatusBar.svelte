@@ -328,8 +328,36 @@
     color: rgba(255,255,255,0.9);
   }
   .disconnect-btn:hover {
-    background: rgba(179, 62, 31, 0.25);
-    border-color: rgba(179, 62, 31, 0.5);
-    color: #f5a08a;
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: #f87171;
   }
+
+  /* ── Cloud tier overrides ─────────────────────────────────── */
+  :global([data-tier="cloud"]) .bar {
+    background: #0a0e14;
+    border-bottom-color: rgba(43, 180, 238, 0.1);
+  }
+  :global([data-tier="cloud"]) .bar:not(.bar-prod):not(.bar-staging)::before {
+    content: "";
+    position: absolute; left: 0; right: 0; top: 0; height: 2px;
+    pointer-events: none;
+    background: linear-gradient(90deg, #1a8bbf 0%, #2bb4ee 50%, #1a8bbf 100%);
+    opacity: 0.7;
+  }
+  :global([data-tier="cloud"]) .conn-name { color: #e6edf3; }
+  :global([data-tier="cloud"]) .ai-btn.active {
+    background: rgba(43, 180, 238, 0.18);
+    border-color: rgba(43, 180, 238, 0.4);
+    color: #2bb4ee;
+  }
+  :global([data-tier="cloud"]) .ai-btn.active:hover {
+    background: rgba(43, 180, 238, 0.28);
+  }
+  :global([data-tier="cloud"]) .sql-btn.active {
+    background: #2bb4ee;
+    border-color: #2bb4ee;
+    color: #fff;
+  }
+  :global([data-tier="cloud"]) .sql-btn.active:hover { background: #40bdee; }
 </style>
