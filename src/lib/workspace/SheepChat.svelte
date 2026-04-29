@@ -6,13 +6,14 @@
 
 <script lang="ts">
   import { aiKeySave, aiKeyGet, type AiMessage, type AiContext, chartConfigureRpc, chartResetRpc, type ChartConfig, type PreviewData } from "$lib/workspace";
-  import { FEATURES } from "$lib/services/features";
   import { AIService } from "$lib/ai/AIService";
   import { dashboard } from "$lib/stores/dashboard.svelte";
   import ChartWidget from "./ChartWidget.svelte";
   import SubscribeModal from "./SubscribeModal.svelte";
   import LoginModal from "./LoginModal.svelte";
-  import { tick, onMount } from "svelte";
+  import { tick, onMount, getContext } from "svelte";
+
+  const authCtx = getContext<{ tier: "ce" | "cloud" }>("auth");
 
   type AnalyzePayload = {
     sessionId: string;
@@ -389,8 +390,8 @@
   <!-- Header -->
   <div class="panel-head">
     <div class="head-left">
-      <img src={FEATURES.userTier === "cloud" ? "/veesker-cloud-logo.png" : "/veesker-sheep.png"} class="head-sheep" alt={FEATURES.userTier === "cloud" ? "Veesker Cloud AI" : "Veesker AI"} />
-      <span class="head-title">{FEATURES.userTier === "cloud" ? "Cloud AI" : "Veesker AI"}</span>
+      <img src={authCtx.tier === "cloud" ? "/veesker-cloud-logo.png" : "/veesker-sheep.png"} class="head-sheep" alt={authCtx.tier === "cloud" ? "Veesker Cloud AI" : "Veesker AI"} />
+      <span class="head-title">{authCtx.tier === "cloud" ? "Cloud AI" : "Veesker AI"}</span>
       {#if ctxLabel}
         <span class="ctx-chip">{ctxLabel}</span>
       {/if}
@@ -452,7 +453,7 @@
   <div class="messages" bind:this={messagesEl}>
     {#if messages.length === 0 && !loading}
       <div class="empty-chat">
-        <img src={FEATURES.userTier === "cloud" ? "/veesker-cloud-logo.png" : "/veesker-sheep.png"} class="empty-sheep" alt="" aria-hidden="true" />
+        <img src={authCtx.tier === "cloud" ? "/veesker-cloud-logo.png" : "/veesker-sheep.png"} class="empty-sheep" alt="" aria-hidden="true" />
         <p>Ask me anything about your Oracle database — schema, queries, PL/SQL, performance.</p>
         <div class="suggestions">
           {#each [
@@ -469,7 +470,7 @@
       {#each messages as msg (msg)}
         <div class="msg" class:user={msg.role === "user"} class:assistant={msg.role === "assistant"}>
           {#if msg.role === "assistant"}
-            <img src={FEATURES.userTier === "cloud" ? "/veesker-cloud-logo.png" : "/veesker-sheep.png"} class="msg-avatar" alt="AI" />
+            <img src={authCtx.tier === "cloud" ? "/veesker-cloud-logo.png" : "/veesker-sheep.png"} class="msg-avatar" alt="AI" />
           {/if}
           <div class="bubble" class:user-bubble={msg.role === "user"} class:ai-bubble={msg.role === "assistant"}>
             <!-- eslint-disable-next-line svelte/no-at-html-tags -->
@@ -529,7 +530,7 @@
     <div class="input-row">
       <textarea
         class="chat-input"
-        placeholder={analyzeStep === "title" ? "Enter chart title…" : FEATURES.userTier === "cloud" ? "Ask Cloud AI…" : "Ask the sheep…"}
+        placeholder={analyzeStep === "title" ? "Enter chart title…" : authCtx.tier === "cloud" ? "Ask Cloud AI…" : "Ask the sheep…"}
         bind:value={input}
         bind:this={inputEl}
         onkeydown={onKeydown}

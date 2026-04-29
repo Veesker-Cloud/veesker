@@ -8,10 +8,11 @@
   import type { TableDetails, TableRelated, ObjectKind, Loadable, DataFlowResult, VectorIndex, VectorSearchResult, EmbedConfig, EmbedProvider } from "$lib/workspace";
   import { tableCountRows, vectorIndexList, vectorSearch, vectorIndexCreate, vectorIndexDrop, embedCountPending, embedBatch, aiKeyGet, aiKeySave } from "$lib/workspace";
   import { sqlEditor } from "$lib/stores/sql-editor.svelte";
-  import { FEATURES } from "$lib/services/features";
   import DataFlow from "./DataFlow.svelte";
   import VectorScatter from "./VectorScatter.svelte";
-  import { onMount } from "svelte";
+  import { onMount, getContext } from "svelte";
+
+  const authCtx = getContext<{ tier: "ce" | "cloud" }>("auth");
 
   type Props = {
     selected: { owner: string; name: string; kind: ObjectKind } | null;
@@ -339,7 +340,7 @@
 <section class="details">
   {#if !selected}
     <div class="empty">
-      <img src={FEATURES.userTier === "cloud" ? "/veesker-cloud-logo.png" : "/ce-logo.png"} class="empty-watermark" alt="" aria-hidden="true" />
+      <img src={authCtx.tier === "cloud" ? "/veesker-cloud-logo.png" : "/ce-logo.png"} class="empty-watermark" alt="" aria-hidden="true" />
       <p>Select an object from the tree</p>
     </div>
   {:else}
@@ -467,7 +468,7 @@
 
     <!-- Tab content -->
     <div class="tab-content">
-      <img src={FEATURES.userTier === "cloud" ? "/veesker-cloud-logo.png" : "/ce-logo.png"} class="tab-watermark" alt="" aria-hidden="true" />
+      <img src={authCtx.tier === "cloud" ? "/veesker-cloud-logo.png" : "/ce-logo.png"} class="tab-watermark" alt="" aria-hidden="true" />
       {#if activeTab === "columns" && (selected.kind === "TABLE" || selected.kind === "VIEW")}
         {#if details.kind === "loading"}
           <div class="loading-row">
