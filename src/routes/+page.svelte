@@ -14,6 +14,9 @@
   } from "$lib/connections";
   import VeeskerMark from "$lib/VeeskerMark.svelte";
   import { ask, message } from "@tauri-apps/plugin-dialog";
+  import { FEATURES } from "$lib/services/features";
+  import { logout } from "$lib/services/auth";
+  import LoginModal from "$lib/workspace/LoginModal.svelte";
 
   let connections = $state<ConnectionMeta[]>([]);
   let loading = $state(true);
@@ -21,6 +24,7 @@
   let deletingId = $state<string | null>(null);
   let query = $state("");
   let authFilter = $state<"all" | "basic" | "wallet">("all");
+  let showLogin = $state(false);
 
   const filtered = $derived.by(() => {
     const q = query.trim().toLowerCase();
@@ -86,13 +90,20 @@
         <p class="tagline">Oracle Studio</p>
       </div>
     </div>
-    <button class="new-btn" onclick={() => goto("/connections/new")}>
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-        <line x1="7" y1="2" x2="7" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-        <line x1="2" y1="7" x2="12" y2="7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-      </svg>
-      New connection
-    </button>
+    <div class="header-actions">
+      {#if FEATURES.isLoggedIn}
+        <button class="cloud-badge" onclick={async () => { await logout(); }}>☁ Cloud</button>
+      {:else}
+        <button class="cloud-signin" onclick={() => { showLogin = true; }}>☁ Sign in to Cloud</button>
+      {/if}
+      <button class="new-btn" onclick={() => goto("/connections/new")}>
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+          <line x1="7" y1="2" x2="7" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <line x1="2" y1="7" x2="12" y2="7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        New connection
+      </button>
+    </div>
   </header>
 
   {#if !loading && !error && connections.length > 0}
@@ -257,6 +268,10 @@
   {/if}
 </main>
 
+{#if showLogin}
+  <LoginModal onClose={() => { showLogin = false; }} />
+{/if}
+
 <style>
   :global(body) {
     margin: 0;
@@ -330,6 +345,12 @@
     text-transform: uppercase;
   }
 
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
   .new-btn {
     display: inline-flex;
     align-items: center;
@@ -347,6 +368,49 @@
     white-space: nowrap;
   }
   .new-btn:hover { background: #b33e1f; }
+
+  .cloud-signin {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: rgba(43, 180, 238, 0.1);
+    color: #2bb4ee;
+    border: 1px solid rgba(43, 180, 238, 0.3);
+    border-radius: 8px;
+    padding: 0.6rem 1rem;
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    white-space: nowrap;
+  }
+  .cloud-signin:hover {
+    background: rgba(43, 180, 238, 0.18);
+    border-color: rgba(43, 180, 238, 0.5);
+  }
+
+  .cloud-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: rgba(43, 180, 238, 0.12);
+    color: #2bb4ee;
+    border: 1px solid rgba(43, 180, 238, 0.3);
+    border-radius: 8px;
+    padding: 0.6rem 1rem;
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+    white-space: nowrap;
+  }
+  .cloud-badge:hover {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.3);
+  }
 
   /* ── Deleting state ──────────────────────────────────────── */
   .card-deleting {
