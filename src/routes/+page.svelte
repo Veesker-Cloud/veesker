@@ -392,12 +392,12 @@
     gap: 1rem;
   }
   .brand-logo {
-    width: 52px;
-    height: 52px;
-    border-radius: 12px;
+    width: 60px;
+    height: 60px;
+    border-radius: 14px;
     object-fit: cover;
     display: block;
-    box-shadow: 0 2px 8px rgba(26, 22, 18, 0.12);
+    box-shadow: 0 4px 16px rgba(26, 22, 18, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.08);
   }
   .brand-text {
     display: flex;
