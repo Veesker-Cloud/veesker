@@ -54,7 +54,7 @@ Pure professional services. No new code. Sells alongside Cloud + add-ons.
 ### Repository layout (planned)
 
 ```
-github.com/gevianajr/veesker                        Public, Apache 2.0 — open-source IDE
+github.com/veesker-cloud/veesker-community-edition                        Public, Apache 2.0 — open-source IDE
 ├── (current contents — desktop app, sidecar, docs)
 └── src/lib/plugins.ts                              Plugin API surface (open)
 

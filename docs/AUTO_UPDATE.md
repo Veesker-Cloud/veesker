@@ -12,7 +12,7 @@ App boot (2s delay) → fetch GitHub Releases latest.json → compare versions �
                                                                             install + relaunch
 ```
 
-- **Endpoint:** `https://github.com/gevianajr/veesker/releases/latest/download/latest.json`
+- **Endpoint:** `https://github.com/veesker-cloud/veesker-community-edition/releases/latest/download/latest.json`
 - **Signature:** Ed25519 (separate from Microsoft code-signing cert)
 - **Install mode:** `passive` on Windows (silent, no UAC prompts beyond the first)
 
@@ -93,15 +93,15 @@ For each release, upload to GitHub Releases:
   "platforms": {
     "windows-x86_64": {
       "signature": "<paste content of Veesker_0.2.0_x64-setup.exe.sig>",
-      "url": "https://github.com/gevianajr/veesker/releases/download/v0.2.0/Veesker_0.2.0_x64-setup.exe"
+      "url": "https://github.com/veesker-cloud/veesker-community-edition/releases/download/v0.2.0/Veesker_0.2.0_x64-setup.exe"
     },
     "darwin-aarch64": {
       "signature": "<paste content of Veesker_0.2.0_aarch64.app.tar.gz.sig>",
-      "url": "https://github.com/gevianajr/veesker/releases/download/v0.2.0/Veesker_0.2.0_aarch64.app.tar.gz"
+      "url": "https://github.com/veesker-cloud/veesker-community-edition/releases/download/v0.2.0/Veesker_0.2.0_aarch64.app.tar.gz"
     },
     "darwin-x86_64": {
       "signature": "<paste content of Veesker_0.2.0_x64.app.tar.gz.sig>",
-      "url": "https://github.com/gevianajr/veesker/releases/download/v0.2.0/Veesker_0.2.0_x64.app.tar.gz"
+      "url": "https://github.com/veesker-cloud/veesker-community-edition/releases/download/v0.2.0/Veesker_0.2.0_x64.app.tar.gz"
     }
   }
 }

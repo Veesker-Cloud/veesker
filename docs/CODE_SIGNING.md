@@ -78,7 +78,7 @@ Adicionar `windows.signCommand` na seção `bundle`:
         "-tr", "http://timestamp.acs.microsoft.com",
         "-td", "sha256",
         "-d", "Veesker — Oracle 23ai Studio",
-        "-du", "https://github.com/gevianajr/veesker",
+        "-du", "https://github.com/veesker-cloud/veesker-community-edition",
         "{{file}}"
       ]
     }
