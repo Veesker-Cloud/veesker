@@ -1425,3 +1425,18 @@ pub async fn object_version_get_remote(
         .map(|url| GetRemoteResult { url })
         .map_err(|e| ConnectionTestErr { code: e.code, message: e.message })
 }
+
+#[tauri::command]
+pub async fn auth_token_get() -> Result<Option<String>, String> {
+    crate::persistence::secrets::get_auth_token().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn auth_token_set(token: String) -> Result<(), String> {
+    crate::persistence::secrets::set_auth_token(&token).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn auth_token_clear() -> Result<(), String> {
+    crate::persistence::secrets::delete_auth_token().map_err(|e| e.to_string())
+}
