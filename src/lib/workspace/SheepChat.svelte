@@ -976,4 +976,29 @@
   }
   .send-btn:hover:not(:disabled) { background: #c94b28; }
   .send-btn:disabled { opacity: 0.4; cursor: default; }
+
+  /* ── Cloud tier overrides ─────────────────────────────────── */
+  :global([data-tier="cloud"]) .send-btn { background: #2bb4ee; }
+  :global([data-tier="cloud"]) .send-btn:hover:not(:disabled) { background: #40bdee; }
+  :global([data-tier="cloud"]) .chat-input:focus { border-color: rgba(43,180,238,0.5); }
+  :global([data-tier="cloud"]) .settings-input:focus { border-color: rgba(43,180,238,0.6); }
+  :global([data-tier="cloud"]) .save-btn { background: #2bb4ee; }
+  :global([data-tier="cloud"]) .save-btn:hover { background: #40bdee; }
+  :global([data-tier="cloud"]) .qa-btn {
+    background: rgba(43,180,238,0.15);
+    border-color: rgba(43,180,238,0.35);
+    color: #7dd3f5;
+  }
+  :global([data-tier="cloud"]) .qa-btn:hover:not(:disabled) {
+    background: rgba(43,180,238,0.28);
+    border-color: rgba(43,180,238,0.6);
+    color: #fff;
+  }
+  :global([data-tier="cloud"]) .ycol-chip.selected {
+    background: rgba(43,180,238,0.22);
+    border-color: rgba(43,180,238,0.5);
+    color: #7dd3f5;
+  }
+  :global([data-tier="cloud"]) .ycol-submit { background: #2bb4ee; }
+  :global([data-tier="cloud"]) .ycol-submit:hover:not(:disabled) { background: #40bdee; }
 </style>
