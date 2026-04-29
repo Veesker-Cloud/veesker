@@ -348,6 +348,7 @@ export type AiContext = {
   selectedName?: string;
   selectedKind?: string;
   activeSql?: string;
+  schemaObjects?: string;
 };
 export type AiChatResult = { content: string; toolsUsed: string[] };
 

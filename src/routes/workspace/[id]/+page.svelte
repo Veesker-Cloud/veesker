@@ -81,6 +81,18 @@
   let completionSchema = $state<Record<string, string[]>>({});
   let colCache = new Map<string, string[]>();
 
+  const schemaSnapshot = $derived((() => {
+    const current = schemas.find((s) => s.isCurrent);
+    if (!current) return undefined;
+    const lines: string[] = [`Schema: ${current.name}`];
+    for (const [kind, loadable] of Object.entries(current.kinds)) {
+      if (loadable?.kind === "ok" && loadable.value.length > 0) {
+        lines.push(`${kind}: ${loadable.value.map((o) => o.name).join(", ")}`);
+      }
+    }
+    return lines.join("\n");
+  })());
+
   async function getColumns(table: string, owner: string | null = null): Promise<string[]> {
     const effectiveOwner = owner ?? schemas.find((s) => s.isCurrent)?.name ?? null;
     if (!effectiveOwner) return [];
@@ -801,6 +813,7 @@
               selectedName: selected?.name,
               selectedKind: selected?.kind,
               activeSql: sqlEditor.active?.sql ?? undefined,
+              schemaObjects: schemaSnapshot,
             }}
             onClose={() => showChat = false}
             pendingMessage={chatPendingMessage}
