@@ -530,7 +530,7 @@
     <div class="input-row">
       <textarea
         class="chat-input"
-        placeholder={analyzeStep === "title" ? "Enter chart title…" : authCtx.tier === "cloud" ? "Ask Cloud AI…" : "Ask the sheep…"}
+        placeholder={analyzeStep === "title" ? "Enter chart title…" : authCtx.tier === "cloud" ? "Ask Cloud AI…" : "Ask Sheep AI…"}
         bind:value={input}
         bind:this={inputEl}
         onkeydown={onKeydown}
