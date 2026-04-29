@@ -336,13 +336,14 @@
     gap: 0.1rem;
   }
   h1 {
-    font-family: "Space Grotesk", sans-serif;
-    font-weight: 600;
-    font-size: 32px;
-    letter-spacing: 0.01em;
+    font-family: "Bebas Neue", "Space Grotesk", sans-serif;
+    font-weight: 400;
+    font-size: 36px;
+    letter-spacing: 0.06em;
     margin: 0;
     line-height: 1;
     color: var(--text-primary);
+    text-transform: uppercase;
   }
   .tagline {
     font-family: "Space Grotesk", sans-serif;
