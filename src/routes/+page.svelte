@@ -25,6 +25,7 @@
   let query = $state("");
   let authFilter = $state<"all" | "basic" | "wallet">("all");
   let showLogin = $state(false);
+  let showAccountMenu = $state(false);
 
   const filtered = $derived.by(() => {
     const q = query.trim().toLowerCase();
@@ -109,15 +110,48 @@
     </div>
     <div class="header-actions">
       {#if authCtx.tier === "cloud"}
-        <div class="cloud-account">
-          <img src="/veesker-cloud-logo.png" class="cloud-btn-icon" alt="" aria-hidden="true" />
-          <span class="cloud-account-email">{authCtx.email || "Cloud"}</span>
-          <button class="cloud-signout" onclick={handleLogout} title="Sign out">
-            <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
-              <path d="M5 2H2a1 1 0 00-1 1v7a1 1 0 001 1h3M9 9l3-2.5L9 4M4 6.5h8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <div class="cloud-menu-wrap">
+          <button
+            class="cloud-badge-btn"
+            onclick={() => { showAccountMenu = !showAccountMenu; }}
+            aria-expanded={showAccountMenu}
+            aria-haspopup="true"
+          >
+            <img src="/veesker-cloud-logo.png" class="cloud-btn-icon" alt="" aria-hidden="true" />
+            <span class="cloud-account-email">{authCtx.email || "Cloud"}</span>
+            <svg class="chevron" class:open={showAccountMenu} width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+              <path d="M2 3.5l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            Sign out
           </button>
+          {#if showAccountMenu}
+            <div class="account-dropdown" role="menu">
+              <a
+                class="dropdown-item"
+                href="https://billing.stripe.com/p/login/test_00g4j60Av0c89TieUU"
+                target="_blank"
+                rel="noopener noreferrer"
+                role="menuitem"
+                onclick={() => { showAccountMenu = false; }}
+              >
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+                  <rect x="1" y="3" width="11" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
+                  <path d="M1 6h11" stroke="currentColor" stroke-width="1.3"/>
+                </svg>
+                Manage billing
+              </a>
+              <button
+                class="dropdown-item dropdown-item--danger"
+                role="menuitem"
+                onclick={() => { showAccountMenu = false; handleLogout(); }}
+              >
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+                  <path d="M5 2H2a1 1 0 00-1 1v7a1 1 0 001 1h3M9 9l3-2.5L9 4M4 6.5h8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Sign out
+              </button>
+            </div>
+            <div class="dropdown-backdrop" role="presentation" onclick={() => { showAccountMenu = false; }}></div>
+          {/if}
         </div>
       {:else}
         <button class="cloud-signin" onclick={() => { showLogin = true; }}>
@@ -442,46 +476,84 @@
     border-color: rgba(43, 180, 238, 0.5);
   }
 
-  .cloud-account {
+  .cloud-menu-wrap {
+    position: relative;
+  }
+  .cloud-badge-btn {
     display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.45rem;
     background: rgba(43, 180, 238, 0.1);
+    color: #2bb4ee;
     border: 1px solid rgba(43, 180, 238, 0.3);
     border-radius: 8px;
-    padding: 0.5rem 0.75rem 0.5rem 0.6rem;
+    padding: 0.55rem 0.8rem 0.55rem 0.6rem;
     font-family: "Space Grotesk", sans-serif;
     font-size: 12px;
-    color: #2bb4ee;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
     white-space: nowrap;
   }
+  .cloud-badge-btn:hover {
+    background: rgba(43, 180, 238, 0.18);
+    border-color: rgba(43, 180, 238, 0.5);
+  }
   .cloud-account-email {
-    font-weight: 600;
     max-width: 160px;
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .cloud-signout {
-    display: inline-flex;
+  .chevron {
+    color: rgba(43, 180, 238, 0.6);
+    transition: transform 0.15s;
+    flex-shrink: 0;
+  }
+  .chevron.open { transform: rotate(180deg); }
+
+  .account-dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    min-width: 180px;
+    background: var(--bg-surface-raised);
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    padding: 4px;
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .dropdown-item {
+    display: flex;
     align-items: center;
-    gap: 0.3rem;
-    background: transparent;
-    border: 1px solid rgba(43, 180, 238, 0.25);
-    border-radius: 5px;
-    padding: 0.25rem 0.5rem;
+    gap: 0.5rem;
+    padding: 0.55rem 0.75rem;
+    border-radius: 7px;
     font-family: "Space Grotesk", sans-serif;
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 500;
-    color: rgba(43, 180, 238, 0.7);
+    color: var(--text-primary);
+    background: transparent;
+    border: none;
     cursor: pointer;
-    transition: background 0.12s, color 0.12s, border-color 0.12s;
-    margin-left: 0.15rem;
+    text-decoration: none;
+    transition: background 0.1s;
+    width: 100%;
+    text-align: left;
   }
-  .cloud-signout:hover {
-    background: rgba(239, 68, 68, 0.1);
-    color: #ef4444;
-    border-color: rgba(239, 68, 68, 0.3);
+  .dropdown-item:hover { background: var(--row-hover); }
+  .dropdown-item--danger { color: #ef4444; }
+  .dropdown-item--danger:hover { background: rgba(239, 68, 68, 0.08); }
+
+  .dropdown-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 199;
   }
+
   .tagline-cloud {
     color: #2bb4ee !important;
     font-weight: 600;
