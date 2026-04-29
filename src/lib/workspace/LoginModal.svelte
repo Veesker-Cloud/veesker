@@ -122,7 +122,10 @@
         <button class="btn primary" onclick={sendLink} disabled={!email.trim()}>
           Send sign-in link
         </button>
-        <button class="btn ghost" onclick={handleClose}>Continue with CE</button>
+        <button class="btn ce" onclick={handleClose}>
+          <img src="/ce-logo.png" class="ce-icon" alt="" aria-hidden="true" />
+          Continue with CE
+        </button>
       </div>
 
     {:else if authState === "waiting"}
@@ -147,7 +150,10 @@
       <p class="lead error-text">{errorMessage}</p>
       <div class="actions">
         <button class="btn primary" onclick={retry}>Try again</button>
-        <button class="btn ghost" onclick={handleClose}>Continue with CE</button>
+        <button class="btn ce" onclick={handleClose}>
+          <img src="/ce-logo.png" class="ce-icon" alt="" aria-hidden="true" />
+          Continue with CE
+        </button>
       </div>
     {/if}
   </div>
@@ -294,12 +300,28 @@
     box-shadow: 0 4px 24px rgba(43, 180, 238, 0.45);
   }
 
-  .btn.ghost {
-    background: rgba(255,255,255,0.05);
-    color: rgba(255,255,255,0.5);
-    border: 1px solid rgba(255,255,255,0.08);
+  .btn.ce {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: rgba(179, 62, 31, 0.12);
+    color: #e05a2b;
+    border: 1px solid rgba(179, 62, 31, 0.3);
+    box-shadow: 0 4px 16px rgba(179, 62, 31, 0.15);
   }
-  .btn.ghost:hover { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.7); }
+  .btn.ce:hover {
+    background: rgba(179, 62, 31, 0.2);
+    border-color: rgba(179, 62, 31, 0.5);
+    box-shadow: 0 4px 24px rgba(179, 62, 31, 0.28);
+  }
+  .ce-icon {
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
 
   /* Pulse animation for waiting state */
   .pulse-wrap {
