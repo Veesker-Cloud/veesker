@@ -15,6 +15,7 @@
   import { ask, message } from "@tauri-apps/plugin-dialog";
   import { logout } from "$lib/services/auth";
   import LoginModal from "$lib/workspace/LoginModal.svelte";
+  import AuditLogPanel from "$lib/workspace/AuditLogPanel.svelte";
 
   const authCtx = getContext<{ tier: "ce" | "cloud"; email: string }>("auth");
 
@@ -26,6 +27,7 @@
   let authFilter = $state<"all" | "basic" | "wallet">("all");
   let showLogin = $state(false);
   let showAccountMenu = $state(false);
+  let showAuditLog = $state(false);
 
   const filtered = $derived.by(() => {
     const q = query.trim().toLowerCase();
@@ -125,6 +127,17 @@
           </button>
           {#if showAccountMenu}
             <div class="account-dropdown" role="menu">
+              <button
+                class="dropdown-item"
+                role="menuitem"
+                onclick={() => { showAccountMenu = false; showAuditLog = true; }}
+              >
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+                  <rect x="1" y="1.5" width="11" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
+                  <path d="M3.5 4.5h6M3.5 6.5h6M3.5 8.5h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                </svg>
+                Audit log
+              </button>
               <a
                 class="dropdown-item"
                 href="https://billing.stripe.com/p/login/test_00g4j60Av0c89TieUU"
@@ -330,6 +343,10 @@
     </ul>
   {/if}
 </main>
+
+{#if showAuditLog}
+  <AuditLogPanel onClose={() => { showAuditLog = false; }} />
+{/if}
 
 {#if showLogin}
   <LoginModal onClose={async () => {

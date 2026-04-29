@@ -1206,4 +1206,21 @@
   }
   .term-vhandle:hover { background: rgba(179, 62, 31, 0.07); }
   .term-vhandle:hover::before { background: rgba(179, 62, 31, 0.75); }
+
+  /* ── Cloud overrides ─────────────────────────────────────────────────────── */
+  :global([data-tier="cloud"]) .tab.active { border-bottom-color: #2bb4ee; }
+  :global([data-tier="cloud"]) .drawer { border-top-color: rgba(43,180,238,0.35); }
+  :global([data-tier="cloud"]) .top-handle:hover { background: rgba(43,180,238,0.07); }
+  :global([data-tier="cloud"]) .top-handle:hover::before { background: rgba(43,180,238,0.75); }
+  :global([data-tier="cloud"]) .top-handle:focus-visible { outline-color: #2bb4ee; }
+  :global([data-tier="cloud"]) .mid-handle:hover { background: rgba(43,180,238,0.07); }
+  :global([data-tier="cloud"]) .mid-handle:hover::before { background: rgba(43,180,238,0.75); }
+  :global([data-tier="cloud"]) .mid-handle:focus-visible { outline-color: #2bb4ee; }
+  :global([data-tier="cloud"]) .term-resize-handle:hover { background: rgba(43,180,238,0.07); }
+  :global([data-tier="cloud"]) .term-resize-handle:hover::before { background: rgba(43,180,238,0.75); }
+  :global([data-tier="cloud"]) .term-vhandle:hover { background: rgba(43,180,238,0.07); }
+  :global([data-tier="cloud"]) .term-vhandle:hover::before { background: rgba(43,180,238,0.75); }
+  :global([data-tier="cloud"]) .dock-compile { color: #7dd3f5; }
+  :global([data-tier="cloud"]) .dock-compile:hover:not(:disabled) { background: rgba(43,180,238,0.18); color: #a8e6fa; }
+  :global([data-tier="cloud"]) .dock-rollback { color: #7dd3f5; }
 </style>
