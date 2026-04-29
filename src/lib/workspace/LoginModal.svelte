@@ -8,9 +8,12 @@
   import { invoke } from "@tauri-apps/api/core";
   import { onDestroy } from "svelte";
   import { applyFeatureFlags } from "$lib/services/features";
+  import SubscribeModal from "./SubscribeModal.svelte";
 
   type Props = { onClose: () => void };
   let { onClose }: Props = $props();
+
+  let showSubscribe = $state(false);
 
   type AuthState = "idle" | "waiting" | "error";
   let authState: AuthState = $state("idle");
@@ -50,6 +53,17 @@
           localStorage.setItem("veesker:features", JSON.stringify(data.features));
           applyFeatureFlags(data.features);
           polling = false;
+          // If no active subscription, show upgrade modal before closing
+          const meRes = await fetch("https://api.veesker.cloud/v1/auth/me", {
+            headers: { Authorization: `Bearer ${data.token}` },
+          }).catch(() => null);
+          if (meRes?.ok) {
+            const me = await meRes.json().catch(() => ({}));
+            if (me?.org?.subscription_status !== "active" && me?.org?.subscription_status !== "trialing") {
+              showSubscribe = true;
+              return;
+            }
+          }
           onClose();
           return;
         }
@@ -84,6 +98,9 @@
   onDestroy(() => { polling = false; });
 </script>
 
+{#if showSubscribe}
+  <SubscribeModal onClose={onClose} />
+{:else}
 <div class="backdrop" role="presentation" onclick={handleClose}>
   <div class="modal" role="dialog" aria-modal="true" onclick={(e) => e.stopPropagation()}>
     <button class="close-btn" aria-label="Close" onclick={handleClose}>
@@ -158,6 +175,7 @@
     {/if}
   </div>
 </div>
+{/if}
 
 <style>
   .backdrop {
