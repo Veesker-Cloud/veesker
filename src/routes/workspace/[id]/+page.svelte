@@ -90,7 +90,7 @@
         lines.push(`${kind}: ${loadable.value.map((o) => o.name).join(", ")}`);
       }
     }
-    return lines.join("\n");
+    return lines.length > 1 ? lines.join("\n") : undefined;
   })());
 
   async function getColumns(table: string, owner: string | null = null): Promise<string[]> {
