@@ -254,11 +254,11 @@
   .close-btn:hover { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.7); }
 
   .logo-wrap {
-    width: 72px; height: 72px;
-    border-radius: 18px;
+    width: 80px; height: 80px;
+    border-radius: 20px;
     overflow: hidden;
-    border: 1px solid rgba(43, 180, 238, 0.2);
-    box-shadow: 0 0 24px rgba(43, 180, 238, 0.15);
+    border: 1.5px solid rgba(43, 180, 238, 0.5);
+    box-shadow: 0 0 0 4px rgba(43, 180, 238, 0.08), 0 0 32px rgba(43, 180, 238, 0.35);
     margin-bottom: 4px;
     flex-shrink: 0;
   }
