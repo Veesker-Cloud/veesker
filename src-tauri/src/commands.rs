@@ -1471,3 +1471,24 @@ pub async fn cloud_api_get(path: String, params: Option<std::collections::HashMa
     }
     Ok(body)
 }
+
+#[tauri::command]
+pub async fn cloud_api_post(path: String, body: Value) -> Result<(), String> {
+    let token = crate::persistence::secrets::get_auth_token()
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "not_authenticated".to_string())?;
+
+    let url = format!("https://api.veesker.cloud{}", path);
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let res = client.post(&url).bearer_auth(&token).json(&body).send().await.map_err(|e| e.to_string())?;
+    let status = res.status().as_u16();
+    if status >= 400 {
+        return Err(format!("server_error_{}", status));
+    }
+    Ok(())
+}

@@ -27,7 +27,9 @@ export async function initAuth(): Promise<void> {
   const stored = localStorage.getItem("veesker:features");
   if (stored) {
     try {
-      applyFeatureFlags(JSON.parse(stored));
+      const flags = JSON.parse(stored);
+      applyFeatureFlags(flags);
+      if (flags.cloudAudit) CloudAuditService.start();
     } catch {
       // malformed — ignore, background refresh will fix it
     }

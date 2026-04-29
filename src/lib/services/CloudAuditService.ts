@@ -41,30 +41,9 @@ async function resolveClientVersion(): Promise<string> {
 async function flush(): Promise<void> {
   if (_buffer.length === 0) return;
   const batch = _buffer.splice(0, BATCH_SIZE);
-
-  let token: string | null = null;
   try {
-    token = await invoke<string | null>("auth_token_get");
+    await invoke("cloud_api_post", { path: "/v1/audit/ingest", body: { entries: batch } });
   } catch {
-    _buffer = [...batch, ..._buffer];
-    return;
-  }
-  if (!token) {
-    _buffer = [...batch, ..._buffer];
-    return;
-  }
-
-  try {
-    await fetch("https://api.veesker.cloud/v1/audit/ingest", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ entries: batch }),
-    });
-  } catch {
-    // Network error — put entries back unless buffer is already too large
     if (_buffer.length < MAX_BUFFER) {
       _buffer = [...batch, ..._buffer];
     }
