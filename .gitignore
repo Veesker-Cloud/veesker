@@ -18,6 +18,7 @@ src-tauri/gen/
 # IDE
 .idea/
 *.swp
+.obsidian/
 
 # Compiled sidecar binaries (built per-platform via scripts/build-sidecar.sh)
 src-tauri/binaries/veesker-sidecar-*
