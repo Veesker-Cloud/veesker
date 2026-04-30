@@ -1,5 +1,6 @@
-import { describe, test, expect } from "bun:test";
-import { getTools, buildSystem, isReadOnlySql } from "./ai";
+import { describe, test, expect, beforeEach } from "bun:test";
+import { getTools, buildSystem, isReadOnlySql, aiChat } from "./ai";
+import { setSessionSafety } from "./state";
 
 describe("getTools", () => {
   test("returns empty array when tools disabled (CE mode)", () => {
@@ -109,5 +110,67 @@ describe("isReadOnlySql (MEDIUM-001 hardened gate)", () => {
   });
   test("blocks multi-statement SELECT;DROP", () => {
     expect(isReadOnlySql("SELECT 1; DROP TABLE x")).toBe(false);
+  });
+});
+
+describe("aiChat (PROD-001 prod-connection gate)", () => {
+  beforeEach(() => {
+    setSessionSafety({});
+  });
+
+  async function callOrTimeout(params: any): Promise<any> {
+    try {
+      await Promise.race([
+        aiChat(params),
+        new Promise((_, reject) =>
+          setTimeout(() => reject({ code: -1, message: "passed-gate" }), 200),
+        ),
+      ]);
+      return null;
+    } catch (e) {
+      return e;
+    }
+  }
+
+  test("refuses without acknowledgeProdAi when env=prod", async () => {
+    setSessionSafety({ env: "prod" });
+    const err = await callOrTimeout({
+      apiKey: "test",
+      messages: [{ role: "user", content: "hi" }],
+      context: {},
+    });
+    expect(err?.code).toBe(-32604);
+    expect(err.message).toContain("production-tagged");
+  });
+
+  test("does NOT refuse when env=dev (no acknowledge required)", async () => {
+    setSessionSafety({ env: "dev" });
+    const err = await callOrTimeout({
+      apiKey: "fake-test-key",
+      messages: [{ role: "user", content: "hi" }],
+      context: {},
+    });
+    expect(err?.code).not.toBe(-32604);
+  });
+
+  test("does NOT refuse when env is undefined (legacy/unspecified)", async () => {
+    setSessionSafety({});
+    const err = await callOrTimeout({
+      apiKey: "fake-test-key",
+      messages: [{ role: "user", content: "hi" }],
+      context: {},
+    });
+    expect(err?.code).not.toBe(-32604);
+  });
+
+  test("allows when env=prod AND acknowledgeProdAi=true", async () => {
+    setSessionSafety({ env: "prod" });
+    const err = await callOrTimeout({
+      apiKey: "fake-test-key",
+      messages: [{ role: "user", content: "hi" }],
+      context: {},
+      acknowledgeProdAi: true,
+    });
+    expect(err?.code).not.toBe(-32604);
   });
 });

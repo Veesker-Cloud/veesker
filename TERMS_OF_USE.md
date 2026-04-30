@@ -1,6 +1,6 @@
 ﻿# Terms of Use
 
-**Effective date:** 2026-04-25
+**Effective date:** 2026-04-30
 
 ## 1. About Veesker
 
@@ -52,6 +52,14 @@ Veesker integrates with external AI services (Anthropic Claude API). When AI fea
 - The maintainer is not responsible for the AI provider's availability, accuracy, or data handling
 - AI-generated SQL, PL/SQL, REST endpoint configurations, or chart suggestions may be incorrect or harmful — **always review before applying**
 - The user is responsible for ensuring that sending data to the AI provider complies with their organization's data policy
+
+### 6.1 Production-tagged connections
+
+When a connection is tagged `prod` in its safety settings, AI features are **disabled by default** for that connection. To enable AI on a production connection, the user must explicitly unlock it per chat session by typing the connection name in a confirmation modal.
+
+The unlock applies only to the current chat session and resets when the chat panel closes or the application restarts.
+
+Once unlocked, the same data flow as section 6 applies: query content (including any data the user's Oracle account can read) may be sent to Anthropic for processing. Anthropic's data handling is governed by their [Acceptable Use Policy](https://www.anthropic.com/legal/aup) and [Privacy Policy](https://www.anthropic.com/legal/privacy).
 
 ## 7. Database operations
 

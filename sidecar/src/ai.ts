@@ -4,6 +4,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { tableDescribe, objectDdl, objectsList, queryExecute } from "./oracle";
+import { getSessionSafety } from "./state";
 
 export type AiMessage = { role: "user" | "assistant"; content: string };
 
@@ -19,6 +20,11 @@ export type AiChatParams = {
   apiKey: string;
   messages: AiMessage[];
   context: AiContext;
+  // PROD-001 (audit 2026-04-30): when the active connection is tagged env='prod'
+  // the AI gate refuses to run unless the caller explicitly acknowledges that
+  // query data may flow to Anthropic. The frontend should set this flag only
+  // after the user clicked through the per-session unlock modal.
+  acknowledgeProdAi?: boolean;
 };
 
 export type AiChatResult = {
@@ -291,6 +297,18 @@ async function aiChatViaCli(params: AiChatParams, tools: boolean): Promise<AiCha
 }
 
 export async function aiChat(params: AiChatParams, tools: boolean = false): Promise<AiChatResult> {
+  // PROD-001 (audit 2026-04-30): refuse AI calls on prod-tagged connections
+  // unless the caller explicitly acknowledged the data-flow disclaimer for
+  // this session. This is the sidecar-level gate; the UI also gates earlier.
+  const safety = getSessionSafety();
+  if (safety.env === "prod" && !params.acknowledgeProdAi) {
+    throw {
+      code: -32604,
+      message:
+        "AI tools are disabled on production-tagged connections. Unlock per session in the chat panel after acknowledging that queries may be sent to Anthropic.",
+    };
+  }
+
   const key = params.apiKey || process.env.ANTHROPIC_API_KEY;
 
   // No API key — try the locally installed claude CLI (uses Claude Code auth).

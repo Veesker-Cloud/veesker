@@ -35,6 +35,8 @@ HIGH-003 (server rate limit), LOW-006 (CORS), PROD-001/002 (cloud features).
 | MEDIUM-001 (AI regex) | (CL pending push) | (pending) | `sidecar/src/ai.ts` | CE has AI; identical fix; 22/22 tests pass |
 | MEDIUM-002 (wallet path) | (CL pending push) | (pending) | `src-tauri/src/commands.rs` | Same edit as CL; cargo check passes |
 | MEDIUM-004 (CSP) | 🟡 Partial | (pending) | `src-tauri/tauri.conf.json` | Same partial fix as CL; `'unsafe-inline'` retained pending Svelte refactor |
+| PROD-001 sidecar gate | (CL pending push) | (pending) | `sidecar/src/ai.ts` | env=prod requires acknowledgeProdAi; 26/26 tests pass. CE UI gate (SheepChat modal) deferred to a follow-up commit since CE's SheepChat may diverge from CL's. |
+| TERMS_OF_USE 6.1 | n/a | (pending) | `TERMS_OF_USE.md` | AI prod-unlock disclosure; effective date bumped to 2026-04-30 |
 | LOW-001 (eprintln) | (pending Batch 4) | — | `src-tauri/src/persistence/connections.rs` | — |
 | LOW-002 (Instant Client cache) | (pending Batch 4) | — | `src-tauri/src/sidecar.rs` (or sidecar/src/oracle.ts) | — |
 | LOW-003 (logger Windows) | (pending Batch 4) | — | `sidecar/src/logger.ts` | — |
@@ -53,7 +55,6 @@ These ship only in CL because the corresponding feature doesn't exist in CE:
 - HIGH-003 (audit ingest rate limit) — server only
 - LOW-005 (SSL pinning for cloud_api) — no cloud_api in CE
 - LOW-006 (CORS allowlist) — server only
-- PROD-001 (AI off in prod) — confirm CE has AI; if yes, applies
 - PROD-002 (audit metadata-only) — no cloud audit in CE
 
 ---
