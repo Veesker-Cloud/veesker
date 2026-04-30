@@ -188,4 +188,37 @@ describe("oracle-shim SQL translator", () => {
     expect(out).toContain("'NVL is not a function here'");
     expect(out).not.toContain("COALESCE");
   });
+
+  it("translates NVL2 with nested function calls in args", () => {
+    const out = translate("SELECT NVL2(SUBSTR(x, 1, 3), 'yes', 'no') FROM DUAL");
+    expect(out).toContain("CASE WHEN SUBSTR(x, 1, 3) IS NOT NULL THEN 'yes' ELSE 'no' END");
+  });
+
+  it("translates DECODE with nested function in expr", () => {
+    const out = translate("SELECT DECODE(GREATEST(a,b), 1, 'one', 2, 'two') FROM t");
+    expect(out).toContain("WHEN GREATEST(a,b) = 1 THEN 'one'");
+    expect(out).toContain("WHEN GREATEST(a,b) = 2 THEN 'two'");
+  });
+
+  it("translates DECODE with NULL key using IS NULL", () => {
+    const out = translate("SELECT DECODE(x, NULL, 'is null', 'A', 'is A') FROM t");
+    expect(out).toContain("WHEN x IS NULL THEN 'is null'");
+    expect(out).toContain("WHEN x = 'A' THEN 'is A'");
+    expect(out).not.toContain("x = NULL");
+  });
+
+  it("translates DECODE with NULL key (lowercase)", () => {
+    const out = translate("SELECT DECODE(x, null, 'n') FROM t");
+    expect(out).toContain("WHEN x IS NULL THEN 'n'");
+  });
+
+  it("does not translate ROWNUM when combined with another predicate", () => {
+    const sql = "SELECT * FROM t WHERE ROWNUM <= 10 AND status = 'A'";
+    expect(translate(sql)).toBe(sql);
+  });
+
+  it("translates ROWNUM at end of statement (semicolon variant)", () => {
+    expect(translate("SELECT * FROM t WHERE ROWNUM <= 5;"))
+      .toBe("SELECT * FROM t LIMIT 5;");
+  });
 });
