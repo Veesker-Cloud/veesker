@@ -33,7 +33,7 @@ HIGH-003 (server rate limit), LOW-006 (CORS), PROD-001/002 (cloud features).
 |----|-----------|-----------|----------------|-------|
 | HIGH-002 (host validation) | (CL pending push) | (pending) | `src-tauri/src/persistence/connections.rs` | Same diff as CL; 16/16 validation_tests pass |
 | MEDIUM-001 (AI regex) | (CL pending push) | (pending) | `sidecar/src/ai.ts` | CE has AI; identical fix; 22/22 tests pass |
-| MEDIUM-002 (wallet path) | (pending Batch 2) | — | `src-tauri/src/commands.rs` | File diverges between repos — apply same logical edit |
+| MEDIUM-002 (wallet path) | (CL pending push) | (pending) | `src-tauri/src/commands.rs` | Same edit as CL; cargo check passes |
 | MEDIUM-004 (CSP) | (pending Batch 2) | — | `src-tauri/tauri.conf.json` | Confirm CSP is identical |
 | LOW-001 (eprintln) | (pending Batch 4) | — | `src-tauri/src/persistence/connections.rs` | — |
 | LOW-002 (Instant Client cache) | (pending Batch 4) | — | `src-tauri/src/sidecar.rs` (or sidecar/src/oracle.ts) | — |

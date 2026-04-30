@@ -48,9 +48,21 @@ pub struct ConnectionTestErr {
     pub message: String,
 }
 
-fn config_to_params(config: ConnectionConfig) -> Value {
+// MEDIUM-002 (audit 2026-04-30): validate the wallet directory path BEFORE
+// passing it to the sidecar. Without this, connection_test would accept a UNC
+// path like \\evil-server\share which would leak NTLM hashes on Windows when
+// oracledb opens the wallet location.
+//
+// HIGH-002 also re-validates host/serviceName/connect_alias as belt-and-
+// suspenders even though connection_save already does so via persistence layer.
+fn config_to_params(
+    app: &AppHandle,
+    config: ConnectionConfig,
+) -> Result<Value, ConnectionError> {
     use crate::persistence::connection_config::{basic_params, wallet_params};
-    use std::path::Path;
+    use crate::persistence::connections::{
+        validate_connect_alias, validate_host, validate_service_name,
+    };
     match config {
         ConnectionConfig::Basic {
             host,
@@ -58,20 +70,28 @@ fn config_to_params(config: ConnectionConfig) -> Value {
             service_name,
             username,
             password,
-        } => basic_params(&host, port, &service_name, &username, &password),
+        } => {
+            validate_host(&host)?;
+            validate_service_name(&service_name)?;
+            Ok(basic_params(&host, port, &service_name, &username, &password))
+        }
         ConnectionConfig::Wallet {
             wallet_dir,
             wallet_password,
             connect_alias,
             username,
             password,
-        } => wallet_params(
-            Path::new(&wallet_dir),
-            &wallet_password,
-            &connect_alias,
-            &username,
-            &password,
-        ),
+        } => {
+            let canon = validate_user_path(app, &wallet_dir)?;
+            validate_connect_alias(&connect_alias)?;
+            Ok(wallet_params(
+                &canon,
+                &wallet_password,
+                &connect_alias,
+                &username,
+                &password,
+            ))
+        }
     }
 }
 
@@ -85,7 +105,10 @@ pub async fn connection_test(
         message: err,
     })?;
 
-    let params = config_to_params(config);
+    let params = config_to_params(&app, config).map_err(|err| ConnectionTestErr {
+        code: err.code,
+        message: err.message,
+    })?;
     let result = sidecar
         .call("connection.test", params)
         .await
