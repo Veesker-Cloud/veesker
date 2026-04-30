@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0
 // https://github.com/veesker-cloud/veesker-community-edition
 
-import { mkdirSync, appendFileSync, existsSync, statSync, renameSync } from "node:fs";
+import { mkdirSync, appendFileSync, existsSync, statSync, renameSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 
 /**
@@ -34,12 +34,15 @@ function logDir(): string | null {
 
 function rotate(path: string): void {
   // 5 MB cap, keep one .old.
+  // LOW-003 (audit 2026-04-30): use node:fs.unlinkSync instead of spawning `rm`.
+  // The previous implementation silently failed on Windows (no rm in PATH),
+  // which after the first rotation caused log files to grow unbounded.
   try {
     const st = statSync(path);
     if (st.size > 5 * 1024 * 1024) {
       const old = path + ".old";
       if (existsSync(old)) {
-        try { Bun.spawnSync(["rm", "-f", old]); } catch { /* ignore */ }
+        try { unlinkSync(old); } catch { /* ENOENT: fine; other errors swallowed */ }
       }
       renameSync(path, old);
     }

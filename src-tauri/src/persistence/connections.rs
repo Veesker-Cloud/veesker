@@ -707,20 +707,27 @@ impl ConnectionService {
             let conn = self.lock()?;
             store::delete(&conn, id)?;
         }
+        // LOW-001 (audit 2026-04-30): use println! (not eprintln!) so the log
+        // is captured by Tauri's stdout pipe consistently. Redact wallet path
+        // to filename only — no full filesystem path leak via logs.
         if let Err(e) = secrets::delete_password(id) {
-            eprintln!("[connections] keychain delete failed for {id}: {e}");
+            println!("[connections] keychain delete failed for {id}: {e}");
         }
         if let Some(r) = row
             && r.auth_type == AuthType::Wallet
         {
             if let Err(e) = secrets::delete_wallet_password(id) {
-                eprintln!("[connections] wallet keychain delete failed for {id}: {e}");
+                println!("[connections] wallet keychain delete failed for {id}: {e}");
             }
             let dir = self.wallet_dir(id);
             if dir.exists()
                 && let Err(e) = std::fs::remove_dir_all(&dir)
             {
-                eprintln!("[connections] wallet dir delete failed for {dir:?}: {e}");
+                let dir_name = dir
+                    .file_name()
+                    .map(|s| s.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| "<unknown>".into());
+                println!("[connections] wallet dir delete failed for {dir_name}: {e}");
             }
         }
         Ok(())
