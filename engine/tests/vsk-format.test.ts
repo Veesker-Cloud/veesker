@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { writeHeader, readHeader, VSK_MAGIC, VSK_VERSION } from "../src/vsk-format/header";
+import { writeManifest, readManifest, type VskManifest } from "../src/vsk-format/manifest";
 
 describe("vsk-format header", () => {
   it("round-trips a header", () => {
@@ -64,5 +65,54 @@ describe("vsk-format header", () => {
     const parsed = readHeader(slice);
     expect(parsed.manifestOffset).toBe(4242n);
     expect(parsed.dataLength).toBe(99999n);
+  });
+});
+
+describe("vsk-format manifest", () => {
+  const sample: VskManifest = {
+    builtAt: "2026-04-30T12:00:00.000Z",
+    sourceId: "oracle-prod-1",
+    schemaName: "ORDERS_OWNER",
+    ttlExpiresAt: "2026-05-07T12:00:00.000Z",
+    tables: [
+      {
+        name: "ORDERS",
+        rowCount: 12345,
+        columns: [
+          { name: "ID", type: "BIGINT", nullable: false },
+          { name: "TOTAL", type: "DECIMAL(18,2)", nullable: true },
+        ],
+      },
+    ],
+    piiMasks: [{ table: "ORDERS", column: "EMAIL", maskType: "hash" }],
+  };
+
+  it("round-trips a manifest", () => {
+    const buf = writeManifest(sample);
+    const parsed = readManifest(buf);
+    expect(parsed).toEqual(sample);
+  });
+
+  it("rejects malformed JSON", () => {
+    expect(() => readManifest(new TextEncoder().encode("{not json"))).toThrow();
+  });
+
+  it("rejects a manifest missing required fields", () => {
+    const noTables = JSON.stringify({ builtAt: "x", sourceId: "y", schemaName: "z", ttlExpiresAt: "w", piiMasks: [] });
+    expect(() => readManifest(new TextEncoder().encode(noTables))).toThrow(/malformed/i);
+
+    const wrongType = JSON.stringify({ ...sample, builtAt: 42 });
+    expect(() => readManifest(new TextEncoder().encode(wrongType))).toThrow(/malformed/i);
+  });
+
+  it("preserves unicode in schema and table names", () => {
+    const unicode: VskManifest = {
+      ...sample,
+      schemaName: "PEDIDOS_ÇÃO",
+      tables: [{ ...sample.tables[0]!, name: "CLIENTÉS", columns: sample.tables[0]!.columns }],
+    };
+    const parsed = readManifest(writeManifest(unicode));
+    expect(parsed.schemaName).toBe("PEDIDOS_ÇÃO");
+    expect(parsed.tables[0]!.name).toBe("CLIENTÉS");
   });
 });
