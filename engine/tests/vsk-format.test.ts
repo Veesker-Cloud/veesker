@@ -1,6 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import { writeHeader, readHeader, VSK_MAGIC, VSK_VERSION } from "../src/vsk-format/header";
 import { writeManifest, readManifest, VSK_MASK_TYPES, type VskManifest } from "../src/vsk-format/manifest";
+import { writeVsk } from "../src/vsk-format/writer";
+import { readVsk } from "../src/vsk-format/reader";
+import { DuckDBHost } from "../src/duckdb-host";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { unlinkSync, existsSync } from "node:fs";
 
 describe("vsk-format header", () => {
   it("round-trips a header", () => {
@@ -146,5 +152,123 @@ describe("vsk-format manifest", () => {
 
   it("exposes VSK_MASK_TYPES as a const tuple", () => {
     expect(VSK_MASK_TYPES).toEqual(["hash", "redact", "static", "partial"]);
+  });
+});
+
+describe("vsk-format writer + reader", () => {
+  it("writes then reads back a sandbox", async () => {
+    const path = join(tmpdir(), `vsk-test-${process.pid}-${Date.now()}.vsk`);
+    const src = await DuckDBHost.openInMemory();
+    try {
+      await src.exec("CREATE TABLE customers (id INT, name VARCHAR)");
+      await src.exec("INSERT INTO customers VALUES (1,'alice'),(2,'bob')");
+
+      await writeVsk(src, path, {
+        builtAt: new Date().toISOString(),
+        sourceId: "test",
+        schemaName: "TEST",
+        ttlExpiresAt: new Date(Date.now() + 86400000).toISOString(),
+        tables: [{
+          name: "CUSTOMERS",
+          rowCount: 2,
+          columns: [
+            { name: "ID", type: "INTEGER", nullable: false },
+            { name: "NAME", type: "VARCHAR", nullable: true },
+          ],
+        }],
+        piiMasks: [],
+      });
+
+      expect(existsSync(path)).toBe(true);
+
+      const dst = await DuckDBHost.openInMemory();
+      try {
+        const m = await readVsk(path, dst);
+        expect(m.tables.length).toBe(1);
+        const rows = await dst.query("SELECT * FROM customers ORDER BY id");
+        expect(rows).toEqual([
+          { id: 1, name: "alice" },
+          { id: 2, name: "bob" },
+        ]);
+      } finally {
+        await dst.close();
+      }
+    } finally {
+      await src.close();
+      try { unlinkSync(path); } catch { /* best effort */ }
+    }
+  });
+
+  it("handles multiple tables in one .vsk", async () => {
+    const path = join(tmpdir(), `vsk-multi-${process.pid}-${Date.now()}.vsk`);
+    const src = await DuckDBHost.openInMemory();
+    try {
+      await src.exec("CREATE TABLE orders (id INT, total DECIMAL(10,2))");
+      await src.exec("INSERT INTO orders VALUES (1, 100.50), (2, 250.75)");
+      await src.exec("CREATE TABLE customers (id INT, name VARCHAR)");
+      await src.exec("INSERT INTO customers VALUES (1,'alice')");
+
+      await writeVsk(src, path, {
+        builtAt: new Date().toISOString(),
+        sourceId: "test",
+        schemaName: "TEST",
+        ttlExpiresAt: new Date(Date.now() + 86400000).toISOString(),
+        tables: [
+          { name: "ORDERS", rowCount: 2, columns: [
+            { name: "ID", type: "INTEGER", nullable: false },
+            { name: "TOTAL", type: "DECIMAL(10,2)", nullable: true },
+          ]},
+          { name: "CUSTOMERS", rowCount: 1, columns: [
+            { name: "ID", type: "INTEGER", nullable: false },
+            { name: "NAME", type: "VARCHAR", nullable: true },
+          ]},
+        ],
+        piiMasks: [],
+      });
+
+      const dst = await DuckDBHost.openInMemory();
+      try {
+        await readVsk(path, dst);
+        const orderCount = await dst.query("SELECT COUNT(*) AS n FROM orders");
+        expect(Number(orderCount[0]!.n)).toBe(2);
+        const custCount = await dst.query("SELECT COUNT(*) AS n FROM customers");
+        expect(Number(custCount[0]!.n)).toBe(1);
+      } finally {
+        await dst.close();
+      }
+    } finally {
+      await src.close();
+      try { unlinkSync(path); } catch { /* best effort */ }
+    }
+  });
+
+  it("preserves manifest fields exactly through round-trip", async () => {
+    const path = join(tmpdir(), `vsk-manifest-${process.pid}-${Date.now()}.vsk`);
+    const src = await DuckDBHost.openInMemory();
+    try {
+      await src.exec("CREATE TABLE t (id INT)");
+      const original = {
+        builtAt: "2026-04-30T15:00:00.000Z",
+        sourceId: "oracle-prod-7",
+        schemaName: "MY_SCHEMA",
+        ttlExpiresAt: "2026-05-30T15:00:00.000Z",
+        tables: [{ name: "T", rowCount: 0, columns: [{ name: "ID", type: "INTEGER", nullable: false }] }],
+        piiMasks: [],
+        engineVersion: "0.1.0",
+        dataFormat: "parquet-streams-v1",
+      };
+      await writeVsk(src, path, original);
+
+      const dst = await DuckDBHost.openInMemory();
+      try {
+        const recovered = await readVsk(path, dst);
+        expect(recovered).toEqual(original);
+      } finally {
+        await dst.close();
+      }
+    } finally {
+      await src.close();
+      try { unlinkSync(path); } catch { /* best effort */ }
+    }
   });
 });
