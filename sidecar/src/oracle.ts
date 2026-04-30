@@ -3,7 +3,7 @@
 // https://github.com/veesker-cloud/veesker-community-edition
 
 import oracledb from "oracledb";
-import { readdirSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, basename } from "node:path";
 import { embedText, type EmbedParams } from "./embedding";
 import { log } from "./logger";
@@ -130,6 +130,37 @@ function findInstantClientCandidates(): string[] {
  *
  * Set VEESKER_FORCE_THIN=1 to stay in Thin mode regardless.
  */
+// LOW-002 (audit 2026-04-30): cache the discovered libDir to skip the
+// filesystem walk on subsequent starts. Cache lives next to the sidecar's
+// log file (in VEESKER_LOG_DIR) — a writable location chosen by the Tauri
+// host. If unset (e.g., dev mode), we just skip caching.
+function cacheFilePath(): string | null {
+  const dir = process.env.VEESKER_LOG_DIR;
+  return dir ? join(dir, "instantclient-libdir.cache") : null;
+}
+
+function readCachedLibDir(): string | null {
+  const path = cacheFilePath();
+  if (!path) return null;
+  try {
+    const cached = readFileSync(path, "utf8").trim();
+    if (cached && dirHasOracleClientLib(cached)) return cached;
+  } catch {
+    /* no cache yet */
+  }
+  return null;
+}
+
+function writeCachedLibDir(libDir: string): void {
+  const path = cacheFilePath();
+  if (!path) return;
+  try {
+    writeFileSync(path, libDir, { encoding: "utf8" });
+  } catch {
+    /* non-fatal */
+  }
+}
+
 export function tryEnableThickMode(): { mode: "thin" | "thick"; libDir?: string; error?: string } {
   if (process.env.VEESKER_FORCE_THIN === "1") {
     process.stderr.write("[oracle] VEESKER_FORCE_THIN=1 — using Thin mode\n");
@@ -151,6 +182,11 @@ export function tryEnableThickMode(): { mode: "thin" | "thick"; libDir?: string;
   const attempts: Array<{ libDir?: string; label: string }> = [];
   const explicit = process.env.VEESKER_INSTANT_CLIENT_DIR;
   if (explicit) attempts.push({ libDir: explicit, label: `env VEESKER_INSTANT_CLIENT_DIR=${explicit}` });
+  // LOW-002: cached libDir from a previous successful init wins second priority.
+  // Skips the deep filesystem walk on every startup (was 1-3s on machines with
+  // multiple Oracle installs).
+  const cached = readCachedLibDir();
+  if (cached) attempts.push({ libDir: cached, label: `cache hit ${cached}` });
   attempts.push({ label: "default search path" });
   for (const dir of findInstantClientCandidates()) {
     attempts.push({ libDir: dir, label: `auto-discovered ${dir}` });
@@ -165,6 +201,7 @@ export function tryEnableThickMode(): { mode: "thin" | "thick"; libDir?: string;
       else oracledb.initOracleClient();
       _driverMode = "thick";
       process.stderr.write(`[oracle] Thick mode enabled — ${a.label}\n`);
+      if (a.libDir) writeCachedLibDir(a.libDir);
       return { mode: "thick", libDir: a.libDir };
     } catch (err) {
       const msg = String(err).split("\n")[0];
