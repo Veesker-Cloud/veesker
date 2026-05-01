@@ -1,6 +1,16 @@
 import { sodiumReady, getSodium } from "./sodium";
 import type { Keypair } from "./keypair";
 
+export interface Recipient {
+  userId: string;
+  x25519Pubkey: Uint8Array;
+}
+
+export interface SealedRecipient {
+  userId: string;
+  envelope: Envelope;
+}
+
 export interface Envelope {
   ciphertext: Uint8Array;
   nonce: Uint8Array;
@@ -70,4 +80,33 @@ export async function openEnvelope(
     envelope.nonce,
     sharedKey,
   );
+}
+
+/**
+ * Seal a single content key for N recipients. Returns one envelope per
+ * recipient, indexed by `userId`. Order in output matches input.
+ *
+ * Throws if any recipient pubkey is not exactly 32 bytes (X25519
+ * pubkeys are always 32 bytes; refuse anything else to fail fast).
+ */
+export async function sealForRecipients(
+  contentKey: Uint8Array,
+  recipients: Recipient[],
+  sender: Keypair,
+): Promise<SealedRecipient[]> {
+  for (const r of recipients) {
+    if (r.x25519Pubkey.length !== 32) {
+      throw new Error(
+        `x25519Pubkey must be 32 bytes, got ${r.x25519Pubkey.length} for userId=${r.userId}`,
+      );
+    }
+  }
+  // Defensive copy: caller's buffer must not affect envelopes mid-loop.
+  const ck = contentKey.slice();
+  const out: SealedRecipient[] = [];
+  for (const r of recipients) {
+    const env = await sealEnvelope(ck, r.x25519Pubkey, sender);
+    out.push({ userId: r.userId, envelope: env });
+  }
+  return out;
 }

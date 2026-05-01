@@ -54,5 +54,8 @@ export {
 export {
   sealEnvelope,
   openEnvelope,
+  sealForRecipients,
   type Envelope,
+  type Recipient,
+  type SealedRecipient,
 } from "./crypto/envelope";
