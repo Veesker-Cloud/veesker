@@ -7,6 +7,17 @@ import { render, screen, fireEvent } from "@testing-library/svelte";
 import ObjectDetails from "./ObjectDetails.svelte";
 import { sqlEditor } from "$lib/stores/sql-editor.svelte";
 
+vi.mock("svelte", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("svelte")>();
+  return {
+    ...mod,
+    getContext: (key: unknown) => {
+      if (key === "auth") return { tier: "ce", email: "" };
+      return mod.getContext(key as never);
+    },
+  };
+});
+
 vi.mock("$lib/sql-query", () => ({
   queryExecute: vi.fn().mockResolvedValue({
     ok: true,
