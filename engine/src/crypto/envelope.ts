@@ -101,9 +101,11 @@ export async function sealForRecipients(
       );
     }
   }
+  // Defensive copy: caller's buffer must not affect envelopes mid-loop.
+  const ck = contentKey.slice();
   const out: SealedRecipient[] = [];
   for (const r of recipients) {
-    const env = await sealEnvelope(contentKey, r.x25519Pubkey, sender);
+    const env = await sealEnvelope(ck, r.x25519Pubkey, sender);
     out.push({ userId: r.userId, envelope: env });
   }
   return out;

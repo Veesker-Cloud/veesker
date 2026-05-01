@@ -91,4 +91,28 @@ describe("sealForRecipients", () => {
       ),
     ).rejects.toThrow(/x25519Pubkey must be 32 bytes/);
   });
+
+  it("does not corrupt envelopes if caller mutates contentKey after the call returns", async () => {
+    await sodiumReady();
+    const sender = await generateKeypair();
+    const recipient = await generateKeypair();
+    const recipientPub = publicKeyFromPrivate(recipient.privateKey);
+    const contentKey = await randomKey();
+    const original = contentKey.slice();
+    const senderPub = publicKeyFromPrivate(sender.privateKey);
+
+    const sealed = await sealForRecipients(
+      contentKey,
+      [{ userId: "u1", x25519Pubkey: recipientPub }],
+      sender,
+    );
+
+    // Mutate the caller's buffer AFTER the call. The sealed envelope must
+    // still decrypt to the ORIGINAL value because sealForRecipients took
+    // a defensive copy.
+    contentKey.fill(0xff);
+
+    const recovered = await openEnvelope(sealed[0].envelope, senderPub, recipient);
+    expect(recovered).toEqual(original);
+  });
 });
