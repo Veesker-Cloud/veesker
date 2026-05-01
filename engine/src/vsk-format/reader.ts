@@ -142,9 +142,26 @@ export async function readVsk(
     try {
       const tmpEsc = tmp.replace(/\\/g, "/").replace(/'/g, "''");
       const tNameSafe = tableName.toLowerCase().replace(/"/g, '""');
-      await dst.exec(
-        `${ddl} "${tNameSafe}" AS SELECT * FROM read_parquet('${tmpEsc}')`,
-      );
+      const tNameUpper = tableName.toUpperCase();
+      const manifestTable = manifest.tables.find((t) => t.name.toUpperCase() === tNameUpper);
+      if (manifestTable) {
+        const colDdl = manifestTable.columns
+          .map((c) => {
+            const colName = c.name.replace(/"/g, '""');
+            const nullClause = c.nullable ? "" : " NOT NULL";
+            return `"${colName}" ${c.type}${nullClause}`;
+          })
+          .join(", ");
+        const verb = opts.replace ? "CREATE OR REPLACE TABLE" : "CREATE TABLE";
+        await dst.exec(`${verb} "${tNameSafe}" (${colDdl})`);
+        await dst.exec(
+          `INSERT INTO "${tNameSafe}" SELECT * FROM read_parquet('${tmpEsc}')`,
+        );
+      } else {
+        await dst.exec(
+          `${ddl} "${tNameSafe}" AS SELECT * FROM read_parquet('${tmpEsc}')`,
+        );
+      }
     } finally {
       try { unlinkSync(tmp); } catch { /* best effort */ }
     }

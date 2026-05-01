@@ -189,8 +189,8 @@ describe("vsk-format writer + reader", () => {
         expect(m.tables.length).toBe(1);
         const rows = await dst.query("SELECT * FROM customers ORDER BY id");
         expect(rows).toEqual([
-          { id: 1, name: "alice" },
-          { id: 2, name: "bob" },
+          { ID: 1, NAME: "alice" },
+          { ID: 2, NAME: "bob" },
         ]);
       } finally {
         await dst.close();
@@ -273,6 +273,43 @@ describe("vsk-format writer + reader", () => {
       try { unlinkSync(path); } catch { /* best effort */ }
     }
   });
+
+  it("preserves NOT NULL constraints across writeVsk → readVsk", async () => {
+    const path = join(tmpdir(), `vsk-notnull-${process.pid}-${Date.now()}.vsk`);
+    const src = await DuckDBHost.openInMemory();
+    try {
+      await src.exec("CREATE TABLE t (id INTEGER NOT NULL, label VARCHAR)");
+      await src.exec("INSERT INTO t VALUES (1, 'a')");
+      await writeVsk(src, path, {
+        builtAt: new Date().toISOString(),
+        sourceId: "x",
+        schemaName: "x",
+        ttlExpiresAt: new Date(Date.now() + 86400000).toISOString(),
+        tables: [{ name: "T", rowCount: 1, columns: [
+          { name: "ID", type: "INTEGER", nullable: false },
+          { name: "LABEL", type: "VARCHAR", nullable: true },
+        ] }],
+        piiMasks: [],
+      });
+
+      const dst = await DuckDBHost.openInMemory();
+      try {
+        await readVsk(path, dst);
+        const cols = await dst.query(
+          "SELECT column_name, is_nullable FROM information_schema.columns WHERE table_name='t' ORDER BY ordinal_position",
+        );
+        expect(cols).toEqual([
+          { column_name: "ID", is_nullable: "NO" },
+          { column_name: "LABEL", is_nullable: "YES" },
+        ]);
+      } finally {
+        await dst.close();
+      }
+    } finally {
+      await src.close();
+      try { unlinkSync(path); } catch { /* best effort */ }
+    }
+  });
 });
 
 describe("vsk-format safety + edge cases", () => {
@@ -332,7 +369,7 @@ describe("vsk-format safety + edge cases", () => {
         await expect(readVsk(path, dst)).rejects.toThrow();
         await readVsk(path, dst, { replace: true });
         const rows = await dst.query("SELECT id FROM t");
-        expect(rows).toEqual([{ id: 42 }]);
+        expect(rows).toEqual([{ ID: 42 }]);
       } finally {
         await dst.close();
       }
