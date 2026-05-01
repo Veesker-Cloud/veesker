@@ -68,7 +68,7 @@ export async function writeVsk(
   });
 
   const out = Buffer.concat([Buffer.from(header), Buffer.from(manifestBytes), dataSection]);
-  const tmpOut = `${outPath}.tmp`;
+  const tmpOut = `${outPath}.${process.pid}.${randomUUID()}.tmp`;
   try {
     writeFileSync(tmpOut, out);
     renameSync(tmpOut, outPath);
