@@ -65,9 +65,6 @@ jobs:
       - name: Sidecar tests (Bun)
         run: cd sidecar && bun test
 
-      - name: Rust tests (lib)
-        run: cargo test --manifest-path src-tauri/Cargo.toml --lib
-
       - name: Compile sidecar binary (Windows)
         if: matrix.platform == 'windows-latest'
         run: cd sidecar && bun run build:win-x64
@@ -80,5 +77,12 @@ jobs:
         if: matrix.platform == 'ubuntu-latest'
         run: cd sidecar && bun run build:linux-x64
 
+      - name: Copy oracledb native bindings
+        run: bun run copy-bindings
+
+      - name: Rust tests (lib)
+        run: cargo test --manifest-path src-tauri/Cargo.toml --lib
+
       - name: Build Tauri app
+        if: github.event_name == 'push'
         run: bun run tauri build

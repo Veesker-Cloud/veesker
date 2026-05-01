@@ -2,10 +2,21 @@
 // Licensed under the Apache License, Version 2.0
 // https://github.com/veesker-cloud/veesker-community-edition
 
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/svelte";
 import StatusBar from "./StatusBar.svelte";
 import { sqlEditor } from "$lib/stores/sql-editor.svelte";
+
+vi.mock("svelte", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("svelte")>();
+  return {
+    ...mod,
+    getContext: (key: unknown) => {
+      if (key === "auth") return { tier: "ce", email: "" };
+      return mod.getContext(key as never);
+    },
+  };
+});
 
 beforeEach(() => sqlEditor.reset());
 

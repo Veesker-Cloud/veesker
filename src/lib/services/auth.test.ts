@@ -6,6 +6,12 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));
 
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: () => ({
+    setTitle: vi.fn().mockResolvedValue(undefined),
+  }),
+}));
+
 import { invoke } from "@tauri-apps/api/core";
 
 // Build a real (non-signed) JWT payload for testing
