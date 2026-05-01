@@ -84,5 +84,5 @@ jobs:
         run: cargo test --manifest-path src-tauri/Cargo.toml --lib
 
       - name: Build Tauri app
-        if: github.event_name == 'push'
+        if: startsWith(github.ref, 'refs/tags/')
         run: bun run tauri build
