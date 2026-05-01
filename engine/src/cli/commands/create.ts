@@ -3,21 +3,44 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { DuckDBHost } from "../../duckdb-host";
 import { writeVsk } from "../../vsk-format/writer";
-import { assertValidTableName } from "../../vsk-format/errors";
+import { assertValidTableName, VSK_TABLE_NAME_RE } from "../../vsk-format/errors";
 import type { VskManifest, VskTable } from "../../vsk-format/manifest";
 
 /**
- * Allowlist for `column.type` strings in the schema JSON. Permits letters,
- * digits, spaces, parens, and commas (e.g. `DECIMAL(10,2)`, `VARCHAR(100)`,
- * `TIMESTAMP WITH TIME ZONE`). Rejects semicolons, identifiers prefixed with
- * symbols, and anything that could close the DDL and inject another statement.
+ * Allowlist for `column.type` strings in the schema JSON. Permits:
+ *  - Bare type names: `INTEGER`, `VARCHAR`, `BINARY_FLOAT`, `TIMESTAMP_NS`
+ *  - Parameterized: `VARCHAR(100)`, `DECIMAL(10,2)`, `NUMBER(p,-s)`
+ *  - Multi-word from an explicit allowlist: `TIMESTAMP WITH TIME ZONE`,
+ *    `TIMESTAMP WITH LOCAL TIME ZONE`, `DOUBLE PRECISION`
+ *
+ * Rejects intra-DDL injection: NO top-level commas (which would inject a
+ * phantom column past the declared one), NO semicolons (which would close
+ * the DDL), NO quotes, and NO unrecognized multi-word constructs like
+ * `INTEGER PRIMARY KEY` or `INTEGER CHECK (1=1)` that the previous regex
+ * ([A-Za-z0-9 (),]) inadvertently allowed.
  */
-const COLUMN_TYPE_RE = /^[A-Za-z][A-Za-z0-9 (),]{0,63}$/;
+const COLUMN_TYPE_SINGLE = /^[A-Za-z][A-Za-z0-9_]*$/;
+const COLUMN_TYPE_PARAM = /^([A-Za-z][A-Za-z0-9_]*)\(\s*\d+(?:\s*,\s*-?\d+)?\s*\)$/;
+const ALLOWED_MULTI_WORD = new Set([
+  "TIMESTAMP WITH TIME ZONE",
+  "TIMESTAMP WITH LOCAL TIME ZONE",
+  "DOUBLE PRECISION",
+]);
 
 function assertValidColumnType(type: string): void {
-  if (!COLUMN_TYPE_RE.test(type)) {
+  const trimmed = type.trim();
+  if (COLUMN_TYPE_SINGLE.test(trimmed)) return;
+  if (COLUMN_TYPE_PARAM.test(trimmed)) return;
+  if (ALLOWED_MULTI_WORD.has(trimmed.toUpperCase())) return;
+  throw new Error(
+    `invalid column type ${JSON.stringify(type).slice(0, 80)}`,
+  );
+}
+
+function assertValidColumnName(name: string): void {
+  if (!VSK_TABLE_NAME_RE.test(name)) {
     throw new Error(
-      `invalid column type ${JSON.stringify(type).slice(0, 80)} (must match ${COLUMN_TYPE_RE.source})`,
+      `invalid column name ${JSON.stringify(name).slice(0, 80)}`,
     );
   }
 }
@@ -54,6 +77,7 @@ function readSchema(path: string): SchemaJson {
       if (typeof c !== "object" || c === null) throw new Error("each column must be an object");
       const cc = c as Record<string, unknown>;
       if (typeof cc.name !== "string") throw new Error("column.name must be a string");
+      assertValidColumnName(cc.name);
       if (typeof cc.type !== "string") throw new Error("column.type must be a string");
       assertValidColumnType(cc.type);
       if (typeof cc.nullable !== "boolean") throw new Error("column.nullable must be a boolean");
@@ -67,9 +91,10 @@ function readSchema(path: string): SchemaJson {
  *
  * Trust model: the schema JSON is treated as trusted-author input. Each
  * `csv` path is read from the local filesystem; each `column.type` is
- * interpolated into a `CREATE TABLE` DDL after a regex allowlist check
- * (see {@link COLUMN_TYPE_RE}). Each `table.name` passes through
- * `assertValidTableName` before any DB work.
+ * interpolated into a `CREATE TABLE` DDL after the
+ * {@link assertValidColumnType} allowlist check, and each `column.name`
+ * passes through {@link assertValidColumnName}. Each `table.name` passes
+ * through `assertValidTableName` before any DB work.
  *
  * Do NOT consume schemas from untrusted sources without additional
  * sandboxing — even with the allowlist, a malicious author could exhaust
