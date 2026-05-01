@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { sodiumReady, getSodium } from "../src/crypto/sodium";
 import { generateKeypair, publicKeyFromPrivate, pubkeyToBase64, pubkeyFromBase64 } from "../src/crypto/keypair";
 import { OsKeyringStore, InMemoryKeyStore, type KeyStore } from "../src/crypto/keystore";
+import { encryptBlob, decryptBlob, randomKey } from "../src/crypto/blob";
 
 describe("crypto sodium init", () => {
   it("initializes libsodium and exposes constants", async () => {
@@ -114,5 +115,59 @@ describe("crypto KeyStore", () => {
       const pk = await store.getPrivateKey();
       expect(pk).toBeNull();
     });
+  });
+});
+
+describe("crypto blob encryption (XChaCha20-Poly1305 IETF)", () => {
+  it("round-trips a payload", async () => {
+    const key = new Uint8Array(32).fill(1);
+    const plaintext = new TextEncoder().encode("hello sandbox");
+    const { ciphertext, nonce } = await encryptBlob(key, plaintext);
+    expect(nonce.byteLength).toBe(24);
+    expect(ciphertext.byteLength).toBeGreaterThan(plaintext.byteLength);
+    const decrypted = await decryptBlob(key, ciphertext, nonce);
+    expect(new TextDecoder().decode(decrypted)).toBe("hello sandbox");
+  });
+
+  it("randomKey returns a 32-byte key", async () => {
+    await sodiumReady();
+    const k = randomKey();
+    expect(k.byteLength).toBe(32);
+  });
+
+  it("rejects tampered ciphertext", async () => {
+    const key = new Uint8Array(32).fill(2);
+    const { ciphertext, nonce } = await encryptBlob(key, new TextEncoder().encode("x"));
+    ciphertext[0] = (ciphertext[0] ?? 0) ^ 0xff;
+    await expect(decryptBlob(key, ciphertext, nonce)).rejects.toThrow();
+  });
+
+  it("rejects wrong key", async () => {
+    const k1 = new Uint8Array(32).fill(3);
+    const k2 = new Uint8Array(32).fill(4);
+    const { ciphertext, nonce } = await encryptBlob(k1, new TextEncoder().encode("x"));
+    await expect(decryptBlob(k2, ciphertext, nonce)).rejects.toThrow();
+  });
+
+  it("uses fresh random nonces", async () => {
+    const key = new Uint8Array(32).fill(7);
+    const a = await encryptBlob(key, new TextEncoder().encode("x"));
+    const b = await encryptBlob(key, new TextEncoder().encode("x"));
+    expect(Buffer.from(a.nonce).equals(Buffer.from(b.nonce))).toBe(false);
+  });
+
+  it("rejects keys of wrong length", async () => {
+    const shortKey = new Uint8Array(16).fill(1);
+    await expect(encryptBlob(shortKey, new Uint8Array([1, 2, 3])))
+      .rejects.toThrow(/key must be/i);
+  });
+
+  it("round-trips a large payload (100KB)", async () => {
+    const key = new Uint8Array(32).fill(9);
+    const plaintext = new Uint8Array(100 * 1024);
+    for (let i = 0; i < plaintext.length; i++) plaintext[i] = i % 256;
+    const { ciphertext, nonce } = await encryptBlob(key, plaintext);
+    const decrypted = await decryptBlob(key, ciphertext, nonce);
+    expect(Buffer.from(decrypted).equals(Buffer.from(plaintext))).toBe(true);
   });
 });
