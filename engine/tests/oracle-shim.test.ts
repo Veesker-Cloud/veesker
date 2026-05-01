@@ -50,6 +50,11 @@ describe("oracle-shim type adapter — Oracle → DuckDB", () => {
     expect(mapOracleType("SDO_GEOMETRY")).toBe("VARCHAR");
     expect(mapOracleType("")).toBe("VARCHAR");
   });
+
+  it("clamps Oracle negative scale to 0 (DuckDB rejects DECIMAL with negative scale)", () => {
+    expect(mapOracleType("NUMBER(5,-2)")).toBe("DECIMAL(5,0)");
+    expect(mapOracleType("NUMBER(10,-5)")).toBe("DECIMAL(10,0)");
+  });
 });
 
 describe("oracle-shim type adapter — DuckDB → Oracle", () => {
@@ -73,6 +78,16 @@ describe("oracle-shim type adapter — DuckDB → Oracle", () => {
   it("maps DuckDB timestamps", () => {
     expect(mapDuckDBType("TIMESTAMP")).toBe("TIMESTAMP");
     expect(mapDuckDBType("TIMESTAMPTZ")).toBe("TIMESTAMP WITH TIME ZONE");
+  });
+
+  it("maps DuckDB long-form 'TIMESTAMP WITH TIME ZONE'", () => {
+    expect(mapDuckDBType("TIMESTAMP WITH TIME ZONE")).toBe("TIMESTAMP WITH TIME ZONE");
+  });
+
+  it("maps DuckDB nanosecond/microsecond/second timestamp variants", () => {
+    expect(mapDuckDBType("TIMESTAMP_NS")).toBe("TIMESTAMP");
+    expect(mapDuckDBType("TIMESTAMP_MS")).toBe("TIMESTAMP");
+    expect(mapDuckDBType("TIMESTAMP_S")).toBe("TIMESTAMP");
   });
 
   it("maps DuckDB BLOB → Oracle BLOB", () => {

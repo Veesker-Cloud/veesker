@@ -6,7 +6,10 @@
  * emulation (DuckDB schema → presented as Oracle types).
  *
  * Mapping policy:
- *   - Numeric types preserve precision/scale where possible.
+ *   - Numeric types preserve precision/scale where possible. Oracle allows
+ *     NUMBER(p,-s) (rounding to the left of the decimal); DuckDB rejects
+ *     DECIMAL with negative scale, so we clamp the scale to 0. The rounding
+ *     semantics are dropped — values are stored at full precision instead.
  *   - String types collapse to `VARCHAR` in DuckDB; reverse-mapping uses
  *     `VARCHAR2(4000)` as a conservative Oracle equivalent.
  *   - Unknown types fall back to `VARCHAR` / `VARCHAR2(4000)` so that
@@ -21,7 +24,8 @@ export function mapOracleType(oracleType: string): string {
   const numberMatch = t.match(/^NUMBER\s*\(\s*(\d+)\s*(?:,\s*(-?\d+)\s*)?\)$/);
   if (numberMatch) {
     const precision = numberMatch[1];
-    const scale = numberMatch[2] ?? "0";
+    const rawScale = numberMatch[2] ?? "0";
+    const scale = Math.max(0, parseInt(rawScale, 10));
     return `DECIMAL(${precision},${scale})`;
   }
   if (t === "NUMBER") return "DOUBLE";
@@ -57,6 +61,8 @@ export function mapDuckDBType(duckdbType: string): string {
 
   if (t === "VARCHAR") return "VARCHAR2(4000)";
 
+  if (t === "TIMESTAMP WITH TIME ZONE") return "TIMESTAMP WITH TIME ZONE";
+  if (t === "TIMESTAMP_NS" || t === "TIMESTAMP_MS" || t === "TIMESTAMP_S") return "TIMESTAMP";
   if (t === "TIMESTAMP") return "TIMESTAMP";
   if (t === "TIMESTAMPTZ") return "TIMESTAMP WITH TIME ZONE";
 
