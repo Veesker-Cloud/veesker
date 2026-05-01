@@ -233,11 +233,11 @@ describe("oracle-shim system views", () => {
       await host.exec("CREATE TABLE customers (id INT, name VARCHAR)");
       await installSystemViews(host, "TEST_OWNER");
 
-      const objs = await host.query("SELECT object_name FROM user_objects ORDER BY object_name");
+      const objs = await host.query("SELECT object_name FROM vsk_user_objects ORDER BY object_name");
       expect(objs.map((r) => r.object_name)).toEqual(["CUSTOMERS", "ORDERS"]);
 
       const cols = await host.query(
-        "SELECT column_name, data_type FROM user_tab_columns WHERE table_name='ORDERS' ORDER BY column_id",
+        "SELECT column_name, data_type FROM vsk_user_tab_columns WHERE table_name='ORDERS' ORDER BY column_id",
       );
       expect(cols).toEqual([
         { column_name: "ID", data_type: "NUMBER(10,0)" },
@@ -253,11 +253,11 @@ describe("oracle-shim system views", () => {
     try {
       await host.exec("CREATE TABLE foo (id INT)");
       await installSystemViews(host, "X");
-      const rows = await host.query("SELECT object_name FROM user_objects ORDER BY object_name");
+      const rows = await host.query("SELECT object_name FROM vsk_user_objects ORDER BY object_name");
       const names = rows.map((r) => r.object_name);
       expect(names).toContain("FOO");
-      expect(names).not.toContain("USER_OBJECTS");
-      expect(names).not.toContain("USER_TAB_COLUMNS");
+      expect(names).not.toContain("VSK_USER_OBJECTS");
+      expect(names).not.toContain("VSK_USER_TAB_COLUMNS");
     } finally {
       await host.close();
     }
@@ -268,12 +268,12 @@ describe("oracle-shim system views", () => {
     try {
       await host.exec("CREATE TABLE a (id INT)");
       await installSystemViews(host, "X");
-      let rows = await host.query("SELECT object_name FROM user_objects");
+      let rows = await host.query("SELECT object_name FROM vsk_user_objects");
       expect(rows.length).toBe(1);
 
       await host.exec("CREATE TABLE b (id INT)");
       await installSystemViews(host, "X");
-      rows = await host.query("SELECT object_name FROM user_objects ORDER BY object_name");
+      rows = await host.query("SELECT object_name FROM vsk_user_objects ORDER BY object_name");
       expect(rows.map((r) => r.object_name)).toEqual(["A", "B"]);
     } finally {
       await host.close();
@@ -286,7 +286,7 @@ describe("oracle-shim system views", () => {
       await host.exec("CREATE TABLE t (id INT NOT NULL, name VARCHAR)");
       await installSystemViews(host, "X");
       const rows = await host.query(
-        "SELECT column_name, nullable FROM user_tab_columns WHERE table_name='T' ORDER BY column_id",
+        "SELECT column_name, nullable FROM vsk_user_tab_columns WHERE table_name='T' ORDER BY column_id",
       );
       expect(rows).toEqual([
         { column_name: "ID", nullable: "N" },
@@ -303,7 +303,7 @@ describe("oracle-shim system views", () => {
       await host.exec(`CREATE TABLE "weird$tab" ("col_1" INT)`);
       await installSystemViews(host, "X");
       const rows = await host.query(
-        "SELECT object_name FROM user_objects WHERE object_name = 'WEIRD$TAB'",
+        "SELECT object_name FROM vsk_user_objects WHERE object_name = 'WEIRD$TAB'",
       );
       expect(rows.length).toBe(1);
     } finally {
@@ -317,11 +317,11 @@ describe("oracle-shim system views", () => {
       await host.exec(`CREATE TABLE "O'Brien" ("col'name" INT)`);
       await installSystemViews(host);
       const objs = await host.query(
-        "SELECT object_name FROM user_objects WHERE object_name = 'O''BRIEN'",
+        "SELECT object_name FROM vsk_user_objects WHERE object_name = 'O''BRIEN'",
       );
       expect(objs.length).toBe(1);
       const cols = await host.query(
-        "SELECT column_name FROM user_tab_columns WHERE table_name = 'O''BRIEN'",
+        "SELECT column_name FROM vsk_user_tab_columns WHERE table_name = 'O''BRIEN'",
       );
       expect(cols.map((r) => r.column_name)).toEqual(["COL'NAME"]);
     } finally {
@@ -333,10 +333,25 @@ describe("oracle-shim system views", () => {
     const host = await DuckDBHost.openInMemory();
     try {
       await installSystemViews(host);
-      const objs = await host.query("SELECT * FROM user_objects");
+      const objs = await host.query("SELECT * FROM vsk_user_objects");
       expect(objs).toEqual([]);
-      const cols = await host.query("SELECT * FROM user_tab_columns");
+      const cols = await host.query("SELECT * FROM vsk_user_tab_columns");
       expect(cols).toEqual([]);
+    } finally {
+      await host.close();
+    }
+  });
+
+  it("does not clobber a user table that happens to be named user_objects", async () => {
+    const host = await DuckDBHost.openInMemory();
+    try {
+      await host.exec("CREATE TABLE user_objects (mine INTEGER)");
+      await host.exec("INSERT INTO user_objects VALUES (42)");
+      await installSystemViews(host);
+      const userTable = await host.query("SELECT mine FROM user_objects");
+      expect(userTable).toEqual([{ mine: 42 }]);
+      const sysObjects = await host.query("SELECT object_name FROM vsk_user_objects ORDER BY object_name");
+      expect(sysObjects.map((r) => r.object_name)).toContain("USER_OBJECTS");
     } finally {
       await host.close();
     }

@@ -4,10 +4,13 @@ import { mapDuckDBType } from "./types";
 /**
  * Drop and rebuild Oracle-style metadata views inside a DuckDB host.
  *
- * Populates two tables:
- *   - `USER_OBJECTS(object_name, object_type, status, created, last_ddl_time)`
+ * Populates two tables (vsk_-prefixed to avoid colliding with user tables
+ * that may legitimately be named `user_objects` / `user_tab_columns` —
+ * Oracle-style USER_OBJECTS exports lowercased on load would otherwise
+ * silently overwrite the system view):
+ *   - `VSK_USER_OBJECTS(object_name, object_type, status, created, last_ddl_time)`
  *     — one row per non-system table.
- *   - `USER_TAB_COLUMNS(table_name, column_name, data_type, data_length, nullable, column_id)`
+ *   - `VSK_USER_TAB_COLUMNS(table_name, column_name, data_type, data_length, nullable, column_id)`
  *     — one row per column with Oracle-mapped data_type.
  *
  * Idempotent: safe to call multiple times. Subsequent calls fully refresh
@@ -23,7 +26,7 @@ import { mapDuckDBType } from "./types";
  * Notes:
  *   - Object names are upper-cased on output (Oracle convention).
  *   - DuckDB types are mapped to Oracle equivalents via `mapDuckDBType`.
- *   - The system-view tables themselves are excluded from `USER_OBJECTS`.
+ *   - The system-view tables themselves are excluded from `VSK_USER_OBJECTS`.
  *   - `data_length` is a placeholder (4000) for v1 — real Oracle byte
  *     lengths come in Plan 7.
  *   - The `owner` parameter is informational; the views currently expose
@@ -34,7 +37,7 @@ export async function installSystemViews(host: DuckDBHost, owner?: string): Prom
   void owner;
 
   await host.exec(`
-    CREATE OR REPLACE TABLE user_objects (
+    CREATE OR REPLACE TABLE vsk_user_objects (
       object_name VARCHAR,
       object_type VARCHAR,
       status VARCHAR,
@@ -43,7 +46,7 @@ export async function installSystemViews(host: DuckDBHost, owner?: string): Prom
     )
   `);
   await host.exec(`
-    CREATE OR REPLACE TABLE user_tab_columns (
+    CREATE OR REPLACE TABLE vsk_user_tab_columns (
       table_name VARCHAR,
       column_name VARCHAR,
       data_type VARCHAR,
@@ -57,7 +60,7 @@ export async function installSystemViews(host: DuckDBHost, owner?: string): Prom
     SELECT table_name
     FROM information_schema.tables
     WHERE table_schema = 'main'
-      AND table_name NOT IN ('user_objects', 'user_tab_columns')
+      AND table_name NOT IN ('vsk_user_objects', 'vsk_user_tab_columns')
     ORDER BY table_name
   `);
 
@@ -92,10 +95,10 @@ export async function installSystemViews(host: DuckDBHost, owner?: string): Prom
   }
 
   if (objectRows.length > 0) {
-    await host.exec(`INSERT INTO user_objects VALUES ${objectRows.join(", ")}`);
+    await host.exec(`INSERT INTO vsk_user_objects VALUES ${objectRows.join(", ")}`);
   }
   if (columnRows.length > 0) {
-    await host.exec(`INSERT INTO user_tab_columns VALUES ${columnRows.join(", ")}`);
+    await host.exec(`INSERT INTO vsk_user_tab_columns VALUES ${columnRows.join(", ")}`);
   }
 }
 
