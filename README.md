@@ -45,6 +45,8 @@ Veesker follows the **DBeaver model**: the Community Edition is a fully function
 | **Vector Search Studio** | — | ✅ Cloud |
 | **Team features + shared queries** | — | ✅ Cloud |
 | **Usage dashboard + billing** | — | ✅ Cloud |
+| **VeeskerDB Sandbox — encrypted production data slices** | — | ✅ Cloud |
+| **VeeskerDB engine — `.vsk` format library** | ✅ embedded | ✅ embedded |
 
 </div>
 
@@ -160,6 +162,7 @@ If you need warranty, SLA, or commercial support, that requires a separate signe
 - A native desktop Oracle 23ai studio combining SQL editing, schema browsing, vector search, AI assistance, PL/SQL debugging, and REST API generation in a single app
 - Zero Oracle client install — connects directly via the Thin driver (pure TypeScript, no native libraries, no JDBC jar)
 - An AI assistant with live database access — Sheep can run SELECT queries against your schema to answer questions, not just autocomplete based on training data
+- A platform with the open `.vsk` format and `@veesker/engine` library — encrypted, portable Oracle data slices that can be sealed for specific recipients
 - An open-core project — the IDE is Apache 2.0, with the option for separate corporate features under commercial license
 
 **What it isn't:**
@@ -242,6 +245,18 @@ For commercial inquiries, partnerships, or trademark permission, reach out via e
 - **Similarity search UI** — text input → embeddings → live similarity results sorted by distance
 - **2D scatter plot** — PCA-projected vector space, color-coded by similarity score, hover to inspect source rows
 - **Embed batch operations** — bulk-embed pending rows in your tables with progress tracking
+
+### VeeskerDB engine — `.vsk` format
+
+A pure-TypeScript library for reading and writing `.vsk` files — Veesker's open encrypted artifact format for portable Oracle data slices. Powers the VeeskerDB Sandbox feature in Cloud Edition; embedded as `@veesker/engine` and reusable in any Bun/Node project.
+
+- **Open format** — magic-bytes + version header, libsodium-sealed recipient envelopes, ChaCha20-Poly1305 encrypted DuckDB blob payload. Spec lives in [`docs/superpowers/specs/`](docs/superpowers/specs/).
+- **Crypto primitives** — X25519 ECDH for key exchange, ChaCha20-Poly1305 AEAD for content, BLAKE2b for derivation. All from `libsodium-wrappers`.
+- **Per-recipient sealing** — `sealForRecipients(contentKey, recipients[], senderKp)` produces N envelopes (one per pubkey); each member decrypts only their envelope with their private key. The content blob itself is encrypted once.
+- **DuckDB host** — embedded DuckDB instance for staging tabular payloads with full SQL access. Cross-platform native bindings auto-resolved at runtime.
+- **No network** — engine is local-only. Distribution / publish / pull is the integrator's responsibility (Cloud Edition uses Cloudflare R2 + Veesker API).
+
+The full sandbox workflow — owner build pipeline, hosted publish, recipient management, member open/query UX — is a Cloud Edition feature that consumes this engine.
 
 ### PL/SQL features
 
