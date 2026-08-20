@@ -189,7 +189,7 @@ If you need warranty, SLA, or commercial support, that requires a separate signe
 |---|---|---|
 | **v0.5.0-beta.1** | ✅ Launched May 2026 | Phase 1: schema browser (18 object kinds), DDL/DCL safety gate, Sessions monitor + KILL, HMAC-SHA256 tamper-evident audit chain, Verify Chain UI |
 | **v0.5.x** | 🔜 patch | Bug B1 fix (directory detail panel), Dependabot cleanup, UX/UI improvements; repo unification (CL→CE migration) |
-| **v0.6.0** | 📋 planned | Phase 2: multi-connection, multiple independent SQL windows, edit-in-grid SELECT FOR UPDATE |
+| **v0.6.0** | 📋 planned | APEX Studio: read-only APEX Explorer, version-aware dictionary detection, and SQL/PLSQL extraction into the editor |
 | **v0.7.0** | 📋 planned | Phase 3: Item #4 Phase D TX close hooks, .vsk portable Oracle sandbox |
 | **v1.0.0** | 🎯 target | Stable release with Windows code signing, macOS notarization, Linux packaging, subscription feature flags live |
 
@@ -512,6 +512,7 @@ flowchart TB
 - **[docs/PRICING.md](docs/PRICING.md)** — subscription tiers, add-ons, FAQ
 - **[docs/AUTO_UPDATE.md](docs/AUTO_UPDATE.md)** — Tauri updater configuration & release process
 - **[docs/CODE_SIGNING.md](docs/CODE_SIGNING.md)** — Azure Trusted Signing setup for Windows
+- **[docs/apex/README.md](docs/apex/README.md)** — Veesker APEX Studio scope, detection, version support, and extraction contract
 
 ---
 

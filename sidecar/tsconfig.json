@@ -7,7 +7,7 @@
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": ["bun-types"]
+    "types": ["bun"]
   },
   "include": ["src/**/*", "tests/**/*"]
 }
