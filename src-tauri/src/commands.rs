@@ -314,6 +314,9 @@ pub async fn wallet_inspect(
 pub struct WorkspaceInfo {
     pub server_version: String,
     pub current_schema: String,
+    pub user: String,
+    pub service_name: String,
+    pub apex: Option<Value>,
 }
 
 #[derive(Debug, Serialize)]
@@ -443,9 +446,23 @@ pub async fn workspace_open(
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string();
+    let user = res
+        .get("user")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let service_name = res
+        .get("serviceName")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let apex = call_sidecar(&app, "apex.detect", json!({})).await.ok();
     Ok(WorkspaceInfo {
         server_version,
         current_schema,
+        user,
+        service_name,
+        apex,
     })
 }
 
@@ -1666,6 +1683,42 @@ pub async fn ords_detect(app: AppHandle) -> Result<OrdsDetectResult, ConnectionT
         code: -32603,
         message: format!("ords_detect parse error: {}", e),
     })
+}
+
+#[tauri::command]
+pub async fn apex_detect(app: AppHandle) -> Result<serde_json::Value, ConnectionTestErr> {
+    call_sidecar(&app, "apex.detect", json!({})).await
+}
+
+#[tauri::command]
+pub async fn apex_workspaces_list(app: AppHandle) -> Result<serde_json::Value, ConnectionTestErr> {
+    call_sidecar(&app, "apex.workspaces.list", json!({})).await
+}
+
+#[tauri::command]
+pub async fn apex_applications_list(
+    app: AppHandle,
+    workspace: String,
+) -> Result<serde_json::Value, ConnectionTestErr> {
+    call_sidecar(
+        &app,
+        "apex.applications.list",
+        json!({ "workspace": workspace }),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn apex_pages_list(
+    app: AppHandle,
+    application_id: i64,
+) -> Result<serde_json::Value, ConnectionTestErr> {
+    call_sidecar(
+        &app,
+        "apex.pages.list",
+        json!({ "applicationId": application_id }),
+    )
+    .await
 }
 
 #[tauri::command]

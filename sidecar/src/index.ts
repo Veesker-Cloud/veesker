@@ -57,6 +57,7 @@ import { getSessionSafety } from "./state";
 import { RpcCodedError, PSDPM_BLOCKED, APPROVAL_UNKNOWN_REQUEST_ID, ENV_REQUIRED } from "./errors";
 import { chartConfigure, chartReset } from "./chart";
 import { ordsDetect, ordsModulesList, ordsModuleGet, ordsEnableSchema, ordsModuleExportSql, ordsRolesList, ordsGenerateSql, ordsApply, ordsClientsList, ordsClientsCreate, ordsClientsRevoke } from "./ords";
+import { apexApplicationsList, apexDetect, apexPagesList, apexWorkspacesList } from "./apex";
 import {
   debugOpen,
   debugGetSource,
@@ -219,6 +220,10 @@ const handlers: HandlerMap = {
   "ords.clients.list":   (params) => ordsClientsList(params as any),
   "ords.clients.create": (params) => ordsClientsCreate(params as any),
   "ords.clients.revoke": (params) => ordsClientsRevoke(params as any),
+  "apex.detect":         () => apexDetect(),
+  "apex.workspaces.list":    () => apexWorkspacesList(),
+  "apex.applications.list":  (params) => apexApplicationsList(params as any),
+  "apex.pages.list":         (params) => apexPagesList(params as any),
   "debug.open":              (params) => debugOpen(params as any),
   "debug.get_source":        (params) => debugGetSource(params as any),
   "debug.start":             (params) => debugStart(params as any),

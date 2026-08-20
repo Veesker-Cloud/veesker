@@ -8,6 +8,7 @@ import type { TableStats, TableIndex } from "$lib/perf/perf-rules";
 export type WorkspaceInfo = {
   serverVersion: string;
   currentSchema: string;
+  apex?: ApexDetectResult | null;
   user: string;          // L3.5 — uppercase username for StatusBar user@service
   serviceName: string;   // L3.5 — extracted from connectString
 };
@@ -126,6 +127,54 @@ export type OrdsDetectResult = {
 
 export const ordsDetect = () =>
   call<OrdsDetectResult>("ords_detect", {});
+
+export type ApexCapability = {
+  view: string;
+  minVersion: string;
+  enabled: boolean;
+};
+
+export type ApexDetectResult = {
+  installed: boolean;
+  userHasAccess: boolean;
+  version: string | null;
+  supported: boolean;
+  minSupportedVersion: "19.2";
+  capabilities: ApexCapability[];
+};
+
+export const apexDetect = () =>
+  call<ApexDetectResult>("apex_detect", {});
+
+export type ApexWorkspaceRow = {
+  workspace: string;
+  workspaceId: number | null;
+};
+
+export type ApexApplicationRow = {
+  workspace: string;
+  applicationId: number;
+  name: string;
+  alias: string | null;
+  owner: string | null;
+};
+
+export type ApexPageRow = {
+  applicationId: number;
+  pageId: number;
+  name: string;
+  alias: string | null;
+  pageMode: string | null;
+};
+
+export const apexWorkspacesList = () =>
+  call<{ workspaces: ApexWorkspaceRow[]; accessDenied: boolean }>("apex_workspaces_list", {});
+
+export const apexApplicationsList = (workspace: string) =>
+  call<{ applications: ApexApplicationRow[]; accessDenied: boolean }>("apex_applications_list", { workspace });
+
+export const apexPagesList = (applicationId: number) =>
+  call<{ pages: ApexPageRow[]; accessDenied: boolean }>("apex_pages_list", { applicationId });
 
 export type RestModule = {
   name: string;

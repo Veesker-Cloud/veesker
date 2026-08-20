@@ -844,6 +844,7 @@
           onKindExpand={onKindExpand}
           onRefresh={refreshSchemas}
           {refreshing}
+          apex={info?.apex ?? null}
           onExecuteProc={(owner, name, objectType) => {
             procExecTarget = { owner, name, objectType };
           }}

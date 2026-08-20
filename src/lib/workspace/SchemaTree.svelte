@@ -5,8 +5,18 @@
 -->
 
 <script lang="ts">
-  import type { ObjectKind, Loadable } from "$lib/workspace";
-  import { Table, Eye, Hash, Cog, SquareFunction, Package, Zap, FileType, Webhook, Database, Link2, Folder, Inbox, Clock, User as UserIcon, Shield } from "lucide-svelte";
+  import {
+    apexApplicationsList,
+    apexPagesList,
+    apexWorkspacesList,
+    type ApexApplicationRow,
+    type ApexDetectResult,
+    type ApexPageRow,
+    type ApexWorkspaceRow,
+    type ObjectKind,
+    type Loadable,
+  } from "$lib/workspace";
+  import { Table, Eye, Hash, Cog, SquareFunction, Package, Zap, FileType, Webhook, Database, Link2, Folder, Inbox, Clock, User as UserIcon, Shield, Boxes } from "lucide-svelte";
 
   export type SchemaNode = {
     name: string;
@@ -29,14 +39,21 @@
     onExecuteProc?: (owner: string, name: string, objectType: "PROCEDURE" | "FUNCTION") => void;
     onTestWindow?: (owner: string, name: string, kind: ObjectKind) => void;
     onExposeAsRest?: (owner: string, name: string, kind: "TABLE" | "VIEW" | "PROCEDURE" | "FUNCTION") => void;
+    apex?: ApexDetectResult | null;
   };
-  let { schemas, selected, onToggle, onSelect, onRetry, onKindExpand, onRefresh, refreshing = false, onExecuteProc, onTestWindow, onExposeAsRest }: Props = $props();
+  let { schemas, selected, onToggle, onSelect, onRetry, onKindExpand, onRefresh, refreshing = false, onExecuteProc, onTestWindow, onExposeAsRest, apex = null }: Props = $props();
 
   let search = $state("");
   let hiddenKinds = $state<Set<ObjectKind>>(new Set());
   let density = $state<"compact" | "comfortable">("compact");
   let showSystemSchemas = $state(false);
   let contextMenu = $state<{ x: number; y: number; owner: string; name: string; kind: ObjectKind } | null>(null);
+  let apexExpanded = $state(false);
+  let apexWorkspaces = $state<Loadable<ApexWorkspaceRow[]>>({ kind: "idle" });
+  let openApexWorkspaces = $state<Set<string>>(new Set());
+  let apexApplications = $state<Record<string, Loadable<ApexApplicationRow[]>>>({});
+  let openApexApplications = $state<Set<number>>(new Set());
+  let apexPages = $state<Record<number, Loadable<ApexPageRow[]>>>({});
 
   const VIRTUALIZE_THRESHOLD = 100;
   const ROW_HEIGHT = 24;
@@ -53,6 +70,10 @@
     "SI_INFORMTN_SCHEMA", "SYS", "SYSBACKUP", "SYSDG", "SYSKM", "SYSRAC",
     "SYSMAN", "SYSTEM", "WMSYS", "XDB", "XS$NULL",
   ]);
+
+  const apexVisible = $derived(
+    !!apex?.installed && !!apex.userHasAccess && !!apex.supported
+  );
 
   const KIND_LABELS: Record<ObjectKind, string> = {
     TABLE: "Tables", VIEW: "Views", SEQUENCE: "Sequences",
@@ -204,6 +225,68 @@
     return { start, end, topPad: start * ROW_HEIGHT, botPad: (total - end) * ROW_HEIGHT };
   }
 
+  async function loadApexWorkspaces(): Promise<void> {
+    if (apexWorkspaces.kind === "loading" || apexWorkspaces.kind === "ok") return;
+    apexWorkspaces = { kind: "loading" };
+    const res = await apexWorkspacesList();
+    if (!res.ok) {
+      apexWorkspaces = { kind: "err", message: res.error.message };
+      return;
+    }
+    apexWorkspaces = res.data.accessDenied
+      ? { kind: "err", message: "APEX dictionary access denied" }
+      : { kind: "ok", value: res.data.workspaces };
+  }
+
+  async function toggleApexRoot(): Promise<void> {
+    apexExpanded = !apexExpanded;
+    if (apexExpanded) await loadApexWorkspaces();
+  }
+
+  async function toggleApexWorkspace(workspace: string): Promise<void> {
+    const next = new Set(openApexWorkspaces);
+    if (next.has(workspace)) {
+      next.delete(workspace);
+      openApexWorkspaces = next;
+      return;
+    }
+    next.add(workspace);
+    openApexWorkspaces = next;
+    if (apexApplications[workspace]?.kind === "ok" || apexApplications[workspace]?.kind === "loading") return;
+    apexApplications = { ...apexApplications, [workspace]: { kind: "loading" } };
+    const res = await apexApplicationsList(workspace);
+    apexApplications = {
+      ...apexApplications,
+      [workspace]: !res.ok
+        ? { kind: "err", message: res.error.message }
+        : res.data.accessDenied
+          ? { kind: "err", message: "APEX applications access denied" }
+          : { kind: "ok", value: res.data.applications },
+    };
+  }
+
+  async function toggleApexApplication(applicationId: number): Promise<void> {
+    const next = new Set(openApexApplications);
+    if (next.has(applicationId)) {
+      next.delete(applicationId);
+      openApexApplications = next;
+      return;
+    }
+    next.add(applicationId);
+    openApexApplications = next;
+    if (apexPages[applicationId]?.kind === "ok" || apexPages[applicationId]?.kind === "loading") return;
+    apexPages = { ...apexPages, [applicationId]: { kind: "loading" } };
+    const res = await apexPagesList(applicationId);
+    apexPages = {
+      ...apexPages,
+      [applicationId]: !res.ok
+        ? { kind: "err", message: res.error.message }
+        : res.data.accessDenied
+          ? { kind: "err", message: "APEX pages access denied" }
+          : { kind: "ok", value: res.data.pages },
+    };
+  }
+
   $effect(() => {
     const validOwners = new Set(schemas.map(s => s.name));
     for (const k of [...virtScrollTops.keys()]) {
@@ -293,6 +376,85 @@
       </div>
     {/each}
   </div>
+
+  {#if apexVisible}
+    <div class="apex-block">
+      <button
+        class="schema-row apex-root"
+        onclick={() => { void toggleApexRoot(); }}
+        title="Oracle APEX"
+      >
+        <span class="chev" aria-hidden="true">{apexExpanded ? "â–¾" : "â–¸"}</span>
+        <Boxes size={13} />
+        <span class="schema-name">APEX {apex?.version ? `(${apex.version})` : ""}</span>
+      </button>
+
+      {#if apexExpanded}
+        <div class="kinds apex-body">
+          {#if apexWorkspaces.kind === "idle"}
+            <div class="muted-row">â€”</div>
+          {:else if apexWorkspaces.kind === "loading"}
+            <div class="muted-row">loadingâ€¦</div>
+          {:else if apexWorkspaces.kind === "err"}
+            <div class="err-row">
+              <span class="err-msg">{apexWorkspaces.message}</span>
+              <button class="retry-btn" onclick={() => { apexWorkspaces = { kind: "idle" }; void loadApexWorkspaces(); }}>retry</button>
+            </div>
+          {:else}
+            {#each apexWorkspaces.value as ws}
+              <div class="apex-level">
+                <button class="apex-row" onclick={() => { void toggleApexWorkspace(ws.workspace); }} title={ws.workspace}>
+                  <span class="chev" aria-hidden="true">{openApexWorkspaces.has(ws.workspace) ? "â–¾" : "â–¸"}</span>
+                  <span class="obj-name">{ws.workspace}</span>
+                </button>
+                {#if openApexWorkspaces.has(ws.workspace)}
+                  {@const apps = apexApplications[ws.workspace] ?? { kind: "idle" }}
+                  <div class="apex-children">
+                    {#if apps.kind === "loading"}
+                      <div class="muted-row">loading applicationsâ€¦</div>
+                    {:else if apps.kind === "err"}
+                      <div class="err-row"><span class="err-msg">{apps.message}</span></div>
+                    {:else if apps.kind === "ok"}
+                      {#each apps.value as app}
+                        <div class="apex-level">
+                          <button class="apex-row" onclick={() => { void toggleApexApplication(app.applicationId); }} title={`App ${app.applicationId} - ${app.name}`}>
+                            <span class="chev" aria-hidden="true">{openApexApplications.has(app.applicationId) ? "â–¾" : "â–¸"}</span>
+                            <span class="obj-name">{app.applicationId} - {app.name}</span>
+                          </button>
+                          {#if openApexApplications.has(app.applicationId)}
+                            {@const pages = apexPages[app.applicationId] ?? { kind: "idle" }}
+                            <div class="apex-children">
+                              {#if pages.kind === "loading"}
+                                <div class="muted-row">loading pagesâ€¦</div>
+                              {:else if pages.kind === "err"}
+                                <div class="err-row"><span class="err-msg">{pages.message}</span></div>
+                              {:else if pages.kind === "ok"}
+                                {#each pages.value as page}
+                                  <div class="apex-leaf" title={`Page ${page.pageId} - ${page.name}`}>
+                                    <span class="obj-name">p{page.pageId} - {page.name}</span>
+                                  </div>
+                                {:else}
+                                  <div class="muted-row">â€” no pages â€”</div>
+                                {/each}
+                              {/if}
+                            </div>
+                          {/if}
+                        </div>
+                      {:else}
+                        <div class="muted-row">â€” no applications â€”</div>
+                      {/each}
+                    {/if}
+                  </div>
+                {/if}
+              </div>
+            {:else}
+              <div class="muted-row">â€” no workspaces â€”</div>
+            {/each}
+          {/if}
+        </div>
+      {/if}
+    </div>
+  {/if}
 
   {#each schemas as s}
     {#if isVisible(s)}
@@ -620,6 +782,42 @@
   .kind-icon-btn:active { transform: scale(0.95); }
   .kind-icon-btn:focus-visible { outline: 1px solid var(--gc); outline-offset: 1px; }
   .kind-icon-btn.off { color: var(--text-muted); opacity: 0.3; }
+
+  .apex-block {
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    margin: 0.15rem 0 0.4rem;
+    padding: 0.2rem 0;
+  }
+  .apex-root { color: #7ec96a; }
+  .apex-body { padding-left: 0.4rem; }
+  .apex-level { min-width: 0; }
+  .apex-row,
+  .apex-leaf {
+    width: 100%;
+    min-height: 24px;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-family: "Inter", sans-serif;
+    font-size: 11px;
+    text-align: left;
+    padding: 0.24rem 0.7rem 0.24rem 1rem;
+    box-sizing: border-box;
+  }
+  .apex-row { cursor: pointer; }
+  .apex-row:hover {
+    background: var(--row-hover);
+    color: var(--text-primary);
+  }
+  .apex-children {
+    margin-left: 0.8rem;
+    border-left: 1px solid rgba(255,255,255,0.06);
+  }
+  .apex-leaf { color: var(--text-muted); }
 
   /* ── Schema row ───────────────────────────────────────────── */
   .schema { margin-bottom: 0.15rem; }
