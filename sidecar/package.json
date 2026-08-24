@@ -30,7 +30,7 @@
     "@anthropic-ai/sdk": "^0.95.2",
     "@veesker/engine": "workspace:*",
     "jose": "^6.2.3",
-    "oracledb": "^6.6.0"
+    "oracledb": "^7.0.1"
   },
   "devDependencies": {
     "@types/bun": "latest",
