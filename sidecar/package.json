@@ -27,7 +27,7 @@
     "build": "bun run build:mac-x64"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.95.2",
+    "@anthropic-ai/sdk": "^0.120.0",
     "@veesker/engine": "workspace:*",
     "jose": "^6.2.3",
     "oracledb": "^6.6.0"
